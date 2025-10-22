@@ -1,0 +1,7 @@
+pytesseract
+gherkin-official
+psutil
+pyautogui
+behave
+opencv-python
+allure-behave

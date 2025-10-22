@@ -1,0 +1,6 @@
+*.pyc
+*.log
+reports/*
+*.code-workspace
+.venv/
+__pycache__
