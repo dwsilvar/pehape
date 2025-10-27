@@ -217,6 +217,21 @@ resources/images/features/access_with_card/card_entry/card_entry.feature/smoke/b
 
 This way, if the framework cannot find the element by text, it will look for the image in this path and use it for image-based search.
 
+### Generic Images Support 🖼️
+
+For frequently used UI elements that appear across multiple features (like standard buttons, icons, or logos), you can store their images in the generic resources folder:
+
+```
+resources/images/features/generic/<image_name>.png
+```
+
+These images will be used as a fallback when searching for elements. The framework will:
+1. Try to find elements by text using OCR
+2. If OCR fails, try using the specific image path provided
+3. As a final fallback, try looking for the image in the generic resources folder
+
+Example: If you have a common "OK" button image saved as `ok_button.png` in the generic folder, it will be found automatically when searching for elements, even if not explicitly referenced in the test.
+
 #### Using tags in features and execution plans 🏷️
 
 Tags in Gherkin scenarios and features allow you to:
