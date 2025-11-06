@@ -4,3 +4,5 @@ reports/*
 *.code-workspace
 .venv/
 __pycache__
+
+frontend/node_modules/
