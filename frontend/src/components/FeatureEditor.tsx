@@ -1,87 +1,72 @@
-import { FC, useState, useCallback } from 'react';
-import { Box, Paper, Divider, Typography } from '@mui/material';
-import Editor from '@monaco-editor/react';
-import FileExplorer from './FileExplorer';
-import ExecutionOrder from './ExecutionOrder';
-import { FileData, ExecutionItem } from '../types';
+import { FC } from 'react';
+import { Box } from '@mui/material';
+import Editor, { OnMount } from '@monaco-editor/react';
+import { FileData } from '../types';
 
 interface FeatureEditorProps {
-  // Props will be added as needed
+  selectedFile: FileData | null;
+  editorContent: string;
+  onEditorChange: (value: string | undefined) => void;
+  theme: string; // Nueva prop para el tema
 }
 
-export const FeatureEditor: FC<FeatureEditorProps> = () => {
-  const [selectedFile, setSelectedFile] = useState<FileData | null>(null);
-  const [executionItems, setExecutionItems] = useState<ExecutionItem[]>([]);
-  const [editorContent, setEditorContent] = useState<string>('');
+export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorContent, onEditorChange, theme }) => {
+  const handleEditorDidMount: OnMount = (editor, monaco) => {
+    const applyTheme = async (themeName: string) => {
+      // El tema 'vs-dark' es nativo, no necesita importación.
+      if (themeName === 'vs-dark') {
+        monaco.editor.setTheme(themeName);
+        return;
+      }
 
-  const handleFileSelect = useCallback((file: FileData) => {
-    setSelectedFile(file);
-    // TODO: Load file content from backend
-    setEditorContent('# Loading file content...');
-  }, []);
+      try {
+        // Importación dinámica del archivo de tema.
+        const themeData = await import(`monaco-themes/themes/${themeName.replace(/-/g, ' ')}.json`);
+        monaco.editor.defineTheme(themeName, themeData);
+        monaco.editor.setTheme(themeName);
+      } catch (error) {
+        console.error(`Failed to load theme ${themeName}:`, error);
+        monaco.editor.setTheme('vs-dark'); // Fallback a un tema seguro
+      }
+    };
 
-  const handleEditorChange = useCallback((value: string | undefined) => {
-    if (value !== undefined) {
-      setEditorContent(value);
+    applyTheme(theme);
+    // Assign a unique ID to the editor's internal textarea for accessibility
+    // and to prevent browser warnings about form fields without a name.
+    const editorElement = editor.getDomNode();
+    if (editorElement) {
+      const textarea = editorElement.querySelector('textarea');
+      if (textarea) {
+        textarea.id = 'feature-editor-textarea';
+      }
     }
-  }, []);
+  };
 
-  const handleExecutionOrderChange = useCallback((newItems: ExecutionItem[]) => {
-    setExecutionItems(newItems);
-    // TODO: Save execution order to backend
-  }, []);
+  // Este efecto se asegura de que el tema se actualice si cambia mientras el editor ya está montado.
+  const handleEditorWillMount: OnMount = (editor, monaco) => {
+    // Esto es un truco para tener la instancia de monaco disponible fuera del onMount
+    (window as any).monacoInstance = monaco;
+  };
 
   return (
-    <Box sx={{ display: 'flex', height: '100vh', width: '100vw' }}>
-      {/* File Explorer */}
-      <Paper
-        elevation={2}
-        sx={{
-          width: 250,
-          overflow: 'auto',
-          borderRight: 1,
-          borderColor: 'divider',
-        }}
-      >
-        <FileExplorer onFileSelect={handleFileSelect} />
-      </Paper>
-
-      {/* Editor */}
-      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <Typography variant="h6" sx={{ p: 1 }}>
-          {selectedFile?.name || 'No file selected'}
-        </Typography>
-        <Divider />
-        <Box sx={{ flex: 1, minHeight: 0 }}>
-          <Editor
-            height="100%"
-            defaultLanguage="gherkin"
-            value={editorContent}
-            onChange={handleEditorChange}
-            options={{
-              minimap: { enabled: true },
-              lineNumbers: 'on',
-              roundedSelection: false,
-              scrollBeyondLastLine: false,
-              readOnly: false,
-              theme: 'vs-dark',
-            }}
-          />
-        </Box>
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <Box sx={{ flex: 1, minHeight: 0 }}> {/* minHeight: 0 is crucial for child's scroll */}
+        <Editor
+          height="100%"
+          value={selectedFile ? editorContent : '-- Select a file to view its content --'}
+          onChange={onEditorChange}
+          options={{
+            minimap: { enabled: true },
+            lineNumbers: 'on',
+            roundedSelection: false,
+            scrollBeyondLastLine: false,
+            readOnly: !selectedFile,
+            theme: theme, // Aplicar el tema inicial y permitir que onMount lo sobreescriba
+          }}
+          onMount={handleEditorDidMount}
+          language={selectedFile ? 'gherkin' : undefined}
+        />
       </Box>
-
-      {/* Execution Order */}
-      <Paper
-        elevation={2}
-        sx={{
-          width: 300,
-          overflow: 'auto',
-          borderLeft: 1,
-          borderColor: 'divider',
-        }}
-      >
-        <ExecutionOrder items={executionItems} onOrderChange={handleExecutionOrderChange} />
-      </Paper>
     </Box>
   );
 };

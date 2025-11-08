@@ -41,18 +41,21 @@ class ExecutionPlanManager:
         new_module = {
             "module_name": module_name,
             "active": active,
-            "module_dir": module_dir or module_name.lower().replace(" ", "_"),
+            "module_dir": module_dir,
             "order": order,
             "features": []
         }
-        self.data['execution_sequence'].append(new_module)
-
-        # Ordena la secuencia por el 'order' para que el nuevo módulo quede en su lugar
-        self.data['execution_sequence'].sort(key=lambda m: m.get('order', 0))
-        # Re-asigna todos los 'order' para que sean secuenciales (1, 2, 3...)
-        for index, module in enumerate(self.data['execution_sequence']):
-            module['order'] = index + 1
-
+        
+        # Inserta el nuevo módulo en la posición correcta y ajusta los demás.
+        # El 'order' del frontend es 1-based, el índice de la lista es 0-based.
+        # Si el orden es mayor que la longitud de la lista, simplemente se añade al final.
+        insert_index = max(0, order - 1)
+        self.data['execution_sequence'].insert(insert_index, new_module)
+        
+        # Re-asigna todos los 'order' para que sean secuenciales (1, 2, 3...) después de la inserción.
+        for i, module in enumerate(self.data['execution_sequence']):
+            module['order'] = i + 1
+            
         self._save()
         return self.get_sequence() # Devuelve la lista actualizada y ordenada
 

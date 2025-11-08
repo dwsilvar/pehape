@@ -13,6 +13,8 @@ import { // Importa los componentes necesarios para el diálogo
   DialogContent,
   DialogTitle,
   TextField,
+  Menu,
+  MenuItem,
 } from '@mui/material';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
@@ -25,11 +27,13 @@ import { useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { useExecutionOrder } from '../hooks/useExecutionOrder';
 
-interface FeatureItem {
+export interface FeatureItem {
   id: string;
   feature_file: string;
   order: number;
   active: boolean;
+  feature_dir?: string; // Directorio de la característica
+  color?: string; // Color opcional para la feature
 }
 
 interface ExecutionItemProps {
@@ -37,13 +41,17 @@ interface ExecutionItemProps {
   onMoveUp?: () => void;
   onMoveDown?: () => void;
   fontSize: number;
+  onDoubleClick: (item: FeatureItem) => void;
 }
+
+const DEFAULT_FEATURE_COLOR = '#5a5a5a'; // Color gris por defecto para features
 
 const ExecutionItem: React.FC<ExecutionItemProps> = ({
   item,
   onMoveUp,
   onMoveDown,
   fontSize,
+  onDoubleClick,
 }) => {
   const {
     attributes,
@@ -54,6 +62,32 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
     isDragging,
   } = useSortable({ id: item.id });
 
+  const [contextMenu, setContextMenu] = React.useState<{
+    mouseX: number;
+    mouseY: number;
+  } | null>(null);
+
+  const handleContextMenu = (event: React.MouseEvent) => {
+    event.preventDefault();
+    setContextMenu(
+      contextMenu === null
+        ? {
+            mouseX: event.clientX + 2,
+            mouseY: event.clientY - 6,
+          }
+        : null,
+    );
+  };
+
+  const handleClose = () => {
+    setContextMenu(null);
+  };
+
+  const handleOpenInEditor = () => {
+    onDoubleClick(item); // Reutiliza la lógica existente para abrir el editor
+    handleClose();
+  };
+
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -61,28 +95,54 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
   };
 
   return (
-    <ListItem
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...listeners}
-      secondaryAction={
-        <>
-          <IconButton key={`${item.id}-up`} edge="end" onClick={onMoveUp} size="small">
-            <KeyboardArrowUpIcon />
-          </IconButton>
-          <IconButton key={`${item.id}-down`} edge="end" onClick={onMoveDown} size="small">
-            <KeyboardArrowDownIcon />
-          </IconButton>
-        </>
-      }
-    >
-      <ListItemText
-        primary={item.feature_file}
-        primaryTypographyProps={{ sx: { fontSize: `${fontSize}px` } }}
-        secondary={`#${item.order} ${item.active ? '✓' : '✗'}`}
-      />
-    </ListItem>
+    <>
+      <Paper
+        ref={setNodeRef}
+        style={style}
+        elevation={4} // Sombra para destacar que es un elemento individual
+        {...attributes}
+        {...listeners}
+        onDoubleClick={() => onDoubleClick(item)}
+        onContextMenu={handleContextMenu}
+        sx={{
+          p: 1,
+          mb: 1,
+          display: 'flex',
+          alignItems: 'center',
+          opacity: isDragging ? 0.5 : 1,
+          cursor: 'pointer', // Cambiado de 'grab' a 'pointer' para indicar interactividad
+          backgroundColor: 'background.default', // Usar color del tema
+          borderLeft: `5px solid ${item.color || DEFAULT_FEATURE_COLOR}`, // Borde de color
+        }}
+      >
+        <Box sx={{ flexGrow: 1, ml: 1 }}>
+          <Typography sx={{ fontSize: `${fontSize}px` }}>
+            {item.feature_file}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {`Orden: ${item.order} - ${item.active ? 'Activo' : 'Inactivo'}`}
+          </Typography>
+        </Box>
+        <IconButton key={`${item.id}-up`} edge="end" onClick={onMoveUp} size="small">
+          <KeyboardArrowUpIcon />
+        </IconButton>
+        <IconButton key={`${item.id}-down`} edge="end" onClick={onMoveDown} size="small">
+          <KeyboardArrowDownIcon />
+        </IconButton>
+      </Paper>
+      <Menu
+        open={contextMenu !== null}
+        onClose={handleClose}
+        anchorReference="anchorPosition"
+        anchorPosition={
+          contextMenu !== null
+            ? { top: contextMenu.mouseY, left: contextMenu.mouseX }
+            : undefined
+        }
+      >
+        <MenuItem onClick={handleOpenInEditor}>Abrir en editor</MenuItem>
+      </Menu>
+    </>
   );
 };
 
@@ -90,22 +150,29 @@ interface ExecutionOrderProps {
   fontSize: number;
   isDropTarget: boolean;
   onAddFeature: () => void;
+  onFeatureSelect: (path: string) => void;
+  modules: any[]; // Recibe los módulos como prop
+  setModules: React.Dispatch<React.SetStateAction<any[]>>; // Recibe el setter como prop
+  handleSave: () => void; // Recibe el handler de guardado
 }
 
-const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, isDropTarget, onAddFeature }) => {
+const DEFAULT_MODULE_COLOR = '#63a4ff'; // Un azul suave por defecto para módulos
+
+const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, isDropTarget, onAddFeature, onFeatureSelect, modules, setModules, handleSave }) => {
   const { setNodeRef } = useDroppable({
     id: 'execution-order-droppable-area',
   });
 
-  // La lógica de datos ahora está encapsulada en el hook.
-  const { modules, setModules, handleSave } = useExecutionOrder();
+  // El estado y la lógica de datos ahora se reciben como props
+  // desde FeatureEditor, donde reside el DndContext.
+  // const { modules, setModules, handleSave } = useExecutionOrder();
 
   // --- State y Handlers para el diálogo de "Agregar Módulo" ---
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [newModuleName, setNewModuleName] = React.useState('');
   const [newModuleOrder, setNewModuleOrder] = React.useState('');
 
-  const handleOpenDialog = () => {
+  const handleOpenDialog = () => { 
     setDialogOpen(true);
   };
 
@@ -191,7 +258,7 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, isDropTarget,
   };
 
   return (
-    <Box ref={setNodeRef} sx={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column' }}>
+    <Box ref={setNodeRef} sx={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', p: 1 }}>
       <Box display="flex" alignItems="center" mb={1}>
         <Typography variant="subtitle1" flex={1} sx={{ fontSize: `${fontSize}px` }}>
           Execution Order
@@ -203,11 +270,19 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, isDropTarget,
           <SaveIcon />
         </IconButton>
       </Box>
-      <Box sx={{ flex: 1, overflow: 'auto' }}> {/* Contenedor con scroll */}
-        <SortableContext items={modules.flatMap(m => m.features.map((f: FeatureItem) => f.id))} strategy={verticalListSortingStrategy}>
-          <Box>
-            {modules.map((module, index) => (
-              <Paper key={module.module_name} elevation={2} sx={{ mb: 2, p: 2 }}>
+      <Box sx={{ flex: 1, overflow: 'auto', px: 2 }}> {/* Contenedor con scroll y padding horizontal */}
+        {Array.isArray(modules) && (
+          <SortableContext items={modules.flatMap(m => m.features.map((f: FeatureItem) => f.id))} strategy={verticalListSortingStrategy}>
+            {modules.map((module, index) => ( // La interfaz de 'module' viene del hook useExecutionOrder
+              <Paper 
+                key={module.module_name} 
+                elevation={2} 
+                sx={{ 
+                  mb: 2, p: 2, 
+                  borderLeft: `5px solid ${module.color || DEFAULT_MODULE_COLOR}`,
+                  backgroundColor: 'background.paper', // Usar color del tema
+                }}
+              >
                 <Box display="flex" alignItems="center" mb={1}>
                   <Typography variant="h6" sx={{ fontSize: `${fontSize + 2}px`, flexGrow: 1 }}>
                     {`${index + 1}. ${module.module_name}`}
@@ -223,19 +298,25 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, isDropTarget,
                     <DeleteIcon />
                   </IconButton>
                 </Box>
-                <List dense>
+                <Box> {/* Usamos un Box en lugar de List para contener los Paper de las features */}
                   {module.features.map((feature: FeatureItem) => (
                     <ExecutionItem
                       key={feature.id}
                       item={feature}
                       fontSize={fontSize}
+                      onDoubleClick={(item) => {
+                        // Construir la ruta completa del feature, filtrando partes vacías para evitar dobles barras.
+                        const pathParts = [module.module_dir, item.feature_dir, item.feature_file].filter(Boolean);
+                        const fullPath = pathParts.join('/');
+                        onFeatureSelect(fullPath);
+                      }}
                     />
                   ))}
-                </List>
+                </Box>
               </Paper>
             ))}
-          </Box>
-        </SortableContext>
+          </SortableContext>
+        )}
       </Box>
       {isDropTarget && (
         <Box
@@ -262,6 +343,8 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, isDropTarget,
           <TextField
             autoFocus
             margin="dense"
+            id="module-name"
+            name="module-name"
             label="Nombre del Módulo"
             type="text"
             fullWidth
@@ -271,6 +354,8 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, isDropTarget,
           />
           <TextField
             margin="dense"
+            id="module-order"
+            name="module-order"
             label="Orden"
             type="number"
             fullWidth
