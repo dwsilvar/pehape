@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { // Importa los componentes necesarios para el diálogo
   Box,
+  CircularProgress,
   Typography,
   List,
   ListItem,

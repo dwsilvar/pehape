@@ -5,6 +5,7 @@ import { arrayMove } from '@dnd-kit/sortable';
 import FileExplorer from './FileExplorer';
 import FeatureEditor from './FeatureEditor';
 import ExecutionOrder from './ExecutionOrder';
+import StatusBar from './StatusBar'; // Importar la nueva barra de estado
 import { FileData, FeatureItem } from '../types';
 import { getAppTheme } from '../theme'; // 1. Importar nuestro creador de temas
 import { useExecutionOrder } from '../hooks/useExecutionOrder';
@@ -43,7 +44,7 @@ const MainLayout: React.FC = () => {
     return localStorage.getItem('editorTheme') || 'monokai';
   });
   const [isModifiedByDrag, setIsModifiedByDrag] = useState(false);
-  const { modules, setModules, handleSave } = useExecutionOrder();
+  const { modules, setModules, handleSave, statusMessage, isLoading } = useExecutionOrder();
   const [tabValue, setTabValue] = useState(0);
   const [viewMenuAnchorEl, setViewMenuAnchorEl] = useState<null | HTMLElement>(null);
 
@@ -113,7 +114,11 @@ const MainLayout: React.FC = () => {
   return (
     <ThemeProvider theme={muiTheme}>
       <CssBaseline /> {/* Aplica estilos base como el color de fondo del body */}
-      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+      {/* Ajustamos el Box principal para dejar espacio para la barra de estado */}
+      <Box sx={{ 
+        display: 'flex', flexDirection: 'column', 
+        height: '100vh', pb: '24px' /* Padding-bottom para no solapar con la barra */ 
+      }}>
         {/* Barra de Menú Superior */}
         <AppBar position="static" elevation={1} color="default">
           <Toolbar variant="dense">
@@ -230,6 +235,8 @@ const MainLayout: React.FC = () => {
             </Box>
           </Box>
         </DndContext>
+        {/* Renderizar la barra de estado en la parte inferior */}
+        <StatusBar message={statusMessage} isLoading={isLoading} />
       </Box>
     </ThemeProvider>
   );
