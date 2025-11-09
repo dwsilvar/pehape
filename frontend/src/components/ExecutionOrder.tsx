@@ -31,16 +31,7 @@ import { useSortable, SortableContext, verticalListSortingStrategy } from '@dnd-
 import { useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { useExecutionOrder } from '../hooks/useExecutionOrder';
-
-export interface FeatureItem {
-  id: string;
-  feature_file: string;
-  order: number;
-  active: boolean;
-  feature_dir?: string; // Directorio de la característica
-  color?: string; // Color opcional para la feature
-}
-
+import { Module, FeatureItem } from '../types'; // Importar tipos centralizados
 interface ExecutionItemProps {
   item: FeatureItem;
   onMoveUp?: () => void;
@@ -155,7 +146,7 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
 };
 
 const SortableModule: React.FC<{
-  module: any;
+  module: Module;
   controls: React.ReactNode;
   features: React.ReactNode;
 }> = ({ module, controls, features }) => {
@@ -233,21 +224,17 @@ interface ExecutionOrderProps {
   isDropTarget: boolean;
   onAddFeature: () => void;
   onFeatureSelect: (path: string) => void;
-  modules: any[]; // Recibe los módulos como prop
-  setModules: React.Dispatch<React.SetStateAction<any[]>>; // Recibe el setter como prop
-  handleSave: () => void; // Recibe el handler de guardado
+  modules: Module[]; // Usar el tipo Module
+  setModules: React.Dispatch<React.SetStateAction<Module[]>>; // Usar el tipo Module
+  // handleSave ya fue eliminado en un paso anterior, lo quito para mantener consistencia.
 }
 
 const DEFAULT_MODULE_COLOR = '#63a4ff'; // Un azul suave por defecto para módulos
 
-const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, isDropTarget, onAddFeature, onFeatureSelect, modules, setModules, handleSave }) => {
+const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, isDropTarget, onAddFeature, onFeatureSelect, modules, setModules }) => {
   const { setNodeRef } = useDroppable({
     id: 'execution-order-droppable-area',
   });
-
-  // El estado y la lógica de datos ahora se reciben como props
-  // desde FeatureEditor, donde reside el DndContext.
-  // const { modules, setModules, handleSave } = useExecutionOrder();
 
   const [showInactive, setShowInactive] = useState(true);
 
@@ -371,11 +358,6 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, isDropTarget,
           >
             {showInactive ? <VisibilityOffIcon /> : <VisibilityIcon />}
           </ToggleButton>
-        </Tooltip>
-        <Tooltip title="Guardar Orden">
-          <IconButton onClick={handleSave} size="small">
-            <SaveIcon />
-          </IconButton>
         </Tooltip>
       </Box>
       <Box sx={{ flex: 1, overflow: 'auto', px: 2 }}> {/* Contenedor con scroll y padding horizontal */}

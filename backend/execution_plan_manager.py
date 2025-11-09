@@ -126,17 +126,20 @@ class ExecutionPlanManager:
         if not isinstance(new_sequence, list):
             raise TypeError("La secuencia debe ser una lista de módulos.")
         
-        active_modules = []
-        inactive_modules = []
-
-        # Separa la nueva secuencia y asigna el orden correcto.
-        for module in new_sequence:
+        # Separa la nueva secuencia en módulos activos e inactivos.
+        active_modules = [
+            m for m in new_sequence if m.get('active')
+        ]
+        inactive_modules = [
+            m for m in new_sequence if not m.get('active')
+        ]
+        # Re-asigna el orden secuencial solo a los módulos activos, respetando el orden de llegada.
+        for i, module in enumerate(active_modules):
             if module.get('active'):
-                module['order'] = len(active_modules) + 1
-                active_modules.append(module)
-            else:
-                module['order'] = -1
-                inactive_modules.append(module)
+                module['order'] = i + 1
+        
+        for module in inactive_modules:
+            module['order'] = -1
 
         self.data['execution_sequence'] = active_modules + inactive_modules
         self._save()

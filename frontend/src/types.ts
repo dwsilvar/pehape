@@ -5,11 +5,20 @@ export interface FileData {
   children?: FileData[];
 }
 
-export interface ExecutionItem {
+export interface FeatureItem {
   id: string;
-  text: string;
+  feature_file: string;
   order: number;
   active: boolean;
-  type: 'module' | 'feature';
-  moduleId?: string;  // For features, references parent module
+  feature_dir?: string;
+  color?: string;
+}
+
+export interface Module {
+  module_name: string;
+  active: boolean;
+  module_dir: string;
+  order: number;
+  features: FeatureItem[];
+  color?: string;
 }

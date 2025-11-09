@@ -1,12 +1,11 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { Box, Paper, Tabs, Tab, Typography, MenuItem, AppBar, Toolbar, Button, Menu, ThemeProvider, CssBaseline } from '@mui/material';
-import { DndContext, DragEndEvent, closestCenter } from '@dnd-kit/core';
+import { Box, Paper, Tabs, Tab, MenuItem, AppBar, Toolbar, Button, Menu, ThemeProvider, CssBaseline } from '@mui/material';
+import { DndContext, closestCenter } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
-import type { PointerSensor, KeyboardSensor } from '@dnd-kit/core';
 import FileExplorer from './FileExplorer';
 import FeatureEditor from './FeatureEditor';
-import ExecutionOrder, { FeatureItem } from './ExecutionOrder';
-import { FileData } from '../types';
+import ExecutionOrder from './ExecutionOrder';
+import { FileData, FeatureItem } from '../types';
 import { getAppTheme } from '../theme'; // 1. Importar nuestro creador de temas
 import { useExecutionOrder } from '../hooks/useExecutionOrder';
 
@@ -44,9 +43,17 @@ const MainLayout: React.FC = () => {
     return localStorage.getItem('editorTheme') || 'monokai';
   });
   const [isModifiedByDrag, setIsModifiedByDrag] = useState(false);
-  const { modules, setModules, handleSave, handleDragEnd: handleExecutionOrderDragEnd } = useExecutionOrder();
+  const { modules, setModules, handleSave } = useExecutionOrder();
   const [tabValue, setTabValue] = useState(0);
   const [viewMenuAnchorEl, setViewMenuAnchorEl] = useState<null | HTMLElement>(null);
+
+  const availableThemes = {
+    'monokai': 'Monokai',
+    'vs-dark': 'VS Dark',
+    'solarized-dark': 'Solarized Dark',
+    'dracula': 'Dracula',
+    'cobalt': 'Cobalt',
+  };
 
   // 2. Guardar el tema en localStorage cada vez que cambie.
   // Y crear el objeto de tema de MUI con useMemo para eficiencia.
@@ -61,14 +68,6 @@ const MainLayout: React.FC = () => {
       setIsModifiedByDrag(false); // Reset the flag after saving
     }
   }, [isModifiedByDrag, handleSave]);
-
-  const availableThemes = {
-    'monokai': 'Monokai',
-    'vs-dark': 'VS Dark',
-    'solarized-dark': 'Solarized Dark',
-    'dracula': 'Dracula',
-    'cobalt': 'Cobalt',
-  };
 
   const handleViewMenuClick = (event: React.MouseEvent<HTMLElement>) => {
     setViewMenuAnchorEl(event.currentTarget);
@@ -157,20 +156,12 @@ const MainLayout: React.FC = () => {
 
           if (isModuleDrag) {
             if (active.id !== over.id) {
-              setModules((items) => {
-                // Separar activos de inactivos para no afectar a los inactivos
-                const activeModules = items.filter(m => m.active);
-                const inactiveModules = items.filter(m => !m.active);
-
-                // Encontrar los índices solo dentro de la lista de módulos activos
-                const oldIndex = activeModules.findIndex(m => m.module_name === active.id);
-                const newIndex = activeModules.findIndex(m => m.module_name === over.id);
-
-                // Mover el elemento dentro de la lista de activos y luego reconstruir el array completo
-                const reorderedActiveModules = arrayMove(activeModules, oldIndex, newIndex);
-
-                return [...reorderedActiveModules, ...inactiveModules];
-              });
+              const oldIndex = modules.findIndex((m) => m.module_name === active.id);
+              const newIndex = modules.findIndex((m) => m.module_name === over.id);              
+              // Reordenar la lista completa y devolverla.
+              const newModules = arrayMove(modules, oldIndex, newIndex);
+              setModules(newModules);
+              // Marcar que el cambio fue por arrastre para disparar el guardado.
               setIsModifiedByDrag(true);
             }
           } else {
@@ -186,13 +177,15 @@ const MainLayout: React.FC = () => {
                 const newModules = [...prevModules];
                 const module = { ...newModules[moduleIndex] };
                 const oldFeatureIndex = module.features.findIndex(f => f.id === active.id);
-                const newFeatureIndex = module.features.findIndex(f => f.id === over.id);
-
+                const newFeatureIndex = module.features.findIndex((f: FeatureItem) => f.id === over.id);
+                
                 const reorderedFeatures = arrayMove(module.features, oldFeatureIndex, newFeatureIndex);
                 const updatedModule = { ...module, features: reorderedFeatures };
                 newModules[moduleIndex] = updatedModule;
+
                 return newModules;
               });
+              // Marcar que el cambio fue por arrastre para disparar el guardado.
               setIsModifiedByDrag(true);
             }
           }
@@ -232,7 +225,6 @@ const MainLayout: React.FC = () => {
                   onFeatureSelect={handleFileSelect}
                   modules={modules}
                   setModules={setModules}
-                  handleSave={handleSave}
                 />
               </TabPanel>
             </Box>
