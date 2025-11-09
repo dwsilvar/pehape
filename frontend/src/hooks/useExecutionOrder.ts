@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Module } from '../types'; // Importar el tipo Module
 
+type StatusType = 'success' | 'error' | 'info' | null;
+
 export const useExecutionOrder = () => {
   const [modules, setModules] = useState<Module[]>([]);
-  const [statusMessage, setStatusMessage] = useState('');
+  const [status, setStatus] = useState<{ text: string; type: StatusType }>({ text: '', type: null });
   const [isLoading, setIsLoading] = useState(false);
 
   // Cargar la secuencia inicial al montar el componente
@@ -26,8 +28,8 @@ export const useExecutionOrder = () => {
 
   // Función para guardar la secuencia
   const handleSave = useCallback(async () => {
-    setStatusMessage('Guardando orden de ejecución...');
     setIsLoading(true);
+    setStatus({ text: 'Guardando orden de ejecución...', type: 'info' });
     try {
       const response = await fetch('/api/execution-order', {
         method: 'PUT',
@@ -41,17 +43,17 @@ export const useExecutionOrder = () => {
   
       const updatedSequence = await response.json(); // <-- El paso clave
       setModules(updatedSequence); // <-- Actualizar el estado con la respuesta del servidor
-      setStatusMessage('Orden guardada correctamente.');
+      setStatus({ text: 'Orden guardada correctamente.', type: 'success' });
     } catch (error) {
       console.error("Error saving execution order:", error);
-      setStatusMessage('Error al guardar el orden.');
+      setStatus({ text: 'Error al guardar el orden.', type: 'error' });
     } finally {
       setIsLoading(false);
       // Limpiar el mensaje después de unos segundos
-      setTimeout(() => setStatusMessage(''), 3000);
+      setTimeout(() => setStatus({ text: '', type: null }), 3000);
     }
   }, [modules]); // Depende de 'modules' para enviar siempre el estado más reciente
 
   // 4. Exponer el nuevo estado
-  return { modules, setModules, handleSave, statusMessage, isLoading };
+  return { modules, setModules, handleSave, status, isLoading };
 };

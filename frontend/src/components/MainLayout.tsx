@@ -44,7 +44,7 @@ const MainLayout: React.FC = () => {
     return localStorage.getItem('editorTheme') || 'monokai';
   });
   const [isModifiedByDrag, setIsModifiedByDrag] = useState(false);
-  const { modules, setModules, handleSave, statusMessage, isLoading } = useExecutionOrder();
+  const { modules, setModules, handleSave, status, isLoading } = useExecutionOrder();
   const [tabValue, setTabValue] = useState(0);
   const [viewMenuAnchorEl, setViewMenuAnchorEl] = useState<null | HTMLElement>(null);
 
@@ -236,7 +236,7 @@ const MainLayout: React.FC = () => {
           </Box>
         </DndContext>
         {/* Renderizar la barra de estado en la parte inferior */}
-        <StatusBar message={statusMessage} isLoading={isLoading} />
+        <StatusBar message={status.text} isLoading={isLoading} statusType={status.type} />
       </Box>
     </ThemeProvider>
   );
