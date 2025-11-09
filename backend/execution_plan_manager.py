@@ -25,12 +25,28 @@ class ExecutionPlanManager:
 
     def get_sequence(self):
         """Obtiene la secuencia de ejecución completa, ordenada."""
-        sequence = self.data.get('execution_sequence', [])
-        sequence.sort(key=lambda m: m.get('order', 0))
-        for module in sequence:
+        # Valida y corrige el orden al cargar.
+        all_modules = self.data.get('execution_sequence', [])
+        
+        active_modules = [m for m in all_modules if m.get('active')]
+        inactive_modules = [m for m in all_modules if not m.get('active')]
+
+        # Ordena los módulos activos por su 'order' existente para mantener la consistencia.
+        active_modules.sort(key=lambda m: m.get('order', 0))
+
+        # Re-asigna el orden secuencial solo a los módulos activos.
+        for index, module in enumerate(active_modules):
+            module['order'] = index + 1
+
+        # Asigna -1 a todos los inactivos.
+        for module in inactive_modules:
+            module['order'] = -1
+
+        # Ordena las features dentro de cada módulo.
+        for module in all_modules:
             if 'features' in module:
                 module['features'].sort(key=lambda f: f.get('order', 0))
-        return sequence
+        return active_modules + inactive_modules
 
     def add_module(self, module_name, order, active=False, module_dir=""):
         """Añade un nuevo módulo a la secuencia de ejecución."""
@@ -110,10 +126,18 @@ class ExecutionPlanManager:
         if not isinstance(new_sequence, list):
             raise TypeError("La secuencia debe ser una lista de módulos.")
         
-        # Re-asigna el 'order' basándose en el índice de la lista para que coincida con la representación visual.
-        for index, module in enumerate(new_sequence):
-            module['order'] = index + 1
+        active_modules = []
+        inactive_modules = []
 
-        self.data['execution_sequence'] = new_sequence
+        # Separa la nueva secuencia y asigna el orden correcto.
+        for module in new_sequence:
+            if module.get('active'):
+                module['order'] = len(active_modules) + 1
+                active_modules.append(module)
+            else:
+                module['order'] = -1
+                inactive_modules.append(module)
+
+        self.data['execution_sequence'] = active_modules + inactive_modules
         self._save()
         return self.get_sequence()

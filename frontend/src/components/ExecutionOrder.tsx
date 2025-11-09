@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { // Importa los componentes necesarios para el diálogo
   Box,
   Typography,
@@ -15,6 +15,8 @@ import { // Importa los componentes necesarios para el diálogo
   TextField,
   Menu,
   MenuItem,
+  Tooltip,
+  ToggleButton,
 } from '@mui/material';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
@@ -22,6 +24,9 @@ import SaveIcon from '@mui/icons-material/Save';
 import ToggleOnIcon from '@mui/icons-material/ToggleOn';
 import ToggleOffIcon from '@mui/icons-material/ToggleOff';
 import DeleteIcon from '@mui/icons-material/Delete';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import { useSortable, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
@@ -60,7 +65,10 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: item.id });
+  } = useSortable({ 
+    id: item.id,
+    data: { type: 'feature' } // Identificamos este elemento como una 'feature'
+  });
 
   const [contextMenu, setContextMenu] = React.useState<{
     mouseX: number;
@@ -146,6 +154,80 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
   );
 };
 
+const SortableModule: React.FC<{
+  module: any;
+  controls: React.ReactNode;
+  features: React.ReactNode;
+}> = ({ module, controls, features }) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: module.module_name, // Use a unique ID for the module
+    data: { type: 'module' } // Add data to identify it as a module
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 1 : 'auto',
+    position: 'relative' as 'relative',
+  };
+
+  return (
+    <Box ref={setNodeRef} style={style} sx={{ position: 'relative' }}>
+      {/* Este Box es el nuevo "handle" para arrastrar. Se posiciona sobre el Paper. */}
+      <Box
+        {...attributes}
+        {...listeners}
+        sx={{
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: '30px', // Ancho suficiente para el ícono
+          cursor: 'grab',
+          borderTopLeftRadius: (theme) => theme.shape.borderRadius,
+          borderBottomLeftRadius: (theme) => theme.shape.borderRadius,
+          backgroundColor: module.color || DEFAULT_MODULE_COLOR,
+          zIndex: 1, // Asegura que esté por encima del Paper
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'white',
+        }}
+      >
+        <DragIndicatorIcon fontSize="small" />
+      </Box>
+      <Paper elevation={2} sx={{ mb: 2, p: 2, pl: 4, backgroundColor: 'background.paper' }}>
+        <Box display="flex" alignItems="center" mb={1}>
+          <Box
+            sx={{
+              flexGrow: 1,
+              display: 'flex',
+              alignItems: 'center'
+            }}
+          >
+            <Typography variant="h6" sx={{ fontSize: `${14 + 2}px`, flexGrow: 1 }}>
+              {module.active
+                ? `${module.order}. ${module.module_name}`
+                : module.module_name}
+            </Typography>
+          </Box>
+          {/* The rest of the controls are outside the drag handle */}
+          {controls}
+        </Box>
+        {features}
+      </Paper>
+    </Box>
+  );
+};
+
 interface ExecutionOrderProps {
   fontSize: number;
   isDropTarget: boolean;
@@ -167,6 +249,19 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, isDropTarget,
   // desde FeatureEditor, donde reside el DndContext.
   // const { modules, setModules, handleSave } = useExecutionOrder();
 
+  const [showInactive, setShowInactive] = useState(true);
+
+  const handleToggleShowInactive = () => {
+    setShowInactive(prev => !prev);
+  };
+
+  const visibleModules = useMemo(() => {
+    const sortedModules = [...modules].sort((a, b) => {
+      if (a.active === b.active) return a.order - b.order; // Mantener orden entre activos/inactivos
+      return a.active ? -1 : 1; // Activos primero
+    });
+    return showInactive ? sortedModules : sortedModules.filter(m => m.active);
+  }, [modules, showInactive]);
   // --- State y Handlers para el diálogo de "Agregar Módulo" ---
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [newModuleName, setNewModuleName] = React.useState('');
@@ -266,54 +361,56 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, isDropTarget,
         <Button variant="outlined" size="small" sx={{ mr: 1 }} onClick={handleOpenDialog}>
           Agregar Módulo
         </Button>
-        <IconButton onClick={handleSave} size="small">
-          <SaveIcon />
-        </IconButton>
+        <Tooltip title={showInactive ? "Ocultar inactivos" : "Mostrar inactivos"}>
+          <ToggleButton
+            value="check"
+            selected={showInactive}
+            onChange={handleToggleShowInactive}
+            size="small"
+            sx={{ mr: 1 }}
+          >
+            {showInactive ? <VisibilityOffIcon /> : <VisibilityIcon />}
+          </ToggleButton>
+        </Tooltip>
+        <Tooltip title="Guardar Orden">
+          <IconButton onClick={handleSave} size="small">
+            <SaveIcon />
+          </IconButton>
+        </Tooltip>
       </Box>
       <Box sx={{ flex: 1, overflow: 'auto', px: 2 }}> {/* Contenedor con scroll y padding horizontal */}
-        {Array.isArray(modules) && (
-          <SortableContext items={modules.flatMap(m => m.features.map((f: FeatureItem) => f.id))} strategy={verticalListSortingStrategy}>
-            {modules.map((module, index) => ( // La interfaz de 'module' viene del hook useExecutionOrder
-              <Paper 
+        {Array.isArray(visibleModules) && (
+          <SortableContext items={visibleModules.map(m => m.module_name)} strategy={verticalListSortingStrategy}>
+            {visibleModules.map((module, index) => ( // La interfaz de 'module' viene del hook useExecutionOrder
+              <SortableModule 
                 key={module.module_name} 
-                elevation={2} 
-                sx={{ 
-                  mb: 2, p: 2, 
-                  borderLeft: `5px solid ${module.color || DEFAULT_MODULE_COLOR}`,
-                  backgroundColor: 'background.paper', // Usar color del tema
-                }}
-              >
-                <Box display="flex" alignItems="center" mb={1}>
-                  <Typography variant="h6" sx={{ fontSize: `${fontSize + 2}px`, flexGrow: 1 }}>
-                    {`${index + 1}. ${module.module_name}`}
-                  </Typography>
-                  <IconButton onClick={() => handleToggleModuleActivity(module.module_name, module.active)} size="small">
-                    {module.active ? (
-                      <ToggleOnIcon color="success" />
-                    ) : (
-                      <ToggleOffIcon color="action" />
-                    )}
-                  </IconButton>
-                  <IconButton onClick={() => handleDeleteModule(module.module_name)} size="small">
-                    <DeleteIcon />
-                  </IconButton>
-                </Box>
-                <Box> {/* Usamos un Box en lugar de List para contener los Paper de las features */}
-                  {module.features.map((feature: FeatureItem) => (
-                    <ExecutionItem
-                      key={feature.id}
-                      item={feature}
-                      fontSize={fontSize}
-                      onDoubleClick={(item) => {
-                        // Construir la ruta completa del feature, filtrando partes vacías para evitar dobles barras.
-                        const pathParts = [module.module_dir, item.feature_dir, item.feature_file].filter(Boolean);
-                        const fullPath = pathParts.join('/');
-                        onFeatureSelect(fullPath);
-                      }}
-                    />
-                  ))}
-                </Box>
-              </Paper>
+                module={module}
+                controls={
+                  <>
+                    <IconButton onClick={() => handleToggleModuleActivity(module.module_name, module.active)} size="small">
+                      {module.active ? <ToggleOnIcon color="success" /> : <ToggleOffIcon color="action" />}
+                    </IconButton>
+                    <IconButton onClick={() => handleDeleteModule(module.module_name)} size="small">
+                      <DeleteIcon />
+                    </IconButton>
+                  </>
+                }
+                features={
+                  <Box sx={{ width: '100%' }}>
+                    <SortableContext items={module.features.map((f: FeatureItem) => f.id)} strategy={verticalListSortingStrategy}>
+                      {module.features.map((feature: FeatureItem) => (
+                        <ExecutionItem
+                          key={feature.id} item={feature} fontSize={fontSize}
+                          onDoubleClick={(item) => {
+                            const pathParts = [module.module_dir, item.feature_dir, item.feature_file].filter(Boolean);
+                            onFeatureSelect(pathParts.join('/'));
+                          }}
+                        />
+                      ))}
+                    </SortableContext>
+                  </Box>
+                }
+              />
             ))}
           </SortableContext>
         )}
