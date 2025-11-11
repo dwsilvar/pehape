@@ -28,8 +28,9 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
-import { useSortable, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { useDroppable } from '@dnd-kit/core';
+import { useSortable, SortableContext, verticalListSortingStrategy, } from '@dnd-kit/sortable';
+import { arrayMove } from '@dnd-kit/sortable';
+import { useDroppable, useDndContext } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { useExecutionOrder } from '../hooks/useExecutionOrder';
 import { Module, FeatureItem } from '../types'; // Importar tipos centralizados
@@ -39,6 +40,7 @@ interface ExecutionItemProps {
   onMoveDown?: () => void;
   fontSize: number;
   onDoubleClick: (item: FeatureItem) => void;
+  onDelete: (item: FeatureItem) => void;
 }
 
 const DEFAULT_FEATURE_COLOR = '#5a5a5a'; // Color gris por defecto para features
@@ -49,6 +51,7 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
   onMoveDown,
   fontSize,
   onDoubleClick,
+  onDelete,
 }) => {
   const {
     attributes,
@@ -88,6 +91,10 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
     handleClose();
   };
 
+  const handleDelete = () => {
+    onDelete(item);
+    handleClose();
+  };
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -100,22 +107,44 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
         ref={setNodeRef}
         style={style}
         elevation={4} // Sombra para destacar que es un elemento individual
-        {...attributes}
-        {...listeners}
         onDoubleClick={() => onDoubleClick(item)}
         onContextMenu={handleContextMenu}
         sx={{
-          p: 1,
           mb: 1,
           display: 'flex',
           alignItems: 'center',
           opacity: isDragging ? 0.5 : 1,
-          cursor: 'pointer', // Cambiado de 'grab' a 'pointer' para indicar interactividad
           backgroundColor: 'background.default', // Usar color del tema
-          borderLeft: `5px solid ${item.color || DEFAULT_FEATURE_COLOR}`, // Borde de color
+          position: 'relative', // Necesario para posicionar el handle
+          pl: '30px', // Padding izquierdo para dejar espacio al handle
+          py: 1, // Padding vertical
+          pr: 1, // Padding derecho
         }}
       >
-        <Box sx={{ flexGrow: 1, ml: 1 }}>
+        {/* Handle de arrastre a la izquierda, similar al de los módulos */}
+        <Box
+          {...attributes}
+          {...listeners}
+          sx={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: '30px',
+            cursor: 'grab',
+            backgroundColor: item.color || DEFAULT_FEATURE_COLOR,
+            borderTopLeftRadius: (theme) => theme.shape.borderRadius,
+            borderBottomLeftRadius: (theme) => theme.shape.borderRadius,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'white',
+          }}
+        >
+          <DragIndicatorIcon fontSize="small" />
+        </Box>
+        {/* Contenido del feature */}
+        <Box sx={{ flexGrow: 1, ml: 1, cursor: 'pointer' }}>
           <Typography sx={{ fontSize: `${fontSize}px` }}>
             {item.feature_file}
           </Typography>
@@ -123,11 +152,15 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
             {`Orden: ${item.order} - ${item.active ? 'Activo' : 'Inactivo'}`}
           </Typography>
         </Box>
+        {/* Los botones ahora están fuera del handle y sus clics funcionarán. */}
         <IconButton key={`${item.id}-up`} edge="end" onClick={onMoveUp} size="small">
           <KeyboardArrowUpIcon />
         </IconButton>
         <IconButton key={`${item.id}-down`} edge="end" onClick={onMoveDown} size="small">
           <KeyboardArrowDownIcon />
+        </IconButton>
+        <IconButton edge="end" onClick={() => onDelete(item)} size="small" sx={{ ml: 1 }}>
+          <DeleteIcon fontSize="small" />
         </IconButton>
       </Paper>
       <Menu
@@ -141,6 +174,7 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
         }
       >
         <MenuItem onClick={handleOpenInEditor}>Abrir en editor</MenuItem>
+        <MenuItem onClick={handleDelete}>Eliminar</MenuItem>
       </Menu>
     </>
   );
@@ -171,8 +205,26 @@ const SortableModule: React.FC<{
     position: 'relative' as 'relative',
   };
 
+  const droppableId = `module-drop-area-${module.module_name}`;
+  // LOG: Confirmar que cada módulo se registra como un área "droppable"
+  // console.log(`Registering droppable area with ID: ${droppableId}`);
+
+  // Hacer que el módulo sea un área "soltable" (droppable)
+  const { setNodeRef: setDroppableNodeRef, isOver } = useDroppable({
+    id: droppableId,
+    data: {
+      moduleName: module.module_name,
+    },
+  });
+
+  // Unificamos los refs de sortable y droppable en un solo manejador.
+  const combinedRef = (node: HTMLElement | null) => {
+    setNodeRef(node);
+    setDroppableNodeRef(node);
+  };
+
   return (
-    <Box ref={setNodeRef} style={style} sx={{ position: 'relative' }}>
+    <Box ref={combinedRef} style={style} sx={{ position: 'relative' }}>
       {/* Este Box es el nuevo "handle" para arrastrar. Se posiciona sobre el Paper. */}
       <Box
         {...attributes}
@@ -196,7 +248,20 @@ const SortableModule: React.FC<{
       >
         <DragIndicatorIcon fontSize="small" />
       </Box>
-      <Paper elevation={2} sx={{ mb: 2, p: 2, pl: 4, backgroundColor: 'background.paper' }}>
+      {/* El ref del droppable se aplica al Paper para que cubra toda el área del módulo */}
+      <Paper
+        elevation={2}
+        sx={{
+          mb: 2,
+          p: 2,
+          pl: 4,
+          backgroundColor: 'background.paper',
+          // Efecto visual cuando un elemento arrastrable está sobre el módulo
+          outline: isOver ? '2px dashed' : 'none',
+          outlineColor: isOver ? 'primary.main' : 'transparent',
+          transition: 'outline-color 0.2s ease-in-out, background-color 0.2s ease-in-out',
+        }}
+      >
         <Box display="flex" alignItems="center" mb={1}>
           <Box
             sx={{
@@ -233,7 +298,11 @@ interface ExecutionOrderProps {
 const DEFAULT_MODULE_COLOR = '#63a4ff'; // Un azul suave por defecto para módulos
 
 const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, isDropTarget, onAddFeature, onFeatureSelect, modules, setModules }) => {
-  const { setNodeRef } = useDroppable({
+  // Necesitamos acceder al elemento activo para deshabilitar el SortableContext si no es un módulo.
+  // Esto es un patrón avanzado para permitir que droppables externos funcionen dentro de un SortableContext.
+  const { active } = useDndContext();
+
+  const { setNodeRef: setGlobalDroppableRef } = useDroppable({
     id: 'execution-order-droppable-area',
   });
 
@@ -340,8 +409,85 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, isDropTarget,
     }
   };
 
+  const handleDeleteFeature = async (moduleName: string, feature: FeatureItem) => {
+    try {
+      const response = await fetch(`/api/modules/${encodeURIComponent(moduleName)}/features`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          feature_file: feature.feature_file,
+          feature_dir: feature.feature_dir,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete feature');
+      }
+
+      const updatedModules = await response.json();
+      setModules(updatedModules);
+    } catch (error) {
+      console.error('Error al eliminar el feature:', error);
+      // Opcional: mostrar un mensaje de error al usuario
+    }
+  };
+
+  const handleMoveFeature = async (moduleName: string, featureToMove: FeatureItem, direction: 'up' | 'down') => {
+    const module = modules.find(m => m.module_name === moduleName);
+    if (!module) return;
+
+    const oldIndex = module.features.findIndex(f => f.id === featureToMove.id);
+    if (oldIndex === -1) return;
+
+    const newIndex = direction === 'up' ? oldIndex - 1 : oldIndex + 1;
+
+    // Validar que el nuevo índice esté dentro de los límites del array
+    if (newIndex < 0 || newIndex >= module.features.length) {
+      return; // No se puede mover más allá de los límites
+    }
+
+    const reorderedFeatures = arrayMove(module.features, oldIndex, newIndex);
+
+    // Re-asigna el orden secuencial para la actualización optimista
+    const updatedFeaturesWithOrder = reorderedFeatures.map((feature, index) => ({
+      ...feature,
+      order: index + 1,
+    }));
+
+    // Actualización optimista: actualiza la UI inmediatamente
+    setModules(prevModules =>
+      prevModules.map(m =>
+        m.module_name === moduleName ? { ...m, features: updatedFeaturesWithOrder } : m
+      )
+    );
+
+    // Llama a la API para persistir el cambio
+    try {
+      const response = await fetch(`/api/modules/${encodeURIComponent(moduleName)}/features/reorder`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedFeaturesWithOrder), // Envía la lista con el orden ya corregido
+      });
+
+      if (!response.ok) {
+        // Si la API falla, revierte el cambio en la UI
+        setModules(modules);
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to reorder features');
+      }
+      // Opcional: podrías actualizar el estado con la respuesta del servidor si es necesario
+    } catch (error) {
+      console.error('Error al reordenar el feature:', error);
+      setModules(modules); // Revertir en caso de error de red
+    }
+  };
+
+
   return (
-    <Box ref={setNodeRef} sx={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', p: 1 }}>
+    <Box ref={setGlobalDroppableRef} sx={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', p: 1 }}>
       <Box display="flex" alignItems="center" mb={1}>
         <Typography variant="subtitle1" flex={1} sx={{ fontSize: `${fontSize}px` }}>
           Execution Order
@@ -363,7 +509,13 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, isDropTarget,
       </Box>
       <Box sx={{ flex: 1, overflow: 'auto', px: 2 }}> {/* Contenedor con scroll y padding horizontal */}
         {Array.isArray(visibleModules) && (
-          <SortableContext items={visibleModules.map(m => m.module_name)} strategy={verticalListSortingStrategy}>
+          <SortableContext 
+            items={visibleModules.map(m => m.module_name)}
+            strategy={verticalListSortingStrategy}
+            // Deshabilita el contexto de ordenación si el elemento arrastrado no es un 'module'.
+            // Esto permite que los 'droppables' internos acepten elementos externos.
+            disabled={!active || active.data.current?.type !== 'module'}
+          >
             {visibleModules.map((module, index) => ( // La interfaz de 'module' viene del hook useExecutionOrder
               <SortableModule 
                 key={module.module_name} 
@@ -380,14 +532,24 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, isDropTarget,
                 }
                 features={
                   <Box sx={{ width: '100%' }}>
-                    <SortableContext items={module.features.map((f: FeatureItem) => f.id)} strategy={verticalListSortingStrategy}>
-                      {module.features.map((feature: FeatureItem) => (
+                    <SortableContext
+                      id={module.module_name} // ¡LA CLAVE ESTÁ AQUÍ! Asignamos el nombre del módulo como ID.
+                      items={module.features.map((f: FeatureItem) => f.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      {[...module.features] // Creamos una copia para no mutar el estado original
+                        .sort((a, b) => a.order - b.order) // Ordenamos por la propiedad 'order'
+                        .map((feature: FeatureItem, index: number) => (
                         <ExecutionItem
                           key={feature.id} item={feature} fontSize={fontSize}
                           onDoubleClick={(item) => {
-                            const pathParts = [module.module_dir, item.feature_dir, item.feature_file].filter(Boolean);
-                            onFeatureSelect(pathParts.join('/'));
+                            // La ruta del feature ya es relativa al directorio 'features'.
+                            const fullPath = [item.feature_dir, item.feature_file].filter(Boolean).join('/');
+                            onFeatureSelect(fullPath);
                           }}
+                          onDelete={() => handleDeleteFeature(module.module_name, feature)}
+                          onMoveUp={() => handleMoveFeature(module.module_name, feature, 'up')}
+                          onMoveDown={() => handleMoveFeature(module.module_name, feature, 'down')}
                         />
                       ))}
                     </SortableContext>

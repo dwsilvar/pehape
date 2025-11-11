@@ -91,6 +91,14 @@ def save_feature_content(filepath):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+def _add_ids_to_sequence(sequence):
+    """Función auxiliar para añadir IDs únicos a los features para el frontend."""
+    for module in sequence:
+        for feature in module.get('features', []):
+            # Usamos una combinación que sea estable y única dentro del módulo.
+            feature['id'] = f"{module['module_name']}-{feature.get('feature_dir', '')}-{feature['feature_file']}"
+    return sequence
+
 @app.route('/api/execution-order', methods=['GET'])
 def get_execution_order():
     """
@@ -98,11 +106,7 @@ def get_execution_order():
     """
     try:
         execution_sequence = plan_manager.get_sequence()
-        # Asignar un ID único a cada feature para que React lo use como 'key'
-        for module in execution_sequence:
-            for feature in module.get('features', []):
-                feature['id'] = f"{module['module_name']}-{feature['feature_file']}"
-        return jsonify(execution_sequence)
+        return jsonify(_add_ids_to_sequence(execution_sequence))
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -114,7 +118,7 @@ def save_execution_order():
     try:
         new_sequence = request.json
         updated_sequence = plan_manager.update_sequence(new_sequence)
-        return jsonify(updated_sequence)
+        return jsonify(_add_ids_to_sequence(updated_sequence))
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -131,7 +135,7 @@ def add_module():
             return jsonify({"error": "Se requiere 'module_name' y 'order'"}), 400
 
         updated_sequence = plan_manager.add_module(module_name, int(order))
-        return jsonify(updated_sequence), 201
+        return jsonify(_add_ids_to_sequence(updated_sequence)), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
@@ -142,7 +146,7 @@ def delete_module(module_name):
     """
     try:
         updated_sequence = plan_manager.delete_module(module_name)
-        return jsonify(updated_sequence)
+        return jsonify(_add_ids_to_sequence(updated_sequence))
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
@@ -158,9 +162,67 @@ def toggle_module_activity(module_name):
             return jsonify({"error": "Se requiere el estado 'active'"}), 400
 
         updated_sequence = plan_manager.toggle_module_activity(module_name, bool(active))
-        return jsonify(updated_sequence)
+        return jsonify(_add_ids_to_sequence(updated_sequence))
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+
+@app.route('/api/modules/<string:module_name>/features', methods=['POST'])
+def add_feature_to_module(module_name):
+    """
+    Endpoint para añadir un nuevo feature a un módulo existente.
+    """
+    try:
+        data = request.json
+        feature_path = data.get('path')
+        if not feature_path:
+            return jsonify({"error": "Se requiere el 'path' del feature"}), 400
+
+        updated_sequence = plan_manager.add_feature_to_module(module_name, feature_path)
+        return jsonify(_add_ids_to_sequence(updated_sequence)), 201
+    except ValueError as e: # Captura errores de lógica de negocio (ej. duplicados)
+        return jsonify({"error": str(e)}), 409 # 409 Conflict
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/modules/<string:module_name>/features', methods=['DELETE'])
+def delete_feature_from_module(module_name):
+    """
+    Endpoint para eliminar un feature de un módulo existente.
+    La identificación del feature se pasa en el cuerpo de la solicitud.
+    """
+    try:
+        data = request.json
+        feature_file = data.get('feature_file')
+        feature_dir = data.get('feature_dir', '') # El directorio puede no existir
+
+        if not feature_file:
+            return jsonify({"error": "Se requiere 'feature_file' en el cuerpo de la solicitud"}), 400
+
+        updated_sequence = plan_manager.delete_feature_from_module(module_name, feature_file, feature_dir)
+        return jsonify(_add_ids_to_sequence(updated_sequence))
+
+    except ValueError as e: # Captura errores como "no encontrado"
+        return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/modules/<string:module_name>/features/reorder', methods=['PUT'])
+def reorder_features(module_name):
+    """
+    Endpoint para reordenar los features dentro de un módulo.
+    """
+    try:
+        reordered_features = request.json
+        if not isinstance(reordered_features, list):
+            return jsonify({"error": "El cuerpo de la solicitud debe ser una lista de features"}), 400
+
+        updated_sequence = plan_manager.reorder_features_in_module(module_name, reordered_features)
+        return jsonify(_add_ids_to_sequence(updated_sequence))
+
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

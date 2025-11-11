@@ -144,3 +144,84 @@ class ExecutionPlanManager:
         self.data['execution_sequence'] = active_modules + inactive_modules
         self._save()
         return self.get_sequence()
+
+    def add_feature_to_module(self, module_name, feature_path):
+        """Añade un feature a un módulo existente."""
+        target_module = None
+        for m in self.data['execution_sequence']:
+            if m.get('module_name', '').lower() == module_name.lower():
+                target_module = m
+                break
+
+        if not target_module:
+            raise ValueError(f"El módulo '{module_name}' no fue encontrado.")
+
+        # Extraer feature_file y feature_dir del path
+        path_parts = feature_path.replace('\\', '/').split('/')
+        feature_file = path_parts[-1]
+        feature_dir = "/".join(path_parts[:-1])
+
+        # Verificar si el feature ya existe en el módulo
+        if any(f['feature_file'] == feature_file and f['feature_dir'] == feature_dir for f in target_module.get('features', [])):
+            raise ValueError(f"El feature '{feature_file}' ya existe en el módulo '{module_name}'.")
+
+        # Calcular el siguiente 'order' para el nuevo feature
+        max_order = 0
+        if 'features' in target_module and target_module['features']:
+            max_order = max(f.get('order', 0) for f in target_module['features'])
+
+        new_feature = {
+            "feature_file": feature_file,
+            "feature_dir": feature_dir,
+            "active": True,
+            "order": max_order + 1,
+            "tags": None
+        }
+
+        target_module.setdefault('features', []).append(new_feature)
+        self._save()
+        return self.get_sequence()
+
+    def delete_feature_from_module(self, module_name, feature_file, feature_dir):
+        """Elimina un feature de un módulo específico."""
+        target_module = None
+        for m in self.data['execution_sequence']:
+            if m.get('module_name', '').lower() == module_name.lower():
+                target_module = m
+                break
+
+        if not target_module:
+            raise ValueError(f"El módulo '{module_name}' no fue encontrado.")
+
+        initial_feature_count = len(target_module.get('features', []))
+        
+        # Filtra la lista de features para excluir el que se va a eliminar.
+        target_module['features'] = [
+            f for f in target_module.get('features', [])
+            if not (f['feature_file'] == feature_file and f.get('feature_dir', '') == feature_dir)
+        ]
+
+        if len(target_module['features']) == initial_feature_count:
+            raise ValueError(f"El feature '{feature_file}' no fue encontrado en el módulo '{module_name}'.")
+
+        self._save()
+        return self.get_sequence()
+
+    def reorder_features_in_module(self, module_name, reordered_features):
+        """Reordena los features para un módulo específico."""
+        target_module = None
+        for m in self.data['execution_sequence']:
+            if m.get('module_name', '').lower() == module_name.lower():
+                target_module = m
+                break
+
+        if not target_module:
+            raise ValueError(f"El módulo '{module_name}' no fue encontrado.")
+
+        # Re-asigna el orden secuencial a la nueva lista de features.
+        for i, feature in enumerate(reordered_features):
+            feature['order'] = i + 1
+
+        target_module['features'] = reordered_features
+        self._save()
+        return self.get_sequence()
