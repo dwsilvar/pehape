@@ -1,36 +1,41 @@
-import React from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { FileData } from '../types';
 
 export const useFileTree = () => {
-  const [files, setFiles] = React.useState<FileData[]>([]);
-  const [expanded, setExpanded] = React.useState<string[]>([]);
+  const [files, setFiles] = useState<FileData[]>([]);
+  const [expanded, setExpanded] = useState<string[]>([]);
 
-  React.useEffect(() => {
-    fetch('/api/features')
-      .then((res) => {
-        if (!res.ok) {
-          throw new Error(`Network response was not ok: ${res.status} ${res.statusText}`);
-        }
-        return res.json();
-      })
-      .then((data: FileData[]) => {
-        setFiles(data);
-        const folderIds: string[] = [];
-        const collectFolderIds = (nodes: FileData[]) => {
-          nodes.forEach((node: FileData) => {
-            if (node.type === 'directory') {
-              folderIds.push(node.path);
-              if (node.children) collectFolderIds(node.children);
-            }
-          });
-        };
-        collectFolderIds(data);
-        setExpanded(folderIds);
-      })
-      .catch(error => {
-        console.error("Error al obtener los archivos de características:", error);
-      });
-  }, []);
+  // Encapsulamos la lógica de fetch en una función que podemos reutilizar.
+  const fetchFileTree = useCallback(async () => {
+    try {
+      const response = await fetch('/api/features');
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      const data: FileData[] = await response.json();
+      setFiles(data);
+      // Auto-expandir todas las carpetas al cargar
+      const folderIds: string[] = [];
+      const collectFolderIds = (nodes: FileData[]) => {
+        nodes.forEach((node) => {
+          if (node.type === 'directory' && node.children) {
+            folderIds.push(node.path);
+            collectFolderIds(node.children);
+          }
+        });
+      };
+      collectFolderIds(data);
+      setExpanded(folderIds);
+    } catch (error) {
+      console.error("Failed to fetch file tree:", error);
+      setFiles([]); // En caso de error, mostrar un árbol vacío.
+    }
+  }, []); // No tiene dependencias, por lo que no se recreará.
 
-  return { files, expanded, setExpanded };
+  useEffect(() => {
+    fetchFileTree();
+  }, [fetchFileTree]);
+
+  // Exponemos la función 'fetchFileTree' con el alias 'refreshFileTree'.
+  return { files, expanded, setExpanded, refreshFileTree: fetchFileTree };
 };

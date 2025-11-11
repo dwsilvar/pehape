@@ -23,17 +23,21 @@ def list_features():
     def build_tree(path):
         tree = []
         for item in sorted(os.listdir(path)):
+            # Excluir la carpeta 'steps' de la vista del explorador de archivos.
+            if os.path.isdir(os.path.join(path, item)) and item == 'steps':
+                continue
+
             full_path = os.path.join(path, item)
             relative_path = os.path.relpath(full_path, FEATURES_DIR).replace('\\', '/')
             if os.path.isdir(full_path):
                 children = build_tree(full_path)
-                if children: # Solo agregar directorios si no están vacíos
-                    tree.append({
-                        "name": item,
-                        "type": "directory",
-                        "path": relative_path,
-                        "children": children
-                    })
+                # Se elimina la condición 'if children:' para incluir directorios vacíos.
+                tree.append({
+                    "name": item,
+                    "type": "directory",
+                    "path": relative_path,
+                    "children": children
+                })
             elif item.endswith('.feature'):
                 tree.append({
                     "name": item,
@@ -88,6 +92,62 @@ def save_feature_content(filepath):
             return jsonify({"message": f"File '{filepath}' saved successfully."})
         else:
             return jsonify({"error": "Invalid path or access denied"}), 403
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/directories', methods=['POST'])
+def create_directory():
+    """
+    Endpoint para crear un nuevo directorio.
+    """
+    try:
+        data = request.json
+        path = data.get('path')
+        if not path:
+            return jsonify({"error": "Se requiere 'path' en el cuerpo de la solicitud"}), 400
+
+        # Aseguramos que el path es seguro y no sale del directorio de features
+        full_path = os.path.abspath(os.path.join(FEATURES_DIR, path))
+        if os.path.commonpath([full_path, os.path.abspath(FEATURES_DIR)]) != os.path.abspath(FEATURES_DIR):
+            return jsonify({"error": "Ruta inválida o acceso denegado"}), 403
+
+        if os.path.exists(full_path):
+            return jsonify({"error": f"El directorio o archivo '{path}' ya existe."}), 409
+
+        os.makedirs(full_path)
+        return jsonify({"message": f"Directorio '{path}' creado exitosamente."}), 201
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/files', methods=['POST'])
+def create_file():
+    """
+    Endpoint para crear un nuevo archivo .feature.
+    """
+    try:
+        data = request.json
+        path = data.get('path')
+        if not path:
+            return jsonify({"error": "Se requiere 'path' en el cuerpo de la solicitud"}), 400
+
+        # Aseguramos que el path es seguro y termina en .feature
+        if not path.endswith('.feature'):
+            path += '.feature'
+
+        full_path = os.path.abspath(os.path.join(FEATURES_DIR, path))
+        if os.path.commonpath([full_path, os.path.abspath(FEATURES_DIR)]) != os.path.abspath(FEATURES_DIR):
+            return jsonify({"error": "Ruta inválida o acceso denegado"}), 403
+
+        if os.path.exists(full_path):
+            return jsonify({"error": f"El archivo '{path}' ya existe."}), 409
+
+        # Crear el archivo con contenido por defecto
+        default_content = "Feature: Nuevo Feature\n\n  Scenario: Nuevo escenario\n    Given \n    When \n    Then "
+        with open(full_path, 'w', encoding='utf-8') as f:
+            f.write(default_content)
+        return jsonify({"message": f"Archivo '{path}' creado exitosamente.", "path": path}), 201
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

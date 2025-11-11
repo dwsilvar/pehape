@@ -1,5 +1,5 @@
-import React from 'react';
-import { Box, Typography } from '@mui/material';
+import React, { useState } from 'react';
+import { Box, Typography, Menu, MenuItem, Dialog, DialogTitle, DialogContent, TextField, DialogActions, Button } from '@mui/material';
 import { SimpleTreeView } from '@mui/x-tree-view/SimpleTreeView';
 import { TreeItem } from '@mui/x-tree-view/TreeItem';
 import FolderIcon from '@mui/icons-material/Folder';
@@ -19,7 +19,11 @@ interface FileExplorerProps {
  * Componente que envuelve un TreeItem de MUI para hacerlo arrastrable.
  * Solo los elementos de tipo 'file' serán arrastrables.
  */
-const DraggableTreeItem: React.FC<{ node: FileData; fontSize: number }> = ({ node, fontSize }) => {
+const DraggableTreeItem: React.FC<{
+  node: FileData;
+  fontSize: number;
+  onContextMenu: (event: React.MouseEvent, node: FileData) => void;
+}> = ({ node, fontSize, onContextMenu }) => {
   const isFile = node.type === 'file';
   
   // Configura el elemento como arrastrable solo si es un archivo .feature
@@ -42,7 +46,7 @@ const DraggableTreeItem: React.FC<{ node: FileData; fontSize: number }> = ({ nod
       key={node.path}
       itemId={node.path}
       label={
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center' }} onContextMenu={(e) => onContextMenu(e, node)}>
           {/* El ícono de arrastre solo aparece para los archivos y es el que tiene los listeners */}
           {isFile ? (
             <Box
@@ -68,17 +72,17 @@ const DraggableTreeItem: React.FC<{ node: FileData; fontSize: number }> = ({ nod
       }
     >
       {/* Renderiza los hijos si es un directorio */}
-      {Array.isArray(node.children) ? renderTree(node.children, fontSize) : null}
+      {Array.isArray(node.children) ? renderTree(node.children, fontSize, onContextMenu) : null}
     </TreeItem>
   );
 };
 
 // Función de renderizado movida fuera del componente principal para poder ser llamada recursivamente
-const renderTree = (nodes: FileData[], fontSize: number) => {
+const renderTree = (nodes: FileData[], fontSize: number, onContextMenu: (event: React.MouseEvent, node: FileData) => void) => {
   if (!nodes) {
     return null;
   }
-  return nodes.map((node) => <DraggableTreeItem key={node.path} node={node} fontSize={fontSize} />);
+  return nodes.map((node) => <DraggableTreeItem key={node.path} node={node} fontSize={fontSize} onContextMenu={onContextMenu} />);
 };
 
 /**
@@ -104,7 +108,85 @@ type FileExplorerComponent = React.FC<FileExplorerProps> & {
 // Usamos el nuevo tipo para el componente.
 const FileExplorer: FileExplorerComponent = ({ onFileSelect, fontSize }) => {
   // La lógica de datos ahora está encapsulada en el hook.
-  const { files, expanded, setExpanded } = useFileTree();
+  const { files, expanded, setExpanded, refreshFileTree } = useFileTree();
+
+  const [contextMenu, setContextMenu] = useState<{
+    mouseX: number;
+    mouseY: number;
+    node: FileData;
+  } | null>(null);
+
+  const [dialog, setDialog] = useState<{
+    open: boolean;
+    type: 'file' | 'folder';
+    basePath: string;
+  } | null>(null);
+
+  const [newItemName, setNewItemName] = useState('');
+
+  const handleContextMenu = (event: React.MouseEvent, node: FileData) => {
+    event.preventDefault();
+    setContextMenu({
+      mouseX: event.clientX - 2,
+      mouseY: event.clientY - 4,
+      node: node,
+    });
+  };
+
+  const handleCloseContextMenu = () => {
+    setContextMenu(null);
+  };
+
+  const handleOpenNewItemDialog = (type: 'file' | 'folder') => {
+    if (!contextMenu) return;
+
+    // Si se hace clic derecho en un archivo, la base es su directorio padre.
+    // Si se hace clic en una carpeta, la base es esa misma carpeta.
+    const basePath = contextMenu.node.type === 'directory'
+      ? contextMenu.node.path
+      : contextMenu.node.path.substring(0, contextMenu.node.path.lastIndexOf('/'));
+
+    setDialog({
+      open: true,
+      type,
+      basePath,
+    });
+    handleCloseContextMenu();
+  };
+
+  const handleCloseDialog = () => {
+    setDialog(null);
+    setNewItemName('');
+  };
+
+  const handleConfirmNewItem = async () => {
+    if (!newItemName || !dialog) return;
+
+    const fullPath = dialog.basePath ? `${dialog.basePath}/${newItemName}` : newItemName;
+    const endpoint = dialog.type === 'folder' ? '/api/directories' : '/api/files';
+
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: fullPath }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to create ${dialog.type}`);
+      }
+
+      // Si la creación es exitosa, refrescamos el árbol de archivos
+      await refreshFileTree();
+
+    } catch (error) {
+      console.error(`Error creating ${dialog.type}:`, error);
+      // Aquí podrías mostrar una notificación de error al usuario
+    } finally {
+      handleCloseDialog();
+    }
+  };
 
   const handleExpandedChange = (event: React.SyntheticEvent, ids: string[]) => {
     setExpanded(ids);
@@ -146,8 +228,58 @@ const FileExplorer: FileExplorerComponent = ({ onFileSelect, fontSize }) => {
         onExpandedItemsChange={handleExpandedChange}
         onItemClick={handleItemClick}
         >
-        {renderTree(files, fontSize)}
+        {renderTree(files, fontSize, handleContextMenu)}
       </SimpleTreeView>
+
+      <Menu
+        open={contextMenu !== null}
+        onClose={handleCloseContextMenu}
+        anchorReference="anchorPosition"
+        anchorPosition={
+          contextMenu !== null
+            ? { top: contextMenu.mouseY, left: contextMenu.mouseX }
+            : undefined
+        }
+      >
+        <MenuItem onClick={() => handleOpenNewItemDialog('folder')}>Nueva Carpeta</MenuItem>
+        <MenuItem onClick={() => handleOpenNewItemDialog('file')}>Nuevo Archivo Feature</MenuItem>
+      </Menu>
+
+      <Dialog open={dialog?.open || false} onClose={handleCloseDialog}>
+        <DialogTitle>
+          {dialog?.type === 'folder' ? 'Crear Nueva Carpeta' : 'Crear Nuevo Archivo Feature'}
+        </DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            id="name"
+            label="Nombre"
+            type="text"
+            fullWidth
+            variant="standard"
+            value={newItemName}
+            onChange={(e) => setNewItemName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleConfirmNewItem();
+              }
+            }}
+            helperText={
+              dialog?.type === 'file'
+                ? "No es necesario añadir .feature"
+                : `Se creará dentro de: ${dialog?.basePath || 'raíz'}`
+            }
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseDialog}>Cancelar</Button>
+          <Button onClick={handleConfirmNewItem} disabled={!newItemName}>
+            Confirmar
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
