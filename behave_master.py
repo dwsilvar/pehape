@@ -1,5 +1,6 @@
 import sys
 import logging
+import os
 from behave_runner.behave_run_json import BehaveRunJson
 from behave_runner.execution_plan_loader import ExecutionPlanLoader
 from behave_runner.report_allure import ReportAllure
@@ -25,9 +26,16 @@ class BehaveMaster:
             runner = BehaveRunJson(plan)
             runner.run_sequence()
             logger.info("Test execution completed.")
-            reporter = ReportAllure()
-            reporter.run_report_server('reports/allure_results')
-            
+
+            # 3. Generate the Allure report only if results were produced.
+            allure_results_dir = 'reports/allure_results'
+            # Check if the directory exists and is not empty
+            if os.path.exists(allure_results_dir) and os.listdir(allure_results_dir):
+                logger.info("Allure results found. Generating report...")
+                reporter = ReportAllure()
+                reporter.generate_report(allure_results_dir, 'reports/allure-report')
+            else:
+                logger.warning("No Allure results were generated. Skipping report generation.")
 
 
 beha = BehaveMaster()

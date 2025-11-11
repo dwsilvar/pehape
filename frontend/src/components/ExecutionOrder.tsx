@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { // Importa los componentes necesarios para el diálogo
   Box,
   CircularProgress,
@@ -28,6 +28,8 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow'; // Importar el ícono de Play
+import StopIcon from '@mui/icons-material/Stop'; // Importar el ícono de Stop
 import { useSortable, SortableContext, verticalListSortingStrategy, } from '@dnd-kit/sortable';
 import { arrayMove } from '@dnd-kit/sortable';
 import { useDroppable, useDndContext } from '@dnd-kit/core';
@@ -306,19 +308,119 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, isDropTarget,
     id: 'execution-order-droppable-area',
   });
 
-  const [showInactive, setShowInactive] = useState(true);
+  // Estado para controlar si se muestran los módulos inactivos. Por defecto, solo activos.
+  const [showInactive, setShowInactive] = useState(false);
+
+  // --- Estados para el log en tiempo real ---
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [logs, setLogs] = useState<string[]>([]);
+  const logsEndRef = useRef<null | HTMLDivElement>(null);
+
+  // Efecto para recargar los módulos cuando cambia el estado de 'showInactive'.
+  useEffect(() => {
+    const fetchModules = async () => {
+      try {
+        // Construye la URL dinámicamente basándose en el estado 'showInactive'.
+        const url = `/api/execution-order${showInactive ? '?include_inactive=true' : ''}`;
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error('Failed to fetch execution order');
+        }
+        const data = await response.json();
+        setModules(data); // Actualiza el estado global con los datos del backend.
+      } catch (error) {
+        console.error("Error fetching execution order:", error);
+        // Opcional: mostrar un error en la UI.
+      }
+    };
+
+    fetchModules();
+  }, [showInactive, setModules]); // Se ejecuta al montar y cuando showInactive o setModules cambian.
 
   const handleToggleShowInactive = () => {
     setShowInactive(prev => !prev);
   };
 
-  const visibleModules = useMemo(() => {
-    const sortedModules = [...modules].sort((a, b) => {
-      if (a.active === b.active) return a.order - b.order; // Mantener orden entre activos/inactivos
-      return a.active ? -1 : 1; // Activos primero
-    });
-    return showInactive ? sortedModules : sortedModules.filter(m => m.active);
-  }, [modules, showInactive]);
+  // Efecto para hacer scroll automático en el área de logs
+  useEffect(() => {
+    logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [logs]);
+
+  // Handler para ejecutar las pruebas
+  const handleRunTests = async () => {
+    if (isExecuting) return;
+
+    setIsExecuting(true);
+    setLogs(['Iniciando conexión con el servidor...']); // Limpia logs anteriores
+
+    console.log("Iniciando ejecución de pruebas...");
+    try {
+      // 1. Inicia la ejecución en el backend
+      const response = await fetch('/api/run-tests', {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to start test execution');
+      }
+
+      const result = await response.json();
+      console.log(result.message); // "La ejecución de pruebas ha comenzado."
+      setLogs(prev => [...prev, result.message]);
+
+      // 2. Se conecta al stream de eventos para recibir logs
+      const eventSource = new EventSource('/api/stream-logs');
+      
+      eventSource.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.log === '---EXECUTION_FINISHED---') {
+          setLogs(prev => [...prev, '--- Ejecución finalizada. Reporte disponible. ---']);
+          setIsExecuting(false);
+          eventSource.close(); // Cierra la conexión
+          // Abre el reporte en una nueva pestaña si la URL está presente
+          if (data.reportUrl) {
+            window.open(data.reportUrl, '_blank');
+          }
+        } else if (data.log === '---EXECUTION_STOPPED_BY_USER---') {
+          setLogs(prev => [...prev, '--- Ejecución finalizada ---']);
+          setIsExecuting(false);
+          eventSource.close(); // Cierra la conexión
+        } else {
+          setLogs(prev => [...prev, data.log]);
+        }
+      };
+
+      eventSource.onerror = () => {
+        setLogs(prev => [...prev, 'Error en la conexión de streaming. Se ha cerrado.']);
+        setIsExecuting(false);
+        eventSource.close();
+      };
+    } catch (error) {
+      console.error("Error al iniciar la ejecución de pruebas:", error);
+      setIsExecuting(false);
+    }
+  };
+
+  // Handler para detener las pruebas
+  const handleStopTests = async () => {
+    console.log("Enviando solicitud para detener las pruebas...");
+    try {
+      const response = await fetch('/api/stop-tests', {
+        method: 'POST',
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to stop test execution');
+      }
+      const result = await response.json();
+      console.log(result.message);
+      // No es necesario cambiar isExecuting aquí, el stream de logs lo hará.
+    } catch (error) {
+      console.error("Error al detener la ejecución:", error);
+    }
+  };
+
   // --- State y Handlers para el diálogo de "Agregar Módulo" ---
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [newModuleName, setNewModuleName] = React.useState('');
@@ -495,6 +597,17 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, isDropTarget,
         <Button variant="outlined" size="small" sx={{ mr: 1 }} onClick={handleOpenDialog}>
           Agregar Módulo
         </Button>
+        <Tooltip title={isExecuting ? "Detener Ejecución" : "Ejecutar Plan de Pruebas"}>
+          <Button 
+            variant="contained" 
+            color={isExecuting ? "error" : "primary"} 
+            size="small" sx={{ mr: 1 }} 
+            onClick={isExecuting ? handleStopTests : handleRunTests}
+            disabled={isExecuting && !logs.length} // Deshabilita brevemente hasta que se conecta
+          >
+            {isExecuting ? <StopIcon /> : <PlayArrowIcon />}
+          </Button>
+        </Tooltip>
         <Tooltip title={showInactive ? "Ocultar inactivos" : "Mostrar inactivos"}>
           <ToggleButton
             value="check"
@@ -508,15 +621,15 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, isDropTarget,
         </Tooltip>
       </Box>
       <Box sx={{ flex: 1, overflow: 'auto', px: 2 }}> {/* Contenedor con scroll y padding horizontal */}
-        {Array.isArray(visibleModules) && (
+        {Array.isArray(modules) && (
           <SortableContext 
-            items={visibleModules.map(m => m.module_name)}
+            items={modules.map(m => m.module_name)}
             strategy={verticalListSortingStrategy}
             // Deshabilita el contexto de ordenación si el elemento arrastrado no es un 'module'.
             // Esto permite que los 'droppables' internos acepten elementos externos.
             disabled={!active || active.data.current?.type !== 'module'}
           >
-            {visibleModules.map((module, index) => ( // La interfaz de 'module' viene del hook useExecutionOrder
+            {modules.map((module, index) => ( // Ahora iteramos directamente sobre 'modules'
               <SortableModule 
                 key={module.module_name} 
                 module={module}
@@ -560,6 +673,28 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, isDropTarget,
           </SortableContext>
         )}
       </Box>
+      {/* Área para mostrar los logs en tiempo real */}
+      {logs.length > 1 && (
+        <Paper 
+          elevation={3} 
+          sx={{ 
+            mt: 2, 
+            p: 2, 
+            maxHeight: '200px', 
+            overflowY: 'auto', 
+            backgroundColor: 'black', 
+            color: 'lightgray', 
+            fontFamily: 'monospace',
+            fontSize: '0.8rem'
+          }}
+        >
+          {logs.map((log, index) => (
+            <div key={index}>{log}</div>
+          ))}
+          {/* Elemento invisible para hacer scroll automático */}
+          <div ref={logsEndRef} />
+        </Paper>
+      )}
       {isDropTarget && (
         <Box
           sx={{

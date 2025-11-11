@@ -1,6 +1,10 @@
 import os
 import json
-from flask import Flask, jsonify, request
+import subprocess
+from flask import Flask, jsonify, request, Response, send_from_directory
+import sys
+import threading
+from queue import Queue
 from flask_cors import CORS
 
 from execution_plan_manager import ExecutionPlanManager
@@ -14,6 +18,11 @@ FEATURES_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'feature
 
 # Instanciar el manejador del plan de ejecución
 plan_manager = ExecutionPlanManager(FEATURES_DIR)
+
+# --- Variables globales para el streaming de logs ---
+log_queue = Queue() # Cola segura para hilos para almacenar logs
+test_process = None # Para mantener una referencia al proceso de pruebas
+# ----------------------------------------------------
 
 @app.route('/api/features', methods=['GET'])
 def list_features():
@@ -165,8 +174,17 @@ def get_execution_order():
     Endpoint para leer y devolver el contenido de run_list.json.
     """
     try:
+        # Parámetro para decidir si se incluyen los módulos inactivos.
+        # Por defecto, solo se muestran los activos.
+        include_inactive = request.args.get('include_inactive', 'false').lower() == 'true'
+
         execution_sequence = plan_manager.get_sequence()
-        return jsonify(_add_ids_to_sequence(execution_sequence))
+
+        if include_inactive:
+            return jsonify(_add_ids_to_sequence(execution_sequence))
+        else:
+            active_modules = [m for m in execution_sequence if m.get('active')]
+            return jsonify(_add_ids_to_sequence(active_modules))
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -283,6 +301,119 @@ def reorder_features(module_name):
         return jsonify({"error": str(e)}), 404
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+def _stream_process_output(process, queue):
+    """Lee la salida de un proceso línea por línea y la pone en una cola."""
+    # Lee stdout
+    for line in iter(process.stdout.readline, ''):
+        queue.put(line)
+    # Lee stderr
+    for line in iter(process.stderr.readline, ''):
+        queue.put(f"ERROR: {line}")
+    process.stdout.close()
+    process.stderr.close()
+    process.wait()
+    queue.put("---EXECUTION_FINISHED---") # Señal de fin
+
+@app.route('/api/stream-logs')
+def stream_logs():
+    """Endpoint de Server-Sent Events para transmitir logs al frontend."""
+    def generate():
+        while True:
+            line = log_queue.get() # Bloquea hasta que haya un nuevo item
+            if line.strip() == "---EXECUTION_FINISHED---":
+                # Cuando la ejecución termina, generamos la URL del reporte
+                # y la enviamos al frontend con una señal especial.
+                report_url = "/api/report/index.html"
+                yield f"data: {json.dumps({'log': '---EXECUTION_FINISHED---', 'reportUrl': report_url})}\n\n"
+                yield f"data: {json.dumps({'log': line})}\n\n"
+                break
+            yield f"data: {json.dumps({'log': line.strip()})}\n\n"
+    return Response(generate(), mimetype='text/event-stream')
+
+@app.route('/api/report/<path:path>')
+def serve_allure_report(path):
+    """
+    Sirve los archivos estáticos del reporte de Allure.
+    """
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    report_dir = os.path.join(project_root, 'reports', 'allure-report')
+    return send_from_directory(report_dir, path)
+
+@app.route('/api/stop-tests', methods=['POST'])
+def stop_tests():
+    """
+    Endpoint para detener la ejecución de pruebas en curso.
+    """
+    global test_process
+    if test_process and test_process.poll() is None: # .poll() is None si el proceso está corriendo
+        try:
+            # Enviar señal de terminación a todo el grupo de procesos.
+            # Esto asegura que tanto behave_master.py como sus subprocesos (Allure) se detengan.
+            if os.name == 'nt': # Windows
+                os.kill(test_process.pid, subprocess.CTRL_BREAK_EVENT)
+            else: # Unix/Linux/macOS
+                os.killpg(os.getpgid(test_process.pid), subprocess.signal.SIGTERM)
+            log_queue.put("---EXECUTION_STOPPED_BY_USER---") # Señal para el frontend
+            return jsonify({"message": "Se ha enviado la solicitud para detener la ejecución."}), 200
+        except Exception as e:
+            return jsonify({"error": f"No se pudo detener el proceso: {str(e)}"}), 500
+    else:
+        return jsonify({"message": "No hay ninguna ejecución de pruebas en curso para detener."}), 404
+
+
+
+
+@app.route('/api/run-tests', methods=['POST'])
+def run_tests():
+    """
+    Endpoint para iniciar la ejecución de las pruebas con behave_master.py.
+    Ejecuta el script en un proceso separado para no bloquear el servidor.
+    """
+    try:
+        global test_process
+        if test_process and test_process.poll() is None:
+            return jsonify({"message": "Ya hay una ejecución de pruebas en curso."}), 409 # Conflict
+
+        # Limpiar la cola de logs de ejecuciones anteriores
+        while not log_queue.empty():
+            log_queue.get()
+
+        # La ruta a la raíz del proyecto, subiendo un nivel desde la carpeta 'backend'
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        script_path = os.path.join(project_root, 'behave_master.py')
+
+        if not os.path.exists(script_path):
+            return jsonify({"error": "El script behave_master.py no fue encontrado."}), 404
+
+        # Ejecutar el script de Python en un nuevo proceso
+        # Se ejecuta desde la raíz del proyecto para que las rutas relativas dentro del script funcionen
+        # Se crea un nuevo grupo de procesos para poder terminar el proceso principal y todos sus hijos.
+        preexec_fn = None if os.name == 'nt' else os.setsid
+        creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == 'nt' else 0
+
+        test_process = subprocess.Popen(
+            [sys.executable, script_path],
+            cwd=project_root,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding='utf-8',
+            errors='replace', # Añade manejo de errores de decodificación
+            bufsize=1, # Line-buffered
+            # --- Parámetros para la creación del grupo de procesos ---
+            preexec_fn=preexec_fn, # En Unix, crea una nueva sesión
+            creationflags=creationflags # En Windows, crea un nuevo grupo de procesos
+            # ---------------------------------------------------------
+        )
+
+        # Iniciar un hilo para leer la salida del proceso sin bloquear
+        thread = threading.Thread(target=_stream_process_output, args=(test_process, log_queue))
+        thread.start()
+
+        return jsonify({"message": "La ejecución de pruebas ha comenzado."}), 202 # 202 Accepted
+    except Exception as e:
+        return jsonify({"error": f"Error al intentar iniciar la ejecución: {str(e)}"}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
