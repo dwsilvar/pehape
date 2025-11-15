@@ -17,6 +17,7 @@ import { // Importa los componentes necesarios para el diálogo
   Menu,
   MenuItem,
   Tooltip,
+  Chip,
   ToggleButton,
 } from '@mui/material';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
@@ -43,9 +44,10 @@ interface ExecutionItemProps {
   fontSize: number;
   onDoubleClick: (item: FeatureItem) => void;
   onDelete: (item: FeatureItem) => void;
+  onTagClick: (featureId: string, tag: string) => void; // Handler para el clic en un tag
 }
 
-const DEFAULT_FEATURE_COLOR = '#5a5a5a'; // Color gris por defecto para features
+const DEFAULT_FEATURE_COLOR = '#4db6ac'; // Un tono verde azulado (teal) para los features
 
 const ExecutionItem: React.FC<ExecutionItemProps> = ({
   item,
@@ -54,6 +56,7 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
   fontSize,
   onDoubleClick,
   onDelete,
+  onTagClick,
 }) => {
   const {
     attributes,
@@ -147,12 +150,29 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
         </Box>
         {/* Contenido del feature */}
         <Box sx={{ flexGrow: 1, ml: 1, cursor: 'pointer' }}>
-          <Typography sx={{ fontSize: `${fontSize}px` }}>
-            {item.feature_file}
+          <Typography sx={{ fontSize: `${fontSize}px`, display: 'flex', alignItems: 'center' }}>
+            {`${item.order}. ${item.feature_file}`}
           </Typography>
-          <Typography variant="caption" color="text.secondary">
-            {`Orden: ${item.order} - ${item.active ? 'Activo' : 'Inactivo'}`}
+          <Typography variant="caption" color={item.active ? 'success.main' : 'text.secondary'}>
+            {item.active ? 'Activo' : 'Inactivo'}
           </Typography>
+          {/* Mostrar los tags del feature si existen */}
+          {item.display_tags && item.display_tags.length > 0 && (
+            <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+              {item.display_tags.map((tag) => (
+                <Chip
+                  clickable
+                  key={tag}
+                  label={tag}
+                  size="small"
+                  color={item.tags?.includes(tag) ? 'primary' : 'default'}
+                  variant={item.tags?.includes(tag) ? 'filled' : 'outlined'}
+                  onClick={() => onTagClick(item.id, tag)}
+                  sx={{ fontSize: '0.7rem', height: '20px' }}
+                />
+              ))}
+            </Box>
+          )}
         </Box>
         {/* Los botones ahora están fuera del handle y sus clics funcionarán. */}
         <IconButton key={`${item.id}-up`} edge="end" onClick={onMoveUp} size="small">
@@ -186,6 +206,7 @@ const SortableModule: React.FC<{
   module: Module;
   controls: React.ReactNode;
   features: React.ReactNode;
+  onTagToggle: (moduleName: string, featureId: string, tagName: string) => void;
 }> = ({ module, controls, features }) => {
   const {
     attributes,
@@ -257,7 +278,7 @@ const SortableModule: React.FC<{
           mb: 2,
           p: 2,
           pl: 4,
-          backgroundColor: 'background.paper',
+          backgroundColor: module.color ? `${module.color}20` : 'background.paper', // Aplica un tinte del color seleccionado
           // Efecto visual cuando un elemento arrastrable está sobre el módulo
           outline: isOver ? '2px dashed' : 'none',
           outlineColor: isOver ? 'primary.main' : 'transparent',
@@ -297,9 +318,9 @@ interface ExecutionOrderProps {
   // handleSave ya fue eliminado en un paso anterior, lo quito para mantener consistencia.
 }
 
-const DEFAULT_MODULE_COLOR = '#63a4ff'; // Un azul suave por defecto para módulos
+const DEFAULT_MODULE_COLOR = '#7e57c2'; // Un tono púrpura para los módulos
 
-const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, isDropTarget, onAddFeature, onFeatureSelect, modules, setModules }) => {
+const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, onFeatureSelect, modules, setModules }) => {
   // Necesitamos acceder al elemento activo para deshabilitar el SortableContext si no es un módulo.
   // Esto es un patrón avanzado para permitir que droppables externos funcionen dentro de un SortableContext.
   const { active } = useDndContext();
@@ -587,6 +608,84 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, isDropTarget,
     }
   };
 
+  const handleTagToggle = async (moduleName: string, featureId: string, tagName: string) => {
+    const module = modules.find(m => m.module_name === moduleName);
+    const feature = module?.features.find(f => f.id === featureId);
+    if (!module || !feature) return;
+
+    const currentTags = feature.tags || [];
+    let newTags: string[] | null;
+
+    if (currentTags.includes(tagName)) {
+      newTags = currentTags.filter(t => t !== tagName);
+    } else {
+      newTags = [...currentTags, tagName];
+    }
+
+    if (newTags.length === 0) {
+      newTags = null;
+    }
+
+    // Actualización optimista
+    setModules(prev =>
+      prev.map(m =>
+        m.module_name === moduleName
+          ? {
+              ...m,
+              features: m.features.map(f =>
+                f.id === featureId ? { ...f, tags: newTags } : f
+              ),
+            }
+          : m
+      )
+    );
+
+    // Llamada a la API para persistir
+    try {
+      const response = await fetch(`/api/modules/${encodeURIComponent(moduleName)}/features/tags`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          feature_file: feature.feature_file,
+          feature_dir: feature.feature_dir,
+          tags: newTags 
+        }),
+      });
+
+      if (!response.ok) {
+        setModules(modules);
+      }
+    } catch (error) {
+      console.error('Error al actualizar los tags del módulo:', error);
+      setModules(modules);
+    }
+  };
+
+  const handleModuleColorChange = async (moduleName: string, newColor: string) => {
+    // Actualización optimista
+    const originalModules = modules;
+    setModules(prev =>
+      prev.map(m => (m.module_name === moduleName ? { ...m, color: newColor } : m))
+    );
+
+    // Llamada a la API para persistir
+    try {
+      const response = await fetch(`/api/modules/${encodeURIComponent(moduleName)}/color`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ color: newColor }),
+      });
+
+      if (!response.ok) {
+        // Revertir en caso de error
+        setModules(originalModules);
+      }
+    } catch (error) {
+      console.error('Error al actualizar el color del módulo:', error);
+      setModules(originalModules); // Revertir en caso de error de red
+    }
+  };
+
 
   return (
     <Box ref={setGlobalDroppableRef} sx={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', p: 1 }}>
@@ -627,14 +726,36 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, isDropTarget,
             strategy={verticalListSortingStrategy}
             // Deshabilita el contexto de ordenación si el elemento arrastrado no es un 'module'.
             // Esto permite que los 'droppables' internos acepten elementos externos.
-            disabled={!active || active.data.current?.type !== 'module'}
+            disabled={active != null && active.data.current?.type !== 'module'}
           >
             {modules.map((module, index) => ( // Ahora iteramos directamente sobre 'modules'
               <SortableModule 
                 key={module.module_name} 
                 module={module}
+                onTagToggle={(moduleName, featureId, tagName) => handleTagToggle(moduleName, featureId, tagName)}
                 controls={
                   <>
+                    {/* Selector de color */}
+                    <Tooltip title="Cambiar color del módulo">
+                      <IconButton size="small" component="label" sx={{ mr: 1 }}>
+                        <Box
+                          sx={{
+                            width: 20,
+                            height: 20,
+                            borderRadius: '50%',
+                            backgroundColor: module.color || DEFAULT_MODULE_COLOR,
+                            border: '1px solid',
+                            borderColor: 'divider',
+                          }}
+                        />
+                        <input
+                          type="color"
+                          hidden
+                          value={module.color || DEFAULT_MODULE_COLOR}
+                          onChange={(e) => handleModuleColorChange(module.module_name, e.target.value)}
+                        />
+                      </IconButton>
+                    </Tooltip>
                     <IconButton onClick={() => handleToggleModuleActivity(module.module_name, module.active)} size="small">
                       {module.active ? <ToggleOnIcon color="success" /> : <ToggleOffIcon color="action" />}
                     </IconButton>
@@ -663,6 +784,7 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, isDropTarget,
                           onDelete={() => handleDeleteFeature(module.module_name, feature)}
                           onMoveUp={() => handleMoveFeature(module.module_name, feature, 'up')}
                           onMoveDown={() => handleMoveFeature(module.module_name, feature, 'down')}
+                          onTagClick={(featureId, tag) => handleTagToggle(module.module_name, featureId, tag)}
                         />
                       ))}
                     </SortableContext>
@@ -694,24 +816,6 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, isDropTarget,
           {/* Elemento invisible para hacer scroll automático */}
           <div ref={logsEndRef} />
         </Paper>
-      )}
-      {isDropTarget && (
-        <Box
-          sx={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            borderRadius: 1,
-          }}
-        >
-          <Button variant="contained" onClick={onAddFeature}>Agregar Feature</Button>
-        </Box>
       )}
 
       <Dialog open={dialogOpen} onClose={handleCloseDialog}>

@@ -165,7 +165,8 @@ def _add_ids_to_sequence(sequence):
     for module in sequence:
         for feature in module.get('features', []):
             # Usamos una combinación que sea estable y única dentro del módulo.
-            feature['id'] = f"{module['module_name']}-{feature.get('feature_dir', '')}-{feature['feature_file']}"
+            # Se usa un separador claro y se maneja el caso de feature_dir vacío.
+            feature['id'] = f"feature::{module['module_name']}::{feature.get('feature_dir', '')}/{feature['feature_file']}"
     return sequence
 
 @app.route('/api/execution-order', methods=['GET'])
@@ -216,6 +217,43 @@ def add_module():
         return jsonify(_add_ids_to_sequence(updated_sequence)), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+
+@app.route('/api/modules/<string:module_name>/features/tags', methods=['PUT'])
+def update_feature_tags(module_name):
+    """
+    Endpoint para actualizar los tags de ejecución de un feature específico.
+    """
+    try:
+        data = request.json
+        feature_file = data.get('feature_file')
+        feature_dir = data.get('feature_dir', '')
+        tags = data.get('tags')
+
+        if not feature_file:
+            return jsonify({"error": "Se requiere 'feature_file'"}), 400
+
+        updated_sequence = plan_manager.update_feature_tags(module_name, feature_file, feature_dir, tags)
+        return jsonify(_add_ids_to_sequence(updated_sequence))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/modules/<string:module_name>/color', methods=['PUT'])
+def update_module_color(module_name):
+    """
+    Endpoint para actualizar el color de un módulo.
+    """
+    try:
+        data = request.json
+        color = data.get('color')
+        if not color:
+            return jsonify({"error": "Se requiere 'color' en el cuerpo de la solicitud"}), 400
+
+        updated_sequence = plan_manager.update_module_color(module_name, color)
+        return jsonify(_add_ids_to_sequence(updated_sequence))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
 
 @app.route('/api/modules/<string:module_name>', methods=['DELETE'])
 def delete_module(module_name):
