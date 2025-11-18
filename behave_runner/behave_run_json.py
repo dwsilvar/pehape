@@ -77,9 +77,13 @@ class BehaveRunJson:
 
                 behave_args = [full_feature_path]
                 tag_info = ""
-                if tags and tags.strip():
-                    behave_args.extend(["--tags", tags.strip()])
-                    tag_info = f" (Filtro: {tags})"
+                # 'tags' puede ser una lista de strings o null.
+                # Si es una lista, la unimos con comas para crear una expresión de tags OR.
+                if tags and isinstance(tags, list):
+                    tag_expression = ",".join(tags)
+                    behave_args.extend(["--tags", tag_expression])
+                    tag_info = f" (Filtro: {tag_expression})"
+
                 behave_args.extend(["--format", 'allure_behave.formatter:AllureFormatter'])
                 behave_args.extend(["--outfile", 'reports/allure_results']) # Output file for Allure results
 
