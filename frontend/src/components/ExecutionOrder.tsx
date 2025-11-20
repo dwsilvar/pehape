@@ -30,6 +30,8 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'; // Importar el ícono de Play
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import StopIcon from '@mui/icons-material/Stop'; // Importar el ícono de Stop
 import { useSortable, SortableContext, verticalListSortingStrategy, } from '@dnd-kit/sortable';
 import { arrayMove } from '@dnd-kit/sortable';
@@ -331,6 +333,7 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, onFeatureSele
 
   // Estado para controlar si se muestran los módulos inactivos. Por defecto, solo activos.
   const [showInactive, setShowInactive] = useState(false);
+  const [collapsedModules, setCollapsedModules] = useState<Set<string>>(new Set());
 
   // --- Estados para el log en tiempo real ---
   const [isExecuting, setIsExecuting] = useState(false);
@@ -362,6 +365,17 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, onFeatureSele
     setShowInactive(prev => !prev);
   };
 
+  const handleToggleModuleCollapse = (moduleName: string) => {
+    setCollapsedModules(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(moduleName)) {
+        newSet.delete(moduleName);
+      } else {
+        newSet.add(moduleName);
+      }
+      return newSet;
+    });
+  };
   // Efecto para hacer scroll automático en el área de logs
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -735,6 +749,11 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, onFeatureSele
                 onTagToggle={(moduleName, featureId, tagName) => handleTagToggle(moduleName, featureId, tagName)}
                 controls={
                   <>
+                    <Tooltip title={collapsedModules.has(module.module_name) ? "Mostrar features" : "Ocultar features"}>
+                      <IconButton onClick={() => handleToggleModuleCollapse(module.module_name)} size="small">
+                        {collapsedModules.has(module.module_name) ? <ExpandMoreIcon /> : <ExpandLessIcon />}
+                      </IconButton>
+                    </Tooltip>
                     {/* Selector de color */}
                     <Tooltip title="Cambiar color del módulo">
                       <IconButton size="small" component="label" sx={{ mr: 1 }}>
@@ -765,30 +784,32 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, onFeatureSele
                   </>
                 }
                 features={
-                  <Box sx={{ width: '100%' }}>
-                    <SortableContext
-                      id={module.module_name} // ¡LA CLAVE ESTÁ AQUÍ! Asignamos el nombre del módulo como ID.
-                      items={module.features.map((f: FeatureItem) => f.id)}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      {[...module.features] // Creamos una copia para no mutar el estado original
-                        .sort((a, b) => a.order - b.order) // Ordenamos por la propiedad 'order'
-                        .map((feature: FeatureItem, index: number) => (
-                        <ExecutionItem
-                          key={feature.id} item={feature} fontSize={fontSize}
-                          onDoubleClick={(item) => {
-                            // La ruta del feature ya es relativa al directorio 'features'.
-                            const fullPath = [item.feature_dir, item.feature_file].filter(Boolean).join('/');
-                            onFeatureSelect(fullPath);
-                          }}
-                          onDelete={() => handleDeleteFeature(module.module_name, feature)}
-                          onMoveUp={() => handleMoveFeature(module.module_name, feature, 'up')}
-                          onMoveDown={() => handleMoveFeature(module.module_name, feature, 'down')}
-                          onTagClick={(featureId, tag) => handleTagToggle(module.module_name, featureId, tag)}
-                        />
-                      ))}
-                    </SortableContext>
-                  </Box>
+                  !collapsedModules.has(module.module_name) && (
+                    <Box sx={{ width: '100%' }}>
+                      <SortableContext
+                        id={module.module_name} // ¡LA CLAVE ESTÁ AQUÍ! Asignamos el nombre del módulo como ID.
+                        items={module.features.map((f: FeatureItem) => f.id)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        {[...module.features] // Creamos una copia para no mutar el estado original
+                          .sort((a, b) => a.order - b.order) // Ordenamos por la propiedad 'order'
+                          .map((feature: FeatureItem, index: number) => (
+                          <ExecutionItem
+                            key={feature.id} item={feature} fontSize={fontSize}
+                            onDoubleClick={(item) => {
+                              // La ruta del feature ya es relativa al directorio 'features'.
+                              const fullPath = [item.feature_dir, item.feature_file].filter(Boolean).join('/');
+                              onFeatureSelect(fullPath);
+                            }}
+                            onDelete={() => handleDeleteFeature(module.module_name, feature)}
+                            onMoveUp={() => handleMoveFeature(module.module_name, feature, 'up')}
+                            onMoveDown={() => handleMoveFeature(module.module_name, feature, 'down')}
+                            onTagClick={(featureId, tag) => handleTagToggle(module.module_name, featureId, tag)}
+                          />
+                        ))}
+                      </SortableContext>
+                    </Box>
+                  )
                 }
               />
             ))}
