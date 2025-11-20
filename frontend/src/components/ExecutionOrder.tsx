@@ -32,6 +32,7 @@ import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'; // Importar el ícono de Play
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import SyncIcon from '@mui/icons-material/Sync';
 import StopIcon from '@mui/icons-material/Stop'; // Importar el ícono de Stop
 import { useSortable, SortableContext, verticalListSortingStrategy, } from '@dnd-kit/sortable';
 import { arrayMove } from '@dnd-kit/sortable';
@@ -171,6 +172,20 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
                   variant={item.tags?.includes(tag) ? 'filled' : 'outlined'}
                   onClick={() => onTagClick(item.id, tag)}
                   sx={{ fontSize: '0.7rem', height: '20px' }}
+                />
+              ))}
+            </Box>
+          )}
+          {/* Mostrar los escenarios del feature si existen */}
+          {item.scenarios && item.scenarios.length > 0 && (
+            <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+              {item.scenarios.map((scenario) => (
+                <Chip
+                  key={scenario}
+                  label={scenario}
+                  size="small"
+                  variant="outlined"
+                  sx={{ fontSize: '0.7rem', height: '20px', backgroundColor: 'action.hover' }}
                 />
               ))}
             </Box>
@@ -700,6 +715,26 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, onFeatureSele
     }
   };
 
+  const handleRefreshFeatures = async () => {
+    try {
+      const response = await fetch('/api/execution-order/refresh', {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to refresh features');
+      }
+
+      const updatedModules = await response.json();
+      setModules(updatedModules);
+      // Opcional: mostrar una notificación de éxito
+    } catch (error) {
+      console.error('Error al refrescar los features:', error);
+      // Opcional: mostrar una notificación de error
+    }
+  };
+
 
   return (
     <Box ref={setGlobalDroppableRef} sx={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', p: 1 }}>
@@ -710,6 +745,11 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, onFeatureSele
         <Button variant="outlined" size="small" sx={{ mr: 1 }} onClick={handleOpenDialog}>
           Agregar Módulo
         </Button>
+        <Tooltip title="Sincronizar Scenarios y Tags desde archivos .feature">
+          <Button variant="outlined" size="small" sx={{ mr: 1 }} onClick={handleRefreshFeatures}>
+            <SyncIcon />
+          </Button>
+        </Tooltip>
         <Tooltip title={isExecuting ? "Detener Ejecución" : "Ejecutar Plan de Pruebas"}>
           <Button 
             variant="contained" 

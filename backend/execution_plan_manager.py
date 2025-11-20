@@ -2,25 +2,6 @@ import os
 import json
 import re
 
-def _extract_tags_from_feature(base_dir: str, feature_dir: str, feature_file: str) -> list[str]:
-    """
-    Abre un archivo .feature, lee su contenido y extrae todos los tags de Gherkin.
-    """
-    try:
-        # Construye la ruta completa y segura al archivo
-        full_path = os.path.join(base_dir, feature_dir, feature_file)
-        if not os.path.exists(full_path):
-            return []
-
-        with open(full_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        tags = re.findall(r'@\w+', content)
-        cleaned_tags = [tag.lstrip('@') for tag in tags]
-        return list(dict.fromkeys(cleaned_tags)) # Devuelve tags únicos
-    except Exception:
-        return []
-
 class ExecutionPlanManager:
     def __init__(self, features_dir):
         self.features_dir = features_dir
@@ -44,19 +25,11 @@ class ExecutionPlanManager:
         
         # Crea una copia profunda para no modificar el estado en memoria
         data_to_save = json.loads(json.dumps(self.data))
-        # Elimina la propiedad 'tags' de cada FEATURE antes de guardar,
-        # ya que estos son solo para visualización y se leen del archivo .feature.
-        # La propiedad 'display_tags' también se elimina.
-        # La propiedad 'tags' del feature (los seleccionados) SÍ se guarda.
-        for module in data_to_save.get('execution_sequence', []):
-            for feature in module.get('features', []):
-                if 'display_tags' in feature:
-                    del feature['display_tags']
 
         with open(self.run_list_path, 'w', encoding='utf-8') as f:
             json.dump(data_to_save, f, indent=2)
 
-    def get_sequence(self):
+    def get_sequence(self, parser_func=None):
         """Obtiene la secuencia de ejecución completa, ordenada."""
         # Valida y corrige el orden al cargar.
         all_modules = self.data.get('execution_sequence', [])
@@ -79,15 +52,19 @@ class ExecutionPlanManager:
         for module in all_modules:
             if 'features' in module:
                 module['features'].sort(key=lambda f: f.get('order', 0))
-                # Enriquece cada feature con sus tags para visualización
+                # Enriquece los datos del feature si se proporciona una función de parsing.
                 for feature in module['features']:
-                    # 'display_tags' son todos los tags del archivo .feature
-                    feature['display_tags'] = _extract_tags_from_feature(
-                        self.features_dir,
-                        feature.get('feature_dir', ''),
-                        feature.get('feature_file', '')
-                    )
-                    # Aseguramos que 'tags' (los seleccionados) exista, si no, es null.
+                    if parser_func:
+                        relative_path = os.path.join(feature.get('feature_dir', ''), feature.get('feature_file', ''))
+                        full_path = os.path.join(self.features_dir, relative_path)
+                        if os.path.exists(full_path):
+                            parsed_data = parser_func(full_path)
+                            feature['display_tags'] = parsed_data.get('tags', [])
+                            feature['scenarios'] = parsed_data.get('scenarios', [])
+                    else:
+                        # Comportamiento de respaldo: asegura que las claves existan.
+                        feature.setdefault('display_tags', [])
+                        feature.setdefault('scenarios', [])
                     if 'tags' not in feature:
                         feature['tags'] = None
 
@@ -229,7 +206,7 @@ class ExecutionPlanManager:
         self._save()
         return self.get_sequence()
 
-    def add_feature_to_module(self, module_name, feature_path):
+    def add_feature_to_module(self, module_name, feature_path, parser_func=None):
         """Añade un feature a un módulo existente."""
         target_module = None
         for m in self.data['execution_sequence']:
@@ -254,13 +231,24 @@ class ExecutionPlanManager:
         if 'features' in target_module and target_module['features']:
             max_order = max(f.get('order', 0) for f in target_module['features'])
 
+        # Prepara el nuevo feature
         new_feature = {
             "feature_file": feature_file,
             "feature_dir": feature_dir,
             "active": True,
             "order": max_order + 1,
-            "tags": None # Inicializa los tags seleccionados como null
+            "tags": None, # Tags seleccionados para ejecución, inicialmente nulos
+            "display_tags": [], # Tags para mostrar, inicialmente vacíos
+            "scenarios": [] # Escenarios, inicialmente vacíos
         }
+
+        # Si se proporciona una función de parsing, úsala para enriquecer el feature
+        if parser_func:
+            full_path = os.path.join(self.features_dir, feature_path)
+            if os.path.exists(full_path):
+                parsed_data = parser_func(full_path)
+                new_feature['display_tags'] = parsed_data.get('tags', [])
+                new_feature['scenarios'] = parsed_data.get('scenarios', [])
 
         target_module.setdefault('features', []).append(new_feature)
         self._save()
@@ -307,5 +295,28 @@ class ExecutionPlanManager:
             feature['order'] = i + 1
 
         target_module['features'] = reordered_features
+        self._save()
+        return self.get_sequence()
+
+    def refresh_features_data(self, parser_func):
+        """
+        Recorre todos los features, los vuelve a analizar desde el disco
+        y actualiza sus 'display_tags' y 'scenarios'.
+        """
+        for module in self.data.get('execution_sequence', []):
+            for feature in module.get('features', []):
+                relative_path = os.path.join(feature.get('feature_dir', ''), feature.get('feature_file', ''))
+                full_path = os.path.join(self.features_dir, relative_path)
+
+                if os.path.exists(full_path):
+                    parsed_data = parser_func(full_path)
+                    feature['display_tags'] = parsed_data.get('tags', [])
+                    feature['scenarios'] = parsed_data.get('scenarios', [])
+                else:
+                    # Si el archivo no existe, limpia los datos para evitar inconsistencias.
+                    print(f"Advertencia: El archivo feature no se encontró, se limpiarán sus datos: {full_path}")
+                    feature['display_tags'] = []
+                    feature['scenarios'] = []
+        
         self._save()
         return self.get_sequence()

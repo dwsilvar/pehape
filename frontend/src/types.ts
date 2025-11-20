@@ -20,6 +20,7 @@ export interface FeatureItem {
   color?: string;
   tags: string[] | null; // Tags seleccionados para la ejecución (se guarda en JSON)
   display_tags?: string[]; // Todos los tags del .feature (solo para mostrar)
+  scenarios?: string[]; // Nombres de los escenarios del .feature
 }
 
 /**

@@ -5,6 +5,9 @@ from flask import Flask, jsonify, request, Response, send_from_directory
 import sys
 import threading
 from queue import Queue
+from behave.parser import Parser
+from behave.model import Feature, Scenario, ScenarioOutline
+
 from flask_cors import CORS
 
 from execution_plan_manager import ExecutionPlanManager
@@ -179,7 +182,7 @@ def get_execution_order():
         # Por defecto, solo se muestran los activos.
         include_inactive = request.args.get('include_inactive', 'false').lower() == 'true'
 
-        execution_sequence = plan_manager.get_sequence()
+        execution_sequence = plan_manager.get_sequence(parser_func=parse_feature_file_with_behave)
 
         if include_inactive:
             return jsonify(_add_ids_to_sequence(execution_sequence))
@@ -293,7 +296,7 @@ def add_feature_to_module(module_name):
         if not feature_path:
             return jsonify({"error": "Se requiere el 'path' del feature"}), 400
 
-        updated_sequence = plan_manager.add_feature_to_module(module_name, feature_path)
+        updated_sequence = plan_manager.add_feature_to_module(module_name, feature_path, parse_feature_file_with_behave)
         return jsonify(_add_ids_to_sequence(updated_sequence)), 201
     except ValueError as e: # Captura errores de lógica de negocio (ej. duplicados)
         return jsonify({"error": str(e)}), 409 # 409 Conflict
@@ -339,6 +342,64 @@ def reorder_features(module_name):
         return jsonify({"error": str(e)}), 404
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+def parse_feature_file_with_behave(file_path):
+    """
+    Analiza un archivo .feature usando el parser interno de Behave
+    para extraer sus tags y escenarios.
+    
+    Args:
+        file_path (str): La ruta completa al archivo .feature.
+
+    Returns:
+        dict: Un diccionario con "tags" y "scenarios".
+    """
+    all_tags = set()
+    scenario_names = []
+    
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        parser = Parser()
+        feature = parser.parse(content, file_path) # Pasamos el contenido y el path para errores
+
+        if isinstance(feature, Feature):
+            # 1. Extraer tags a nivel de Feature
+            for tag in feature.tags:
+                all_tags.add(f"@{tag}")
+
+            # 2. Iterar sobre los escenarios
+            for scenario in feature.scenarios:
+                # Behave modela Scenarios y ScenarioOutlines de forma similar
+                if isinstance(scenario, (Scenario, ScenarioOutline)):
+                    # Añadimos el nombre del escenario a nuestra lista
+                    scenario_names.append(scenario.name)
+                    
+                    # También extraemos los tags a nivel de Scenario
+                    for tag in scenario.tags:
+                        all_tags.add(f"@{tag}")
+
+    except Exception as e:
+        # Es buena idea registrar el error si el archivo .feature tiene sintaxis inválida
+        print(f"Error parsing feature file '{file_path}' with Behave parser: {e}")
+        return {"tags": [], "scenarios": []}
+
+    return {
+        "tags": sorted(list(all_tags)),
+        "scenarios": scenario_names
+    }
+
+@app.route('/api/execution-order/refresh', methods=['POST'])
+def refresh_execution_order():
+    """
+    Re-lee todos los archivos .feature listados en execution_order.json
+    y actualiza sus 'display_tags' y 'scenarios'.
+    """
+    try:
+        updated_sequence = plan_manager.refresh_features_data(parse_feature_file_with_behave)
+        return jsonify(_add_ids_to_sequence(updated_sequence))
+    except Exception as e:
+        return jsonify({"error": f"Un error inesperado ocurrió: {str(e)}"}), 500
 
 def _stream_process_output(process, queue):
     """Lee la salida de un proceso línea por línea y la pone en una cola."""
