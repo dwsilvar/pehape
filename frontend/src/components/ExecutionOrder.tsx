@@ -199,15 +199,18 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
                   running: 'info',
                 } as const;
 
+                const truncatedLabel = scenario.length > 25 ? `${scenario.substring(0, 25)}...` : scenario;
+
                 return (
-                  <Chip
-                    key={scenario}
-                    label={scenario}
-                    size="small"
-                    color={colorMap[status]}
-                    variant={status === 'untested' ? 'outlined' : 'filled'}
-                    sx={{ fontSize: '0.7rem', height: '20px' }}
-                  />
+                  <Tooltip key={scenario} title={scenario} arrow>
+                    <Chip
+                      label={truncatedLabel}
+                      size="small"
+                      color={colorMap[status]}
+                      variant={status === 'untested' ? 'outlined' : 'filled'}
+                      sx={{ fontSize: '0.7rem', height: '20px' }}
+                    />
+                  </Tooltip>
                 );
               })}
             </Box>
@@ -474,7 +477,12 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
           // Esta es la corrección principal: encontrar el ID ANTES de intentar actualizar el estado.
           if (data.status === 'running') {
             for (const module of modules) {
-              const feature = module.features.find(f => f.scenarios?.includes(data.name));
+              // Modificación para soportar Scenario Outlines:
+              // Comprobamos si el nombre del escenario en ejecución (data.name)
+              // COMIENZA CON alguno de los nombres de escenario base que tenemos.
+              const feature = module.features.find(f => 
+                f.scenarios?.some(baseScenarioName => data.name.startsWith(baseScenarioName))
+              );
               if (feature) {
                 featureIdForUpdate = feature.id;
                 setRunningFeatureId(feature.id);
