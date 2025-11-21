@@ -365,6 +365,7 @@ def parse_feature_file_with_behave(file_path):
 
         if isinstance(feature, Feature):
             # 1. Extraer tags a nivel de Feature
+            # (La extracción de tags se omite para no guardarlos en 'display_tags')
             for tag in feature.tags:
                 all_tags.add(f"@{tag}")
 

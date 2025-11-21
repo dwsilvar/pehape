@@ -34,6 +34,7 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SyncIcon from '@mui/icons-material/Sync';
 import StopIcon from '@mui/icons-material/Stop'; // Importar el ícono de Stop
+import LocalOfferIcon from '@mui/icons-material/LocalOffer'; // Ícono para los tags
 import { useSortable, SortableContext, verticalListSortingStrategy, } from '@dnd-kit/sortable';
 import { arrayMove } from '@dnd-kit/sortable';
 import { useDroppable, useDndContext, Active } from '@dnd-kit/core';
@@ -53,6 +54,7 @@ interface ExecutionItemProps {
   onDelete: (item: FeatureItem) => void;
   onTagClick: (featureId: string, tag: string) => void;
   scenarioStatuses: ScenarioStatusMap;
+  isRunning: boolean; // Nueva prop para indicar si el feature se está ejecutando
 }
 
 const ExecutionItem: React.FC<ExecutionItemProps> = ({
@@ -64,6 +66,7 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
   onDelete,
   onTagClick,
   scenarioStatuses,
+  isRunning,
 }) => {
   const {
     attributes,
@@ -128,6 +131,9 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
           opacity: isDragging ? 0.5 : 1,
           backgroundColor: 'background.default', // Usar color del tema
           position: 'relative', // Necesario para posicionar el handle
+          // Estilo condicional para resaltar el feature en ejecución
+          border: isRunning ? '2px solid' : 'none',
+          borderColor: isRunning ? 'primary.main' : 'transparent',
           pl: '30px', // Padding izquierdo para dejar espacio al handle
           py: 1, // Padding vertical
           pr: 1, // Padding derecho
@@ -157,34 +163,34 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
         </Box>
         {/* Contenido del feature */}
         <Box sx={{ flexGrow: 1, ml: 1, cursor: 'pointer' }}>
-          <Typography sx={{ fontSize: `${fontSize}px`, display: 'flex', alignItems: 'center' }}>
-            {`${item.order}. ${item.feature_file}`}
-          </Typography>
-          <Typography variant="caption" color={item.active ? 'success.main' : 'text.secondary'}>
-            {item.active ? 'Activo' : 'Inactivo'}
-          </Typography>
-          {/* Mostrar los tags del feature si existen */}
-          {item.display_tags && item.display_tags.length > 0 && (
-            <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-              {item.display_tags.map((tag) => (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+            <Typography sx={{ fontSize: `${fontSize}px` }}>
+              {`${item.order}. ${item.feature_file}`}
+            </Typography>
+            {/* Mostrar los tags del feature si existen, ahora al lado del nombre */}
+            {item.display_tags && item.display_tags.length > 0 && (
+              item.display_tags.map((tag) => (
                 <Chip
                   clickable
                   key={tag}
                   label={tag}
+                  icon={<LocalOfferIcon fontSize="small" />}
                   size="small"
                   color={item.tags?.includes(tag) ? 'primary' : 'default'}
                   variant={item.tags?.includes(tag) ? 'filled' : 'outlined'}
                   onClick={() => onTagClick(item.id, tag)}
-                  sx={{ fontSize: '0.7rem', height: '20px' }}
+                  sx={{ fontSize: '0.7rem', height: '22px', borderRadius: '4px' }} // Hacemos el chip más rectangular
                 />
-              ))}
-            </Box>
-          )}
+              ))
+            )}
+          </Box>
           {/* Mostrar los escenarios del feature si existen */}
           {item.scenarios && item.scenarios.length > 0 && (
             <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
               {item.scenarios.map((scenario) => {
-                const status = scenarioStatuses[scenario] || 'untested';
+                // Construimos la clave única para este escenario específico
+                const uniqueScenarioId = `${item.id}::${scenario}`;
+                const status = scenarioStatuses[uniqueScenarioId] || 'untested';
                 const colorMap = {
                   passed: 'success',
                   failed: 'error',
@@ -377,6 +383,14 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
 
   // --- Estados para el log en tiempo real ---
   const [isExecuting, setIsExecuting] = useState(false); // Este estado puede seguir siendo local
+  const [runningFeatureId, setRunningFeatureId] = useState<string | null>(null); // ID del feature en ejecución
+
+  // Usamos un ref para tener acceso al valor más reciente de runningFeatureId dentro de los callbacks de EventSource.
+  // Esto evita problemas con closures y estados "estancados".
+  const runningFeatureIdRef = useRef(runningFeatureId);
+  useEffect(() => {
+    runningFeatureIdRef.current = runningFeatureId;
+  }, [runningFeatureId]);
   const logsEndRef = useRef<null | HTMLDivElement>(null);
 
   // Efecto para recargar los módulos cuando cambia el estado de 'showInactive'.
@@ -427,6 +441,7 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
     setIsExecuting(true);
     setLogs(['Iniciando conexión con el servidor...']); // Limpia logs anteriores
     setScenarioStatuses({}); // Limpia los estados de escenarios de la ejecución anterior
+    setRunningFeatureId(null); // Limpia el feature en ejecución anterior
 
     console.log("Iniciando ejecución de pruebas...");
     try {
@@ -452,10 +467,30 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
 
         // Nuevo: Manejar eventos de estado de escenario
         if (data.type === 'scenario_status') {
-          setScenarioStatuses(prev => ({
-            ...prev,
-            [data.name]: data.status,
-          }));
+          // Leemos el valor más reciente desde el ref para evitar el estado estancado.
+          let featureIdForUpdate = runningFeatureIdRef.current;
+
+          // Si un escenario empieza a correr, encontramos su feature y lo marcamos como activo.
+          // Esta es la corrección principal: encontrar el ID ANTES de intentar actualizar el estado.
+          if (data.status === 'running') {
+            for (const module of modules) {
+              const feature = module.features.find(f => f.scenarios?.includes(data.name));
+              if (feature) {
+                featureIdForUpdate = feature.id;
+                setRunningFeatureId(feature.id);
+                break; // Salimos del bucle una vez encontrado
+              }
+            }
+          }
+
+          // Ahora, si tenemos un ID de feature (ya sea el que estaba o el que acabamos de encontrar), actualizamos el estado.
+          if (featureIdForUpdate) {
+            const uniqueScenarioId = `${featureIdForUpdate}::${data.name}`;
+            setScenarioStatuses(prev => ({
+              ...prev,
+              [uniqueScenarioId]: data.status,
+            }));
+          }
           return; // No lo mostramos como un log normal
         }
         if (data.log === '---EXECUTION_FINISHED---') {
@@ -463,11 +498,13 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
           setIsExecuting(false);
           eventSource.close(); // Cierra la conexión
           // Abre el reporte en una nueva pestaña si la URL está presente
+          setRunningFeatureId(null); // Limpiamos al finalizar
           if (data.reportUrl) {
             window.open(data.reportUrl, '_blank');
           }
         } else if (data.log === '---EXECUTION_STOPPED_BY_USER---') {
           setLogs(prev => [...prev, '--- Ejecución finalizada ---']);
+          setRunningFeatureId(null); // Limpiamos al detener
           setIsExecuting(false);
           eventSource.close(); // Cierra la conexión
         } else {
@@ -481,6 +518,7 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
         eventSource.close();
       };
     } catch (error) {
+      setRunningFeatureId(null); // Limpiamos si hay un error al iniciar
       console.error("Error al iniciar la ejecución de pruebas:", error);
       setIsExecuting(false);
     }
@@ -879,6 +917,7 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
                             onMoveDown={() => handleMoveFeature(module.module_name, feature, 'down')}
                             onTagClick={(featureId, tag) => handleTagToggle(module.module_name, featureId, tag)}
                             scenarioStatuses={scenarioStatuses}
+                            isRunning={feature.id === runningFeatureId}
                           />
                         ))}
                       </SortableContext>
