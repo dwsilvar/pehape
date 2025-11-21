@@ -33,3 +33,16 @@ export interface Module {
   features: FeatureItem[];
   color?: string;
 }
+
+/**
+ * Define los posibles estados de un escenario durante la ejecución.
+ */
+export type ScenarioStatus = 'passed' | 'failed' | 'skipped' | 'untested' | 'running';
+
+/**
+ * Mapea nombres de escenarios a su estado de ejecución.
+ * Ejemplo: { "Mi primer escenario": "passed" }
+ */
+export interface ScenarioStatusMap {
+  [scenarioName: string]: ScenarioStatus;
+}

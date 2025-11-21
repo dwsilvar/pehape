@@ -36,10 +36,14 @@ import SyncIcon from '@mui/icons-material/Sync';
 import StopIcon from '@mui/icons-material/Stop'; // Importar el ícono de Stop
 import { useSortable, SortableContext, verticalListSortingStrategy, } from '@dnd-kit/sortable';
 import { arrayMove } from '@dnd-kit/sortable';
-import { useDroppable, useDndContext } from '@dnd-kit/core';
+import { useDroppable, useDndContext, Active } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { useExecutionOrder } from '../hooks/useExecutionOrder';
-import { Module, FeatureItem } from '../types'; // Importar tipos centralizados
+import { Module, FeatureItem, ScenarioStatusMap } from '../types'; // Importar tipos centralizados
+
+const DEFAULT_FEATURE_COLOR = '#4db6ac'; // Un tono verde azulado (teal) para los features
+
+const DEFAULT_MODULE_COLOR = '#7e57c2'; // Un tono púrpura para los módulos
+
 interface ExecutionItemProps {
   item: FeatureItem;
   onMoveUp?: () => void;
@@ -47,16 +51,9 @@ interface ExecutionItemProps {
   fontSize: number;
   onDoubleClick: (item: FeatureItem) => void;
   onDelete: (item: FeatureItem) => void;
-  onTagClick: (featureId: string, tag: string) => void; // Handler para el clic en un tag
-  scenarioStatuses: Record<string, 'passed' | 'failed' | 'skipped' | 'untested' | 'running'>;
+  onTagClick: (featureId: string, tag: string) => void;
+  scenarioStatuses: ScenarioStatusMap;
 }
-
-type ScenarioStatus = 'passed' | 'failed' | 'skipped' | 'untested' | 'running';
-interface ScenarioStatusMap {
-  [scenarioName: string]: ScenarioStatus;
-}
-
-const DEFAULT_FEATURE_COLOR = '#4db6ac'; // Un tono verde azulado (teal) para los features
 
 const ExecutionItem: React.FC<ExecutionItemProps> = ({
   item,
@@ -242,8 +239,7 @@ const SortableModule: React.FC<{
   module: Module;
   controls: React.ReactNode;
   features: React.ReactNode;
-  onTagToggle: (moduleName: string, featureId: string, tagName: string) => void;
-}> = ({ module, controls, features }) => {
+}> = ({ module, controls, features}) => {
   const {
     attributes,
     listeners,
@@ -346,17 +342,27 @@ const SortableModule: React.FC<{
 
 interface ExecutionOrderProps {
   fontSize: number;
-  isDropTarget: boolean;
   onAddFeature: () => void;
   onFeatureSelect: (path: string) => void;
   modules: Module[]; // Usar el tipo Module
   setModules: React.Dispatch<React.SetStateAction<Module[]>>; // Usar el tipo Module
+  logs: string[];
+  setLogs: React.Dispatch<React.SetStateAction<string[]>>;
+  scenarioStatuses: ScenarioStatusMap;
+  setScenarioStatuses: React.Dispatch<React.SetStateAction<ScenarioStatusMap>>;
   // handleSave ya fue eliminado en un paso anterior, lo quito para mantener consistencia.
 }
 
-const DEFAULT_MODULE_COLOR = '#7e57c2'; // Un tono púrpura para los módulos
-
-const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, onFeatureSelect, modules, setModules }) => {
+const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ 
+  fontSize, 
+  onFeatureSelect, 
+  modules, 
+  setModules,
+  logs,
+  setLogs,
+  scenarioStatuses,
+  setScenarioStatuses
+}) => {
   // Necesitamos acceder al elemento activo para deshabilitar el SortableContext si no es un módulo.
   // Esto es un patrón avanzado para permitir que droppables externos funcionen dentro de un SortableContext.
   const { active } = useDndContext();
@@ -370,9 +376,7 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, onFeatureSele
   const [collapsedModules, setCollapsedModules] = useState<Set<string>>(new Set());
 
   // --- Estados para el log en tiempo real ---
-  const [isExecuting, setIsExecuting] = useState(false);
-  const [logs, setLogs] = useState<string[]>([]);
-  const [scenarioStatuses, setScenarioStatuses] = useState<ScenarioStatusMap>({});
+  const [isExecuting, setIsExecuting] = useState(false); // Este estado puede seguir siendo local
   const logsEndRef = useRef<null | HTMLDivElement>(null);
 
   // Efecto para recargar los módulos cuando cambia el estado de 'showInactive'.
@@ -816,7 +820,6 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, onFeatureSele
               <SortableModule 
                 key={module.module_name} 
                 module={module}
-                onTagToggle={(moduleName, featureId, tagName) => handleTagToggle(moduleName, featureId, tagName)}
                 controls={
                   <>
                     <Tooltip title={collapsedModules.has(module.module_name) ? "Mostrar features" : "Ocultar features"}>

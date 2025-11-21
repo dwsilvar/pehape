@@ -1,11 +1,11 @@
 import React, { useState, useCallback } from 'react';
 import { AppBar, Toolbar, Typography, Slider, Box, Grid, Button, Menu, MenuItem, Dialog, DialogTitle, DialogContent, DialogActions, Tabs, Tab } from '@mui/material';
 import { styled } from '@mui/material/styles';
-import { DndContext, DragEndEvent, DragStartEvent, DragOverEvent, useSensor, useSensors, PointerSensor, TouchSensor } from '@dnd-kit/core';
+import { DndContext, DragEndEvent, DragStartEvent, DragOverEvent, useSensor, useSensors, PointerSensor, TouchSensor, DragOverlay } from '@dnd-kit/core';
 import FileExplorer from './components/FileExplorer';
 import ExecutionOrder from './components/ExecutionOrder';
 import Editor from './components/Editor';
-import { FileData } from './types';
+import { FileData, Module, ScenarioStatusMap } from './types';
 
 const AppContainer = styled(Box)(({ theme }) => ({
   height: '100vh',
@@ -15,13 +15,19 @@ const AppContainer = styled(Box)(({ theme }) => ({
 }));
 
 const App: React.FC = () => {
-  const [selectedFile, setSelectedFile] = useState<FileData | null>(null);
+  const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState<string>('');
   const [isDirty, setIsDirty] = useState(false); // Para rastrear cambios sin guardar
   const [activeTab, setActiveTab] = useState(0);
+  const [modules, setModules] = useState<Module[]>([]);
+
+  // Estados levantados desde ExecutionOrder para persistencia
+  const [logs, setLogs] = useState<string[]>([]);
+  const [scenarioStatuses, setScenarioStatuses] = useState<ScenarioStatusMap>({});
 
   // State for Drag and Drop
-  const [draggedFeature, setDraggedFeature] = useState<FileData | null>(null);
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [draggedItemPath, setDraggedItemPath] = useState<string | null>(null);
   const [isOverExecutionOrder, setIsOverExecutionOrder] = useState(false);
 
   // State for settings
@@ -31,10 +37,10 @@ const App: React.FC = () => {
   const [editorFontSize, setEditorFontSize] = useState<number>(14);
   const [fileMenuAnchorEl, setFileMenuAnchorEl] = useState<null | HTMLElement>(null);
 
-  const handleFileSelect = useCallback(async (file: FileData) => {
-    setSelectedFile(file);
+  const handleFileSelect = useCallback(async (path: string) => {
+    setSelectedFile(path);
     try {
-      const response = await fetch(`/api/features/${file.path}`);
+      const response = await fetch(`/api/files/${encodeURIComponent(path)}`);
       const data = await response.json();
       setIsDirty(false); // El contenido está limpio al cargar
       setFileContent(data.content || 'Error: No se pudo cargar el contenido.');
@@ -55,7 +61,7 @@ const App: React.FC = () => {
     }
 
     try {
-      const response = await fetch(`/api/features/${selectedFile.path}`, {
+      const response = await fetch(`/api/files/${encodeURIComponent(selectedFile)}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -68,38 +74,67 @@ const App: React.FC = () => {
       }
 
       setIsDirty(false); // Marcar como limpio después de guardar
-      console.log(`Archivo '${selectedFile.path}' guardado exitosamente.`);
+      console.log(`Archivo '${selectedFile}' guardado exitosamente.`);
     } catch (error) {
       console.error("Fallo al guardar el archivo:", error);
     }
   }, [selectedFile, fileContent, isDirty]);
 
   const handleDragStart = (event: DragStartEvent) => {
-    if (event.active.data.current?.type === 'file') {
-      setDraggedFeature(event.active.data.current.file);
+    const { active } = event;
+    setActiveDragId(active.id as string);
+    if (active.data.current?.type === 'file-explorer-feature') {
+      setDraggedItemPath(active.data.current.path);
     }
   };
 
   const handleDragOver = (event: DragOverEvent) => {
     const { over } = event;
-    setIsOverExecutionOrder(over?.id === 'execution-order-droppable-area');
+    const overId = over?.id;
+
+    // Comprueba si estamos sobre el área general o sobre un módulo específico
+    const isOverModule = typeof overId === 'string' && overId.startsWith('module-drop-area-');
+    setIsOverExecutionOrder(overId === 'execution-order-droppable-area' || isOverModule);
   };
 
-  const handleDragEnd = useCallback((event: DragEndEvent) => {
-    const { over } = event;
-    if (over?.id === 'execution-order-droppable-area' && draggedFeature) {
-      // TODO: Implement the logic to add the feature to the execution order state.
-      // For now, we just log it.
-      console.log(`Feature '${draggedFeature.path}' dropped. Add to execution order.`);
-    }
-    // Reset states
-    setDraggedFeature(null);
-    setIsOverExecutionOrder(false);
-  }, [draggedFeature]);
+  const handleDragEnd = useCallback(async (event: DragEndEvent) => {
+    const { active, over } = event;
 
-  const handleAddToExecution = useCallback(() => {
-    console.log(`Feature '${draggedFeature?.path}' added via button. Add to execution order.`);
-  }, [draggedFeature]);
+    // Si el elemento arrastrado es un feature del explorador y se suelta sobre un módulo
+    if (active.data.current?.type === 'file-explorer-feature' && over?.data.current?.moduleName) {
+      const featurePath = active.data.current.path;
+      const moduleName = over.data.current.moduleName;
+
+      try {
+        const response = await fetch(`/api/modules/${encodeURIComponent(moduleName)}/features`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ feature_path: featurePath }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to add feature to module');
+        }
+
+        const updatedModules = await response.json();
+        setModules(updatedModules); // Actualiza el estado global de módulos
+
+      } catch (error) {
+        console.error('Error al agregar el feature:', error);
+        // Opcional: mostrar una notificación de error al usuario
+      }
+    }
+
+    // Reset states
+    setActiveDragId(null);
+    setDraggedItemPath(null);
+    setIsOverExecutionOrder(false);
+  }, []);
+
+  const handleAddFeature = () => {
+    // Esta función ya no es necesaria con el drag and drop directo a módulos.
+  };
 
   const handleFileMenuClick = (event: React.MouseEvent<HTMLElement>) => {
     setFileMenuAnchorEl(event.currentTarget);
@@ -184,7 +219,7 @@ const App: React.FC = () => {
               <Box sx={{ pt: 2, flex: 1, display: 'flex', flexDirection: 'column' }}>
                 <Box mb={1} display="flex" justifyContent="space-between" alignItems="center">
                   <Typography variant="subtitle1">
-                    {selectedFile?.name || 'Editor'}
+                    {selectedFile?.split('/').pop() || 'Editor'}
                   </Typography>
                   <Button
                     variant="contained"
@@ -197,12 +232,12 @@ const App: React.FC = () => {
                 </Box>
                 <Box flex={1}>
                   <Editor
-                    key={selectedFile?.path || 'empty-editor'}
+                    key={selectedFile || 'empty-editor'}
                     content={fileContent}
                     onChange={handleContentChange}
                     onSave={handleSave}
                     fontSize={editorFontSize}
-                    filename={selectedFile?.name}
+                    filename={selectedFile || undefined}
                   />
                 </Box>
               </Box>
@@ -211,13 +246,22 @@ const App: React.FC = () => {
               <Box sx={{ pt: 2, flex: 1, overflow: 'auto', position: 'relative' }}>
                 <ExecutionOrder
                   fontSize={executionOrderFontSize}
-                  isDropTarget={isOverExecutionOrder}
-                  onAddFeature={handleAddToExecution}
+                  onAddFeature={handleAddFeature}
+                  onFeatureSelect={handleFileSelect}
+                  modules={modules}
+                  setModules={setModules}
+                  logs={logs}
+                  setLogs={setLogs}
+                  scenarioStatuses={scenarioStatuses}
+                  setScenarioStatuses={setScenarioStatuses}
                 />
               </Box>
             )}
           </Grid>
         </Grid>
+        <DragOverlay>
+          {activeDragId && draggedItemPath ? <FileExplorer.DraggableTreeItemPreview path={draggedItemPath} /> : null}
+        </DragOverlay>
       </DndContext>
     </AppContainer>
   );

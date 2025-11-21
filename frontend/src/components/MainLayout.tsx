@@ -7,7 +7,7 @@ import FeatureEditor from './FeatureEditor';
 import ExecutionOrder from './ExecutionOrder';
 import StatusBar from './StatusBar'; // Importar la nueva barra de estado
 import { FileData, FeatureItem } from '../types';
-import { getAppTheme } from '../theme'; // 1. Importar nuestro creador de temas
+import { getAppTheme } from '../theme';
 import { useExecutionOrder } from '../hooks/useExecutionOrder';
 
 interface TabPanelProps {
@@ -39,7 +39,6 @@ const MainLayout: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<FileData | null>(null);
   const [editorContent, setEditorContent] = useState<string>('');
   const [fontSize] = useState(14);
-  // 1. Estado para el tema del editor, inicializado desde localStorage o con un valor por defecto.
   const [themeName, setThemeName] = useState<string>(() => {
     return localStorage.getItem('editorTheme') || 'monokai';
   });
@@ -47,6 +46,10 @@ const MainLayout: React.FC = () => {
   const { modules, setModules, handleSave, status, isLoading } = useExecutionOrder();
   const [tabValue, setTabValue] = useState(0);
   const [viewMenuAnchorEl, setViewMenuAnchorEl] = useState<null | HTMLElement>(null);
+
+  // Estados levantados desde ExecutionOrder para persistencia entre pestañas
+  const [logs, setLogs] = useState<string[]>([]);
+  const [scenarioStatuses, setScenarioStatuses] = useState<Record<string, 'passed' | 'failed' | 'skipped' | 'untested' | 'running'>>({});
   
   // Estado para gestionar el elemento que se está arrastrando y mostrar el overlay
   const [activeDragItem, setActiveDragItem] = useState<Active | null>(null);
@@ -59,8 +62,6 @@ const MainLayout: React.FC = () => {
     'cobalt': 'Cobalt',
   };
 
-  // 2. Guardar el tema en localStorage cada vez que cambie.
-  // Y crear el objeto de tema de MUI con useMemo para eficiencia.
   useEffect(() => {
     localStorage.setItem('editorTheme', themeName);
   }, [themeName]);
@@ -312,11 +313,14 @@ const MainLayout: React.FC = () => {
               <TabPanel value={tabValue} index={1}>
                 <ExecutionOrder
                   fontSize={fontSize}
-                  isDropTarget={false}
                   onAddFeature={() => {}}
                   onFeatureSelect={handleFileSelect}
                   modules={modules}
                   setModules={setModules}
+                  logs={logs}
+                  setLogs={setLogs}
+                  scenarioStatuses={scenarioStatuses}
+                  setScenarioStatuses={setScenarioStatuses}
                 />
               </TabPanel>
             </Box>
