@@ -420,14 +420,26 @@ def stream_logs():
     def generate():
         while True:
             line = log_queue.get() # Bloquea hasta que haya un nuevo item
-            if line.strip() == "---EXECUTION_FINISHED---":
+            line_strip = line.strip()
+
+            # Intenta parsear la línea como JSON
+            try:
+                data = json.loads(line_strip)
+                # Si es un reporte de estado de escenario, envíalo con su tipo
+                if data.get("type") == "scenario_status":
+                    yield f"data: {json.dumps(data)}\n\n"
+                    continue # Pasa a la siguiente línea sin tratarlo como un log normal
+            except (json.JSONDecodeError, TypeError):
+                # Si no es JSON, trátalo como un log normal
+                pass
+
+            if line_strip == "---EXECUTION_FINISHED---":
                 # Cuando la ejecución termina, generamos la URL del reporte
                 # y la enviamos al frontend con una señal especial.
                 report_url = "/api/report/index.html"
                 yield f"data: {json.dumps({'log': '---EXECUTION_FINISHED---', 'reportUrl': report_url})}\n\n"
-                yield f"data: {json.dumps({'log': line})}\n\n"
                 break
-            yield f"data: {json.dumps({'log': line.strip()})}\n\n"
+            yield f"data: {json.dumps({'log': line_strip})}\n\n"
     return Response(generate(), mimetype='text/event-stream')
 
 @app.route('/api/report/<path:path>')

@@ -9,6 +9,8 @@ from executor.ui_executor import executor
 from executor.tasks_worker.file_tasks import FileTasks
 import logging
 import time
+import json
+import sys
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +18,18 @@ def before_all(context):
     """Executes once before all tests."""
     # Instantiate the task processor once for the entire lifecycle.
     context.file_tasks = FileTasks()
+
+def before_scenario(context, scenario):
+    """
+    Este hook se ejecuta ANTES de cada escenario.
+    Imprime un JSON para notificar al frontend que el escenario está "running".
+    """
+    status_report = {
+        "type": "scenario_status",
+        "name": scenario.name,
+        "status": "running"
+    }
+    print(json.dumps(status_report), flush=True)
 
 def before_step(context, step):
     """
@@ -41,3 +55,15 @@ def after_step(context, step):
             allure.attach(screenshot_bytes, name=f"After: '{step.name}'", attachment_type=AttachmentType.PNG)
     except Exception as e:
         logger.error(f"Could not take automatic screenshot after step '{step.name}'. Cause: {e}")
+
+def after_scenario(context, scenario):
+    """
+    Este hook se ejecuta después de cada escenario.
+    Imprime un JSON estructurado a stdout con el estado del escenario.
+    """
+    status_report = {
+        "type": "scenario_status",
+        "name": scenario.name,
+        "status": scenario.status.name  # 'passed', 'failed', 'skipped', etc.
+    }
+    print(json.dumps(status_report), flush=True)

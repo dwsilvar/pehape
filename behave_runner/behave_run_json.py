@@ -11,8 +11,9 @@ class BehaveRunJson:
     Class responsible for taking the execution plan and executing the commands
     'behave' in the specified order and with the specified filters.
     """
-    def __init__(self, execution_plan: List[Dict[str, Any]]):
+    def __init__(self, execution_plan: List[Dict[str, Any]], extra_args: str = ""):
         self.execution_plan = execution_plan
+        self.extra_args = extra_args.split()
 
     def run_sequence(self):
         """
@@ -75,7 +76,16 @@ class BehaveRunJson:
                     logger.error(f"File not found: {full_feature_path}. Skipping.")
                     continue
 
-                behave_args = [full_feature_path]
+                # Construir los argumentos para Behave
+                # Inicia con los argumentos extra (ej. --no-capture)
+                behave_args = list(self.extra_args) # Esto contendrá ['--no-capture']
+                
+                # Especificar el formateador 'plain' para la salida estándar (consola)
+                behave_args.extend(["-f", "plain", "-o", "-"])
+
+                # Especificar el formateador de Allure con su directorio de salida
+                behave_args.extend(["-f", "allure_behave.formatter:AllureFormatter", "-o", "reports/allure_results"])
+                
                 tag_info = ""
                 # 'tags' puede ser una lista de strings o null.
                 # Si es una lista, la unimos con comas para crear una expresión de tags OR.
@@ -84,8 +94,8 @@ class BehaveRunJson:
                     behave_args.extend(["--tags", tag_expression])
                     tag_info = f" (Filtro: {tag_expression})"
 
-                behave_args.extend(["--format", 'allure_behave.formatter:AllureFormatter'])
-                behave_args.extend(["--outfile", 'reports/allure_results']) # Output file for Allure results
+                # Añadir la ruta del feature al final
+                behave_args.append(full_feature_path)
 
                 logger.info(f"  INCLUDED: {full_feature_path}{tag_info}")
 

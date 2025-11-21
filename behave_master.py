@@ -15,6 +15,13 @@ class BehaveMaster:
 
     def run_main(self):
     
+        # --- INICIO DE LA CORRECCIÓN DE ENCODING ---
+        # Reconfigura los manejadores de logging para forzar el uso de UTF-8.
+        # Esto previene errores UnicodeEncodeError en consolas de Windows.
+        for handler in logging.root.handlers:
+            handler.setStream(open(os.devnull, 'w', encoding='utf-8')) # Truco para reasignar el stream con la codificación correcta
+        # ------------------------------------------------
+
         # 1. Instantiate and load the plan using the ExecutionPlanLoader class
         loader = ExecutionPlanLoader()
         plan = loader.load_execution_plan()
@@ -23,7 +30,10 @@ class BehaveMaster:
             logger.error("The runner failed to start due to configuration errors.")
         else:
             # 2. Instantiate and run the sequence using the BehaveRunner class
-            runner = BehaveRunJson(plan)
+            # Se añaden argumentos para asegurar el streaming en tiempo real.
+            behave_args = "--no-capture"
+            runner = BehaveRunJson(plan, behave_args)
+
             runner.run_sequence()
             logger.info("Test execution completed.")
 

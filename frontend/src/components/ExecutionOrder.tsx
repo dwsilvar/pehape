@@ -48,6 +48,12 @@ interface ExecutionItemProps {
   onDoubleClick: (item: FeatureItem) => void;
   onDelete: (item: FeatureItem) => void;
   onTagClick: (featureId: string, tag: string) => void; // Handler para el clic en un tag
+  scenarioStatuses: Record<string, 'passed' | 'failed' | 'skipped' | 'untested' | 'running'>;
+}
+
+type ScenarioStatus = 'passed' | 'failed' | 'skipped' | 'untested' | 'running';
+interface ScenarioStatusMap {
+  [scenarioName: string]: ScenarioStatus;
 }
 
 const DEFAULT_FEATURE_COLOR = '#4db6ac'; // Un tono verde azulado (teal) para los features
@@ -60,6 +66,7 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
   onDoubleClick,
   onDelete,
   onTagClick,
+  scenarioStatuses,
 }) => {
   const {
     attributes,
@@ -179,15 +186,27 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
           {/* Mostrar los escenarios del feature si existen */}
           {item.scenarios && item.scenarios.length > 0 && (
             <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-              {item.scenarios.map((scenario) => (
-                <Chip
-                  key={scenario}
-                  label={scenario}
-                  size="small"
-                  variant="outlined"
-                  sx={{ fontSize: '0.7rem', height: '20px', backgroundColor: 'action.hover' }}
-                />
-              ))}
+              {item.scenarios.map((scenario) => {
+                const status = scenarioStatuses[scenario] || 'untested';
+                const colorMap = {
+                  passed: 'success',
+                  failed: 'error',
+                  skipped: 'warning',
+                  untested: 'default',
+                  running: 'info',
+                } as const;
+
+                return (
+                  <Chip
+                    key={scenario}
+                    label={scenario}
+                    size="small"
+                    color={colorMap[status]}
+                    variant={status === 'untested' ? 'outlined' : 'filled'}
+                    sx={{ fontSize: '0.7rem', height: '20px' }}
+                  />
+                );
+              })}
             </Box>
           )}
         </Box>
@@ -353,6 +372,7 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, onFeatureSele
   // --- Estados para el log en tiempo real ---
   const [isExecuting, setIsExecuting] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
+  const [scenarioStatuses, setScenarioStatuses] = useState<ScenarioStatusMap>({});
   const logsEndRef = useRef<null | HTMLDivElement>(null);
 
   // Efecto para recargar los módulos cuando cambia el estado de 'showInactive'.
@@ -402,6 +422,7 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, onFeatureSele
 
     setIsExecuting(true);
     setLogs(['Iniciando conexión con el servidor...']); // Limpia logs anteriores
+    setScenarioStatuses({}); // Limpia los estados de escenarios de la ejecución anterior
 
     console.log("Iniciando ejecución de pruebas...");
     try {
@@ -424,6 +445,15 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, onFeatureSele
       
       eventSource.onmessage = (event) => {
         const data = JSON.parse(event.data);
+
+        // Nuevo: Manejar eventos de estado de escenario
+        if (data.type === 'scenario_status') {
+          setScenarioStatuses(prev => ({
+            ...prev,
+            [data.name]: data.status,
+          }));
+          return; // No lo mostramos como un log normal
+        }
         if (data.log === '---EXECUTION_FINISHED---') {
           setLogs(prev => [...prev, '--- Ejecución finalizada. Reporte disponible. ---']);
           setIsExecuting(false);
@@ -845,6 +875,7 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ fontSize, onFeatureSele
                             onMoveUp={() => handleMoveFeature(module.module_name, feature, 'up')}
                             onMoveDown={() => handleMoveFeature(module.module_name, feature, 'down')}
                             onTagClick={(featureId, tag) => handleTagToggle(module.module_name, featureId, tag)}
+                            scenarioStatuses={scenarioStatuses}
                           />
                         ))}
                       </SortableContext>
