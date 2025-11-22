@@ -1,12 +1,13 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { Box, Paper, Tabs, Tab, MenuItem, AppBar, Toolbar, Button, Menu, ThemeProvider, CssBaseline } from '@mui/material';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { Box, Paper, Tabs, Tab, MenuItem, AppBar, Toolbar, Button, Menu, ThemeProvider, CssBaseline, Badge } from '@mui/material';
 import { DndContext, closestCenter, DragOverlay, Active } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
 import FileExplorer from './FileExplorer';
 import FeatureEditor from './FeatureEditor';
 import ExecutionOrder from './ExecutionOrder';
 import StatusBar from './StatusBar'; // Importar la nueva barra de estado
-import { FileData, FeatureItem } from '../types';
+import ConsoleView from './ConsoleView'; // Importar la nueva vista de consola
+import { FileData, Module, ScenarioStatusMap } from '../types';
 import { getAppTheme } from '../theme';
 import { useExecutionOrder } from '../hooks/useExecutionOrder';
 
@@ -48,11 +49,15 @@ const MainLayout: React.FC = () => {
   const [viewMenuAnchorEl, setViewMenuAnchorEl] = useState<null | HTMLElement>(null);
 
   // Estados levantados desde ExecutionOrder para persistencia entre pestañas
+  // y para ser gestionados por el layout principal.
   const [logs, setLogs] = useState<string[]>([]);
-  const [scenarioStatuses, setScenarioStatuses] = useState<Record<string, 'passed' | 'failed' | 'skipped' | 'untested' | 'running'>>({});
+  const [scenarioStatuses, setScenarioStatuses] = useState<ScenarioStatusMap>({});
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [runningFeatureId, setRunningFeatureId] = useState<string | null>(null);
   
   // Estado para gestionar el elemento que se está arrastrando y mostrar el overlay
   const [activeDragItem, setActiveDragItem] = useState<Active | null>(null);
+  const runningFeatureIdRef = useRef(runningFeatureId);
 
   const availableThemes = {
     'monokai': 'Monokai',
@@ -65,6 +70,11 @@ const MainLayout: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('editorTheme', themeName);
   }, [themeName]);
+
+  useEffect(() => {
+    runningFeatureIdRef.current = runningFeatureId;
+  }, [runningFeatureId]);
+
   const muiTheme = useMemo(() => getAppTheme(themeName), [themeName]);
 
   useEffect(() => {
@@ -114,6 +124,107 @@ const MainLayout: React.FC = () => {
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
   };
+
+  // --- Lógica de ejecución de pruebas, ahora en el layout principal ---
+  const handleRunTests = async () => {
+    if (isExecuting) return;
+
+    setIsExecuting(true);
+    setLogs(['Iniciando conexión con el servidor...']);
+    setScenarioStatuses({});
+    setRunningFeatureId(null);
+
+    try {
+      const response = await fetch('/api/run-tests', { method: 'POST' });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to start test execution');
+      }
+      const result = await response.json();
+      setLogs(prev => [...prev, result.message]);
+
+      const eventSource = new EventSource('/api/stream-logs');
+      
+      eventSource.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+
+        if (data.type === 'scenario_status') {
+          // Lógica simplificada gracias a que el backend ahora envía el feature_id.
+          // Ya no necesitamos buscar ni adivinar.
+          const featureIdForUpdate = data.feature_id;
+
+          if (featureIdForUpdate) {
+            // Si el escenario está empezando a correr, actualizamos el feature activo.
+            if (data.status === 'running') {
+              setRunningFeatureId(featureIdForUpdate);
+            }
+            const uniqueScenarioId = `${featureIdForUpdate}::${data.name}`;
+            setScenarioStatuses(prev => ({ ...prev, [uniqueScenarioId]: data.status }));
+          }
+          return;
+        }
+
+        if (data.type === 'report_ready' && data.reportUrl) {
+          setLogs(prev => [...prev, '--- Reporte disponible. ---']);
+          window.open(data.reportUrl, '_blank');
+          return;
+        }
+
+        if (data.log === '---EXECUTION_FINISHED---') {
+          setLogs(prev => [...prev, '--- Ejecución finalizada. ---']);
+          setIsExecuting(false);
+          eventSource.close();
+          setRunningFeatureId(null);
+        } else if (data.log === '---EXECUTION_STOPPED_BY_USER---') {
+          setLogs(prev => [...prev, '--- Ejecución detenida por el usuario. ---']);
+          setRunningFeatureId(null);
+          setIsExecuting(false);
+          eventSource.close();
+        } else {
+          setLogs(prev => [...prev, data.log]);
+        }
+      };
+
+      eventSource.onerror = () => {
+        setLogs(prev => [...prev, 'Error en la conexión de streaming. Se ha cerrado.']);
+        setIsExecuting(false);
+        eventSource.close();
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+      setLogs(prev => [...prev, `Error al iniciar la ejecución: ${errorMessage}`]);
+      setRunningFeatureId(null);
+      setIsExecuting(false);
+    }
+  };
+
+  const handleStopTests = async () => {
+    try {
+      const response = await fetch('/api/stop-tests', { method: 'POST' });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to stop test execution');
+      }
+      const result = await response.json();
+      setLogs(prev => [...prev, result.message]);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+      setLogs(prev => [...prev, `Error al detener la ejecución: ${errorMessage}`]);
+    }
+  };
+
+  const ConsoleTabLabel = () => (
+    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+      Console
+      {isExecuting && (
+        <Badge 
+          color="primary" 
+          variant="dot" 
+          sx={{ ml: 1.5 }}
+        />
+      )}
+    </Box>
+  );
 
   return (
     <ThemeProvider theme={muiTheme}>
@@ -299,6 +410,7 @@ const MainLayout: React.FC = () => {
                   <Tabs value={tabValue} onChange={handleTabChange} aria-label="main tabs">
                     <Tab label={selectedFile?.name || 'Feature Editor'} id="main-tab-0" aria-controls="main-tabpanel-0" />
                     <Tab label="Execution Order" id="main-tab-1" aria-controls="main-tabpanel-1" />
+                    <Tab label={<ConsoleTabLabel />} id="main-tab-2" aria-controls="main-tabpanel-2" />
                   </Tabs>
                 </Box>
               </Box>
@@ -313,15 +425,19 @@ const MainLayout: React.FC = () => {
               <TabPanel value={tabValue} index={1}>
                 <ExecutionOrder
                   fontSize={fontSize}
-                  onAddFeature={() => {}}
                   onFeatureSelect={handleFileSelect}
                   modules={modules}
                   setModules={setModules}
-                  logs={logs}
-                  setLogs={setLogs}
                   scenarioStatuses={scenarioStatuses}
                   setScenarioStatuses={setScenarioStatuses}
+                  isExecuting={isExecuting}
+                  runningFeatureId={runningFeatureId}
+                  onRunTests={handleRunTests}
+                  onStopTests={handleStopTests}
                 />
+              </TabPanel>
+              <TabPanel value={tabValue} index={2}>
+                <ConsoleView logs={logs} />
               </TabPanel>
             </Box>
           </Box>

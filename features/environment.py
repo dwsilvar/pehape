@@ -24,8 +24,10 @@ def before_scenario(context, scenario):
     Este hook se ejecuta ANTES de cada escenario.
     Imprime un JSON para notificar al frontend que el escenario está "running".
     """
+    feature_id = context.config.userdata.get("feature_id", "unknown_feature")
     status_report = {
         "type": "scenario_status",
+        "feature_id": feature_id,
         "name": scenario.name,
         "status": "running"
     }
@@ -61,8 +63,10 @@ def after_scenario(context, scenario):
     Este hook se ejecuta después de cada escenario.
     Imprime un JSON estructurado a stdout con el estado del escenario.
     """
+    feature_id = context.config.userdata.get("feature_id", "unknown_feature")
     status_report = {
         "type": "scenario_status",
+        "feature_id": feature_id,
         "name": scenario.name,
         "status": scenario.status.name  # 'passed', 'failed', 'skipped', etc.
     }

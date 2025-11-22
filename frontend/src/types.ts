@@ -32,6 +32,7 @@ export interface Module {
   active: boolean;
   features: FeatureItem[];
   color?: string;
+  is_collapsed?: boolean; // Estado de colapso para la UI
 }
 
 /**

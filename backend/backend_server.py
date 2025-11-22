@@ -258,6 +258,24 @@ def update_module_color(module_name):
     except ValueError as e:
         return jsonify({"error": str(e)}), 404
 
+@app.route('/api/ui-settings/module-collapse', methods=['PUT'])
+def update_module_collapse():
+    """
+    Endpoint para guardar el estado de colapso (expandido/contraído) de un módulo.
+    """
+    try:
+        data = request.json
+        module_name = data.get('module_name')
+        is_collapsed = data.get('is_collapsed')
+
+        if not module_name or is_collapsed is None:
+            return jsonify({"error": "Se requiere 'module_name' y 'is_collapsed'"}), 400
+
+        result = plan_manager.update_module_collapse_state(module_name, is_collapsed)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/modules/<string:module_name>', methods=['DELETE'])
 def delete_module(module_name):
     """
@@ -437,8 +455,11 @@ def stream_logs():
             if line_strip == "---EXECUTION_FINISHED---":
                 # Cuando la ejecución termina, generamos la URL del reporte
                 # y la enviamos al frontend con una señal especial.
+                # Paso 1: Enviar la URL del reporte como un evento separado.
                 report_url = "/api/report/index.html"
-                yield f"data: {json.dumps({'log': '---EXECUTION_FINISHED---', 'reportUrl': report_url})}\n\n"
+                yield f"data: {json.dumps({'type': 'report_ready', 'reportUrl': report_url})}\n\n"
+                # Paso 2: Enviar la señal de finalización para que el frontend pueda cerrar la conexión.
+                yield f"data: {json.dumps({'log': '---EXECUTION_FINISHED---'})}\n\n"
                 break
             yield f"data: {json.dumps({'log': line_strip})}\n\n"
     return Response(generate(), mimetype='text/event-stream')

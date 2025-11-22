@@ -54,6 +54,7 @@ class BehaveRunJson:
                 feature_active = feature_item.get("active", False)
                 feature_dir = feature_item.get("feature_dir", "")
                 tags = feature_item.get("tags")
+                feature_id = f"feature::{module_name}::{feature_dir}/{feature_file}"
 
                 if not feature_file: # Warning: Feature without 'feature_file'. Skipping.
                     logger.warning("Feature without 'feature_file'. Skipping.")
@@ -86,6 +87,9 @@ class BehaveRunJson:
                 # Especificar el formateador de Allure con su directorio de salida
                 behave_args.extend(["-f", "allure_behave.formatter:AllureFormatter", "-o", "reports/allure_results"])
                 
+                # Pasamos el ID del feature como un dato de usuario al contexto de behave.
+                behave_args.extend(["--define", f"feature_id={feature_id}"])
+
                 tag_info = ""
                 # 'tags' puede ser una lista de strings o null.
                 # Si es una lista, la unimos con comas para crear una expresión de tags OR.

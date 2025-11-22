@@ -16,11 +16,12 @@ class BehaveMaster:
     def run_main(self):
     
         # --- INICIO DE LA CORRECCIÓN DE ENCODING ---
-        # Reconfigura los manejadores de logging para forzar el uso de UTF-8.
-        # Esto previene errores UnicodeEncodeError en consolas de Windows.
-        for handler in logging.root.handlers:
-            handler.setStream(open(os.devnull, 'w', encoding='utf-8')) # Truco para reasignar el stream con la codificación correcta
-        # ------------------------------------------------
+        # Reconfigura los streams de salida estándar para forzar el uso de UTF-8.
+        # Esto es crucial para que los caracteres especiales (acentos, etc.) se muestren
+        # correctamente cuando la salida del script se captura en otro proceso.
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+        # --- FIN DE LA CORRECCIÓN DE ENCODING ---
 
         # 1. Instantiate and load the plan using the ExecutionPlanLoader class
         loader = ExecutionPlanLoader()

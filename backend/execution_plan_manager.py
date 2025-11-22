@@ -6,7 +6,9 @@ class ExecutionPlanManager:
     def __init__(self, features_dir):
         self.features_dir = features_dir
         self.run_list_path = os.path.join(features_dir, 'run_list.json')
+        self.ui_settings_path = os.path.join(features_dir, 'ui_settings.json')
         self.data = self._load()
+        self.ui_settings = self._load_ui_settings()
 
     def _load(self):
         """Carga el plan de ejecución desde el archivo JSON."""
@@ -14,9 +16,25 @@ class ExecutionPlanManager:
             if not os.path.exists(self.run_list_path):
                 return {"execution_sequence": []}
             with open(self.run_list_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
+                data = json.load(f)
+                # Limpieza retroactiva: elimina el color si existe en los datos cargados.
+                for module in data.get('execution_sequence', []):
+                    module.pop('color', None)
+                return data
         except (json.JSONDecodeError, IOError):
             return {"execution_sequence": []}
+
+    def _load_ui_settings(self):
+        """Carga las configuraciones de UI desde su archivo JSON."""
+        try:
+            with open(self.ui_settings_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            # Devuelve una estructura por defecto si el archivo no existe o está corrupto.
+            return {
+                "module_colors": {},
+                "collapsed_modules": {}
+            }
 
     def _save(self):
         """Guarda la estructura de datos actual en el archivo JSON."""
@@ -24,10 +42,22 @@ class ExecutionPlanManager:
         self.data['execution_sequence'].sort(key=lambda m: m.get('order', 0))
         
         # Crea una copia profunda para no modificar el estado en memoria
-        data_to_save = json.loads(json.dumps(self.data))
+        data_to_save = json.loads(json.dumps(self.data['execution_sequence']))
+        
+        # Prepara los datos para run_list.json (sin campos de UI)
+        for module in data_to_save:
+            module.pop('color', None) # Elimina el color antes de guardar en run_list.json
+            for feature in module.get('features', []):
+                feature.pop('display_tags', None)
+                feature.pop('scenarios', None)
 
         with open(self.run_list_path, 'w', encoding='utf-8') as f:
-            json.dump(data_to_save, f, indent=2)
+            json.dump({"execution_sequence": data_to_save}, f, indent=2)
+
+    def _save_ui_settings(self):
+        """Guarda las configuraciones de UI en su archivo."""
+        with open(self.ui_settings_path, 'w', encoding='utf-8') as f:
+            json.dump(self.ui_settings, f, indent=2)
 
     def get_sequence(self, parser_func=None):
         """Obtiene la secuencia de ejecución completa, ordenada."""
@@ -50,6 +80,11 @@ class ExecutionPlanManager:
 
         # Ordena las features dentro de cada módulo.
         for module in all_modules:
+            # Inyecta el color desde la configuración de UI
+            module['color'] = self.ui_settings.get('module_colors', {}).get(module['module_name'])
+            # Inyecta el estado de colapso (default: false/expandido)
+            module['is_collapsed'] = self.ui_settings.get('collapsed_modules', {}).get(module['module_name'], False)
+
             if 'features' in module:
                 module['features'].sort(key=lambda f: f.get('order', 0))
                 # Enriquece los datos del feature si se proporciona una función de parsing.
@@ -154,9 +189,16 @@ class ExecutionPlanManager:
         if not target_module:
             raise ValueError(f"El módulo '{module_name}' no fue encontrado.")
 
-        target_module['color'] = color
-        self._save()
+        self.ui_settings.setdefault('module_colors', {})[module_name] = color
+        self._save_ui_settings()
         return self.get_sequence()
+
+    def update_module_collapse_state(self, module_name, is_collapsed):
+        """Actualiza el estado de colapso para un módulo específico."""
+        # Asegura que el diccionario exista antes de asignar.
+        self.ui_settings.setdefault('collapsed_modules', {})[module_name] = is_collapsed
+        self._save_ui_settings()
+        return {"status": "success", "module": module_name, "is_collapsed": is_collapsed}
 
     def update_feature_tags(self, module_name, feature_file, feature_dir, tags):
         """Actualiza los tags de ejecución para un feature específico dentro de un módulo."""

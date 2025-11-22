@@ -3,7 +3,6 @@ import { // Importa los componentes necesarios para el diálogo
   Box,
   CircularProgress,
   Typography,
-  List,
   ListItem,
   ListItemText,
   IconButton,
@@ -20,8 +19,8 @@ import { // Importa los componentes necesarios para el diálogo
   Chip,
   ToggleButton,
 } from '@mui/material';
-import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
-import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import SaveIcon from '@mui/icons-material/Save';
 import ToggleOnIcon from '@mui/icons-material/ToggleOn';
 import ToggleOffIcon from '@mui/icons-material/ToggleOff';
@@ -55,6 +54,8 @@ interface ExecutionItemProps {
   onTagClick: (featureId: string, tag: string) => void;
   scenarioStatuses: ScenarioStatusMap;
   isRunning: boolean; // Nueva prop para indicar si el feature se está ejecutando
+  isFirst: boolean; // Nueva prop para saber si es el primer elemento
+  isLast: boolean; // Nueva prop para saber si es el último elemento
 }
 
 const ExecutionItem: React.FC<ExecutionItemProps> = ({
@@ -67,6 +68,8 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
   onTagClick,
   scenarioStatuses,
   isRunning,
+  isFirst,
+  isLast,
 }) => {
   const {
     attributes,
@@ -217,11 +220,11 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
           )}
         </Box>
         {/* Los botones ahora están fuera del handle y sus clics funcionarán. */}
-        <IconButton key={`${item.id}-up`} edge="end" onClick={onMoveUp} size="small">
-          <KeyboardArrowUpIcon />
+        <IconButton key={`${item.id}-up`} edge="end" onClick={onMoveUp} size="small" disabled={isFirst}>
+          <ArrowUpwardIcon />
         </IconButton>
-        <IconButton key={`${item.id}-down`} edge="end" onClick={onMoveDown} size="small">
-          <KeyboardArrowDownIcon />
+        <IconButton key={`${item.id}-down`} edge="end" onClick={onMoveDown} size="small" disabled={isLast}>
+          <ArrowDownwardIcon />
         </IconButton>
         <IconButton edge="end" onClick={() => onDelete(item)} size="small" sx={{ ml: 1 }}>
           <DeleteIcon fontSize="small" />
@@ -351,15 +354,15 @@ const SortableModule: React.FC<{
 
 interface ExecutionOrderProps {
   fontSize: number;
-  onAddFeature: () => void;
   onFeatureSelect: (path: string) => void;
   modules: Module[]; // Usar el tipo Module
   setModules: React.Dispatch<React.SetStateAction<Module[]>>; // Usar el tipo Module
-  logs: string[];
-  setLogs: React.Dispatch<React.SetStateAction<string[]>>;
   scenarioStatuses: ScenarioStatusMap;
   setScenarioStatuses: React.Dispatch<React.SetStateAction<ScenarioStatusMap>>;
-  // handleSave ya fue eliminado en un paso anterior, lo quito para mantener consistencia.
+  isExecuting: boolean;
+  runningFeatureId: string | null;
+  onRunTests: () => void;
+  onStopTests: () => void;
 }
 
 const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ 
@@ -367,10 +370,12 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
   onFeatureSelect, 
   modules, 
   setModules,
-  logs,
-  setLogs,
   scenarioStatuses,
-  setScenarioStatuses
+  setScenarioStatuses,
+  isExecuting,
+  runningFeatureId,
+  onRunTests,
+  onStopTests,
 }) => {
   // Necesitamos acceder al elemento activo para deshabilitar el SortableContext si no es un módulo.
   // Esto es un patrón avanzado para permitir que droppables externos funcionen dentro de un SortableContext.
@@ -382,23 +387,15 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
 
   // Estado para controlar si se muestran los módulos inactivos. Por defecto, solo activos.
   const [showInactive, setShowInactive] = useState(false);
-  const [collapsedModules, setCollapsedModules] = useState<Set<string>>(new Set());
+  // El estado de colapso ahora se inicializa vacío y se llena desde el backend.
+  const [collapsedModules, setCollapsedModules] = useState<Set<string>>(new Set()); 
 
-  // --- Estados para el log en tiempo real ---
-  const [isExecuting, setIsExecuting] = useState(false); // Este estado puede seguir siendo local
-  const [runningFeatureId, setRunningFeatureId] = useState<string | null>(null); // ID del feature en ejecución
-
-  // Usamos un ref para tener acceso al valor más reciente de runningFeatureId dentro de los callbacks de EventSource.
-  // Esto evita problemas con closures y estados "estancados".
-  const runningFeatureIdRef = useRef(runningFeatureId);
-  useEffect(() => {
-    runningFeatureIdRef.current = runningFeatureId;
-  }, [runningFeatureId]);
-  const logsEndRef = useRef<null | HTMLDivElement>(null);
+  const [isLoading, setIsLoading] = useState(true); // Nuevo estado de carga
 
   // Efecto para recargar los módulos cuando cambia el estado de 'showInactive'.
   useEffect(() => {
     const fetchModules = async () => {
+      setIsLoading(true); // Inicia la carga
       try {
         // Construye la URL dinámicamente basándose en el estado 'showInactive'.
         const url = `/api/execution-order${showInactive ? '?include_inactive=true' : ''}`;
@@ -406,11 +403,20 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
         if (!response.ok) {
           throw new Error('Failed to fetch execution order');
         }
-        const data = await response.json();
-        setModules(data); // Actualiza el estado global con los datos del backend.
+        const data: Module[] = await response.json();
+        setModules(data);
+
+        // Inicializa el estado de colapso basado en los datos recibidos del backend.
+        const initiallyCollapsed = new Set<string>();
+        data.forEach(module => { // Ahora 'module' es de tipo 'Module'
+          if (module.is_collapsed) initiallyCollapsed.add(module.module_name);
+        });
+        setCollapsedModules(initiallyCollapsed);
       } catch (error) {
         console.error("Error fetching execution order:", error);
         // Opcional: mostrar un error en la UI.
+      } finally {
+        setIsLoading(false); // Finaliza la carga, tanto en éxito como en error
       }
     };
 
@@ -421,133 +427,31 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
     setShowInactive(prev => !prev);
   };
 
-  const handleToggleModuleCollapse = (moduleName: string) => {
+  const handleToggleModuleCollapse = async (moduleName: string) => {
+    const isCurrentlyCollapsed = collapsedModules.has(moduleName);
+    const newCollapsedState = !isCurrentlyCollapsed;
+
+    // Actualización optimista de la UI
     setCollapsedModules(prev => {
       const newSet = new Set(prev);
-      if (newSet.has(moduleName)) {
-        newSet.delete(moduleName);
-      } else {
+      if (newCollapsedState) {
         newSet.add(moduleName);
+      } else {
+        newSet.delete(moduleName);
       }
       return newSet;
     });
-  };
-  // Efecto para hacer scroll automático en el área de logs
-  useEffect(() => {
-    logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [logs]);
 
-  // Handler para ejecutar las pruebas
-  const handleRunTests = async () => {
-    if (isExecuting) return;
-
-    setIsExecuting(true);
-    setLogs(['Iniciando conexión con el servidor...']); // Limpia logs anteriores
-    setScenarioStatuses({}); // Limpia los estados de escenarios de la ejecución anterior
-    setRunningFeatureId(null); // Limpia el feature en ejecución anterior
-
-    console.log("Iniciando ejecución de pruebas...");
+    // Persistir el cambio en el backend
     try {
-      // 1. Inicia la ejecución en el backend
-      const response = await fetch('/api/run-tests', {
-        method: 'POST',
+      await fetch('/api/ui-settings/module-collapse', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ module_name: moduleName, is_collapsed: newCollapsedState }),
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to start test execution');
-      }
-
-      const result = await response.json();
-      console.log(result.message); // "La ejecución de pruebas ha comenzado."
-      setLogs(prev => [...prev, result.message]);
-
-      // 2. Se conecta al stream de eventos para recibir logs
-      const eventSource = new EventSource('/api/stream-logs');
-      
-      eventSource.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-
-        // Nuevo: Manejar eventos de estado de escenario
-        if (data.type === 'scenario_status') {
-          // Leemos el valor más reciente desde el ref para evitar el estado estancado.
-          let featureIdForUpdate = runningFeatureIdRef.current;
-
-          // Si un escenario empieza a correr, encontramos su feature y lo marcamos como activo.
-          // Esta es la corrección principal: encontrar el ID ANTES de intentar actualizar el estado.
-          if (data.status === 'running') {
-            for (const module of modules) {
-              // Modificación para soportar Scenario Outlines:
-              // Comprobamos si el nombre del escenario en ejecución (data.name)
-              // COMIENZA CON alguno de los nombres de escenario base que tenemos.
-              const feature = module.features.find(f => 
-                f.scenarios?.some(baseScenarioName => data.name.startsWith(baseScenarioName))
-              );
-              if (feature) {
-                featureIdForUpdate = feature.id;
-                setRunningFeatureId(feature.id);
-                break; // Salimos del bucle una vez encontrado
-              }
-            }
-          }
-
-          // Ahora, si tenemos un ID de feature (ya sea el que estaba o el que acabamos de encontrar), actualizamos el estado.
-          if (featureIdForUpdate) {
-            const uniqueScenarioId = `${featureIdForUpdate}::${data.name}`;
-            setScenarioStatuses(prev => ({
-              ...prev,
-              [uniqueScenarioId]: data.status,
-            }));
-          }
-          return; // No lo mostramos como un log normal
-        }
-        if (data.log === '---EXECUTION_FINISHED---') {
-          setLogs(prev => [...prev, '--- Ejecución finalizada. Reporte disponible. ---']);
-          setIsExecuting(false);
-          eventSource.close(); // Cierra la conexión
-          // Abre el reporte en una nueva pestaña si la URL está presente
-          setRunningFeatureId(null); // Limpiamos al finalizar
-          if (data.reportUrl) {
-            window.open(data.reportUrl, '_blank');
-          }
-        } else if (data.log === '---EXECUTION_STOPPED_BY_USER---') {
-          setLogs(prev => [...prev, '--- Ejecución finalizada ---']);
-          setRunningFeatureId(null); // Limpiamos al detener
-          setIsExecuting(false);
-          eventSource.close(); // Cierra la conexión
-        } else {
-          setLogs(prev => [...prev, data.log]);
-        }
-      };
-
-      eventSource.onerror = () => {
-        setLogs(prev => [...prev, 'Error en la conexión de streaming. Se ha cerrado.']);
-        setIsExecuting(false);
-        eventSource.close();
-      };
     } catch (error) {
-      setRunningFeatureId(null); // Limpiamos si hay un error al iniciar
-      console.error("Error al iniciar la ejecución de pruebas:", error);
-      setIsExecuting(false);
-    }
-  };
-
-  // Handler para detener las pruebas
-  const handleStopTests = async () => {
-    console.log("Enviando solicitud para detener las pruebas...");
-    try {
-      const response = await fetch('/api/stop-tests', {
-        method: 'POST',
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to stop test execution');
-      }
-      const result = await response.json();
-      console.log(result.message);
-      // No es necesario cambiar isExecuting aquí, el stream de logs lo hará.
-    } catch (error) {
-      console.error("Error al detener la ejecución:", error);
+      console.error('Error al guardar el estado de colapso:', error);
+      // Opcional: revertir el cambio en la UI si la llamada a la API falla.
     }
   };
 
@@ -698,10 +602,15 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
 
     // Llama a la API para persistir el cambio
     try {
+      // Prepara los datos para enviar, excluyendo los campos de solo visualización.
+      const featuresToSave = updatedFeaturesWithOrder.map(({ display_tags, scenarios, ...rest }) => rest);
+
       const response = await fetch(`/api/modules/${encodeURIComponent(moduleName)}/features/reorder`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedFeaturesWithOrder), // Envía la lista con el orden ya corregido
+        // Envía la lista sin los campos de visualización. El backend reconstruirá el orden.
+        // El backend ya no necesita los 'order' si la lista viene ordenada, pero enviarlos no causa problemas.
+        body: JSON.stringify(featuresToSave),
       });
 
       if (!response.ok) {
@@ -835,8 +744,8 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
             variant="contained" 
             color={isExecuting ? "error" : "primary"} 
             size="small" sx={{ mr: 1 }} 
-            onClick={isExecuting ? handleStopTests : handleRunTests}
-            disabled={isExecuting && !logs.length} // Deshabilita brevemente hasta que se conecta
+            onClick={isExecuting ? onStopTests : onRunTests}
+            disabled={isExecuting && modules.length === 0} // Deshabilita si está ejecutando y no hay módulos
           >
             {isExecuting ? <StopIcon /> : <PlayArrowIcon />}
           </Button>
@@ -854,7 +763,13 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
         </Tooltip>
       </Box>
       <Box sx={{ flex: 1, overflow: 'auto', px: 2 }}> {/* Contenedor con scroll y padding horizontal */}
-        {Array.isArray(modules) && (
+        {isLoading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+            <CircularProgress />
+            <Typography sx={{ ml: 2 }}>Cargando plan de ejecución...</Typography>
+          </Box>
+        ) : (
+          Array.isArray(modules) && modules.length > 0 ? (
           <SortableContext 
             items={modules.map(m => m.module_name)}
             strategy={verticalListSortingStrategy}
@@ -926,6 +841,8 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
                             onTagClick={(featureId, tag) => handleTagToggle(module.module_name, featureId, tag)}
                             scenarioStatuses={scenarioStatuses}
                             isRunning={feature.id === runningFeatureId}
+                            isFirst={index === 0}
+                            isLast={index === module.features.length - 1}
                           />
                         ))}
                       </SortableContext>
@@ -935,30 +852,13 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
               />
             ))}
           </SortableContext>
+          ) : (
+            <Typography sx={{ textAlign: 'center', mt: 4, color: 'text.secondary' }}>
+              No hay módulos en el plan de ejecución. Comience agregando un módulo o arrastrando un feature a esta área.
+            </Typography>
+          )
         )}
       </Box>
-      {/* Área para mostrar los logs en tiempo real */}
-      {logs.length > 1 && (
-        <Paper 
-          elevation={3} 
-          sx={{ 
-            mt: 2, 
-            p: 2, 
-            maxHeight: '200px', 
-            overflowY: 'auto', 
-            backgroundColor: 'black', 
-            color: 'lightgray', 
-            fontFamily: 'monospace',
-            fontSize: '0.8rem'
-          }}
-        >
-          {logs.map((log, index) => (
-            <div key={index}>{log}</div>
-          ))}
-          {/* Elemento invisible para hacer scroll automático */}
-          <div ref={logsEndRef} />
-        </Paper>
-      )}
 
       <Dialog open={dialogOpen} onClose={handleCloseDialog}>
         <DialogTitle>Agregar Nuevo Módulo</DialogTitle>
