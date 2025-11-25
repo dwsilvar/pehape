@@ -5,6 +5,7 @@ import { DndContext, DragEndEvent, DragStartEvent, DragOverEvent, useSensor, use
 import FileExplorer from './components/FileExplorer';
 import ExecutionOrder from './components/ExecutionOrder';
 import Editor from './components/Editor';
+import { useExecutionOrder } from './hooks/useExecutionOrder';
 import { FileData, Module, ScenarioStatusMap } from './types';
 
 const AppContainer = styled(Box)(({ theme }) => ({
@@ -19,11 +20,15 @@ const App: React.FC = () => {
   const [fileContent, setFileContent] = useState<string>('');
   const [isDirty, setIsDirty] = useState(false); // Para rastrear cambios sin guardar
   const [activeTab, setActiveTab] = useState(0);
-  const [modules, setModules] = useState<Module[]>([]);
+  const { modules, setModules, isLoading } = useExecutionOrder();
 
   // Estados levantados desde ExecutionOrder para persistencia
-  const [logs, setLogs] = useState<string[]>([]);
   const [scenarioStatuses, setScenarioStatuses] = useState<ScenarioStatusMap>({});
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [runningFeatureId, setRunningFeatureId] = useState<string | null>(null);
+  
+  const handleRunTests = () => { console.log("run tests"); };
+  const handleStopTests = () => { console.log("stop tests"); };
 
   // State for Drag and Drop
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
@@ -109,7 +114,7 @@ const App: React.FC = () => {
         const response = await fetch(`/api/modules/${encodeURIComponent(moduleName)}/features`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ feature_path: featurePath }),
+          body: JSON.stringify({ path: featurePath }),
         });
 
         if (!response.ok) {
@@ -130,7 +135,7 @@ const App: React.FC = () => {
     setActiveDragId(null);
     setDraggedItemPath(null);
     setIsOverExecutionOrder(false);
-  }, []);
+  }, [setModules]);
 
   const handleAddFeature = () => {
     // Esta función ya no es necesaria con el drag and drop directo a módulos.
@@ -246,14 +251,15 @@ const App: React.FC = () => {
               <Box sx={{ pt: 2, flex: 1, overflow: 'auto', position: 'relative' }}>
                 <ExecutionOrder
                   fontSize={executionOrderFontSize}
-                  onAddFeature={handleAddFeature}
                   onFeatureSelect={handleFileSelect}
                   modules={modules}
                   setModules={setModules}
-                  logs={logs}
-                  setLogs={setLogs}
                   scenarioStatuses={scenarioStatuses}
                   setScenarioStatuses={setScenarioStatuses}
+                  isExecuting={isExecuting}
+                  runningFeatureId={runningFeatureId}
+                  onRunTests={handleRunTests}
+                  onStopTests={handleStopTests}
                 />
               </Box>
             )}

@@ -2,10 +2,11 @@ import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { Box, Paper, Tabs, Tab, MenuItem, AppBar, Toolbar, Button, Menu, ThemeProvider, CssBaseline, Badge } from '@mui/material';
 import { DndContext, closestCenter, DragOverlay, Active } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
-import FileExplorer from './FileExplorer';
-import FeatureEditor from './FeatureEditor';
+import FileExplorer, { DraggableTreeItemPreview } from './FileExplorer';
+import { FeatureEditor } from './FeatureEditor';
 import ExecutionOrder from './ExecutionOrder';
 import StatusBar from './StatusBar'; // Importar la nueva barra de estado
+import ModulesComponent from './Modules';
 import ConsoleView from './ConsoleView'; // Importar la nueva vista de consola
 import { FileData, Module, ScenarioStatusMap } from '../types';
 import { getAppTheme } from '../theme';
@@ -44,8 +45,34 @@ const MainLayout: React.FC = () => {
     return localStorage.getItem('editorTheme') || 'monokai';
   });
   const [isModifiedByDrag, setIsModifiedByDrag] = useState(false);
-  const { modules, setModules, handleSave, status, isLoading } = useExecutionOrder();
+  const { modules, setModules, isLoading, refetch } = useExecutionOrder();
   const [tabValue, setTabValue] = useState(0);
+  const modulesRef = useRef(modules);
+
+  useEffect(() => {
+    modulesRef.current = modules;
+  }, [modules]);
+
+  // Persist modules to backend (used after drag modifications).
+  // The hook doesn't provide a handleSave function so we implement a minimal one here.
+  const handleSave = useCallback(async (modulesToSave?: Module[]) => {
+    try {
+      const payload = modulesToSave || modulesRef.current;
+      const response = await fetch('/api/execution-order', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload), // Usar la referencia para evitar estado rancio o el payload directo
+      });
+      const updatedModules = await response.json();
+      setModules(updatedModules); // Actualiza el estado con la respuesta del servidor para mantener la consistencia
+    } catch (error) {
+      console.error('Error saving execution order:', error);
+    }
+  }, [setModules]);
+
+  // Simple local status placeholder (the hook doesn't currently return status).
+  type LocalStatusType = 'success' | 'error' | 'info' | null;
+  const status: { text: string; type: LocalStatusType } = { text: '', type: 'info' };
   const [viewMenuAnchorEl, setViewMenuAnchorEl] = useState<null | HTMLElement>(null);
 
   // Estados levantados desde ExecutionOrder para persistencia entre pestañas
@@ -321,7 +348,7 @@ const MainLayout: React.FC = () => {
                   throw new Error(errorData.error || 'Failed to add feature');
                 }
                 const updatedModules = await response.json();
-                setModules(updatedModules); // Actualizar el estado con la respuesta del backend
+                setModules(() => updatedModules); // Usar la forma de función para consistencia
               } catch (error) {
                 console.error('Error al agregar el feature:', error);
                 // Aquí podrías mostrar una notificación de error al usuario
@@ -335,9 +362,10 @@ const MainLayout: React.FC = () => {
           if (isModuleDrag) {
             if (active.id !== over.id) {
               const oldIndex = modules.findIndex((m) => m.module_name === active.id);
-              const newIndex = modules.findIndex((m) => m.module_name === over.id);              
-              const newModules = arrayMove(modules, oldIndex, newIndex);
-              setModules(newModules);
+              const newIndex = modules.findIndex((m) => m.module_name === over.id);
+              // Usar la forma de función de actualización para garantizar la consistencia del tipo
+              // y evitar problemas con closures de estado.
+              setModules((currentModules: Module[]) => arrayMove(currentModules, oldIndex, newIndex));
               setIsModifiedByDrag(true);
             }
             return; // Finaliza el manejador aquí
@@ -367,9 +395,12 @@ const MainLayout: React.FC = () => {
                   order: index + 1,
                 }));
 
+                // Guardamos el estado original para poder revertir en caso de error.
+                const originalModules = modules;
+                
                 // Actualización optimista: actualiza la UI inmediatamente
-                setModules(prevModules =>
-                  prevModules.map(m =>
+                setModules(current => 
+                  current.map(m =>
                     m.module_name === moduleName ? { ...m, features: updatedFeaturesWithOrder } : m
                   )
                 );
@@ -379,15 +410,16 @@ const MainLayout: React.FC = () => {
                   const response = await fetch(`/api/modules/${encodeURIComponent(moduleName)}/features/reorder`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(updatedFeaturesWithOrder), // Envía la lista con el orden ya corregido
+                    body: JSON.stringify(updatedFeaturesWithOrder),
                   });
                   if (!response.ok) {
-                    // Si la API falla, revierte el cambio en la UI
-                    setModules(modules);
+                    // Si la API falla, revertimos al estado original.
+                    setModules(originalModules);
                   }
                 } catch (error) {
                   console.error('Error al reordenar los features por drag:', error);
-                  setModules(modules); // Revertir en caso de error de red
+                  // En caso de error de red, también revertimos.
+                  setModules(originalModules);
                 }
               }
             }
@@ -410,7 +442,8 @@ const MainLayout: React.FC = () => {
                   <Tabs value={tabValue} onChange={handleTabChange} aria-label="main tabs">
                     <Tab label={selectedFile?.name || 'Feature Editor'} id="main-tab-0" aria-controls="main-tabpanel-0" />
                     <Tab label="Execution Order" id="main-tab-1" aria-controls="main-tabpanel-1" />
-                    <Tab label={<ConsoleTabLabel />} id="main-tab-2" aria-controls="main-tabpanel-2" />
+                    <Tab label="Modulos" id="main-tab-2" aria-controls="main-tabpanel-2" />
+                    <Tab label={<ConsoleTabLabel />} id="main-tab-3" aria-controls="main-tabpanel-3" />
                   </Tabs>
                 </Box>
               </Box>
@@ -433,10 +466,26 @@ const MainLayout: React.FC = () => {
                   isExecuting={isExecuting}
                   runningFeatureId={runningFeatureId}
                   onRunTests={handleRunTests}
+                  onSaveModules={handleSave}
                   onStopTests={handleStopTests}
                 />
               </TabPanel>
               <TabPanel value={tabValue} index={2}>
+                <ModulesComponent
+                  fontSize={fontSize}
+                  onFeatureSelect={handleFileSelect}
+                  modules={modules}
+                  setModules={setModules}
+                  scenarioStatuses={scenarioStatuses}
+                  setScenarioStatuses={setScenarioStatuses}
+                  isExecuting={isExecuting}
+                  runningFeatureId={runningFeatureId}
+                  onRunTests={handleRunTests}
+                  onSaveModules={handleSave}
+                  onStopTests={handleStopTests}
+                />
+              </TabPanel>
+              <TabPanel value={tabValue} index={3}>
                 <ConsoleView logs={logs} />
               </TabPanel>
             </Box>
@@ -446,7 +495,7 @@ const MainLayout: React.FC = () => {
             {activeDragItem && activeDragItem.data.current?.type === 'file-explorer-feature' && (
               // Renderizamos una versión simplificada del TreeItem para el overlay
               <Paper elevation={4} sx={{ p: 1, display: 'flex', alignItems: 'center', backgroundColor: 'primary.light' }}>
-                <FileExplorer.DraggableTreeItemPreview 
+                <DraggableTreeItemPreview 
                   path={activeDragItem.data.current.path} 
                 />
               </Paper>
@@ -454,7 +503,11 @@ const MainLayout: React.FC = () => {
           </DragOverlay>
         </DndContext>
         {/* Renderizar la barra de estado en la parte inferior */}
-        <StatusBar message={status.text} isLoading={isLoading} statusType={status.type} />
+        <StatusBar 
+          message={status?.text || ''} 
+          isLoading={isLoading} 
+          statusType={status?.type || 'info'} 
+        />
       </Box>
     </ThemeProvider>
   );

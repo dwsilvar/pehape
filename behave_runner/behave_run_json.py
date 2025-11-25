@@ -14,6 +14,72 @@ class BehaveRunJson:
     def __init__(self, execution_plan: List[Dict[str, Any]], extra_args: str = ""):
         self.execution_plan = execution_plan
         self.extra_args = extra_args.split()
+        self.modules_by_name = {
+            module.get("module_name"): module for module in execution_plan
+        }
+
+    def _run_feature(self, feature_item: Dict[str, Any], module_name: str, module_dir: str):
+        feature_file = feature_item.get("feature_file")
+        feature_active = feature_item.get("active", False)
+        feature_dir = feature_item.get("feature_dir", "")
+        tags = feature_item.get("tags")
+        feature_id = f"feature::{module_name}::{feature_dir}/{feature_file}"
+
+        if not feature_file:
+            logger.warning("Feature without 'feature_file'. Skipping.")
+            return
+
+        if not feature_active:
+            logger.info(f"IGNORED: {feature_dir}/{feature_file} (Feature Deactivated)")
+            return
+
+        path_parts = [FEATURES_DIR]
+        if module_dir:
+            path_parts.append(module_dir)
+        if feature_dir:
+            path_parts.append(feature_dir)
+        path_parts.append(feature_file)
+        full_feature_path = os.path.join(*path_parts)
+        
+        if not os.path.exists(full_feature_path):
+            logger.error(f"File not found: {full_feature_path}. Skipping.")
+            return
+
+        behave_args = list(self.extra_args)
+        behave_args.extend(["-f", "plain", "-o", "-"])
+        behave_args.extend(["-f", "allure_behave.formatter:AllureFormatter", "-o", "reports/allure_results"])
+        behave_args.extend(["--define", f"feature_id={feature_id}"])
+
+        tag_info = ""
+        if tags and isinstance(tags, list):
+            tag_expression = ",".join(tags)
+            behave_args.extend(["--tags", tag_expression])
+            tag_info = f" (Filtro: {tag_expression})"
+
+        behave_args.append(full_feature_path)
+
+        logger.info(f"  INCLUDED: {full_feature_path}{tag_info}")
+
+        exit_code = behave_main(behave_args)
+        if exit_code == 0:
+            logger.info("Tests executed successfully.")
+        else:
+            logger.error(f"Tests failed with exit code: {exit_code}")
+
+    def _run_module_features(self, module_item: Dict[str, Any]):
+        module_name = module_item.get("module_name", "Sin Nombre")
+        module_dir = module_item.get("module_dir", "")
+        features = module_item.get("features", [])
+
+        logger.info(f"--- EXECUTING MODULE: {module_name} (Base Dir: {module_dir}) ---")
+
+        features_sorted = sorted(
+            features,
+            key=lambda f: (f.get('order') is None, f.get('order', 0))
+        )
+
+        for feature_item in features_sorted:
+            self._run_feature(feature_item, module_name, module_dir)
 
     def run_sequence(self):
         """
@@ -25,7 +91,6 @@ class BehaveRunJson:
 
         logger.info("--- Execution Plan ---")
 
-        # Sort modules by 'order' when present, otherwise preserve given order
         modules_sorted = sorted(
             self.execution_plan,
             key=lambda m: (m.get('order') is None, m.get('order', 0))
@@ -34,80 +99,33 @@ class BehaveRunJson:
         for module_item in modules_sorted:
             module_name = module_item.get("module_name", "Sin Nombre")
             module_active = module_item.get("active", False)
-            module_dir = module_item.get("module_dir", "")
-            features = module_item.get("features", [])
+            
+            setup = module_item.get("setup", [])
+            teardown = module_item.get("teardown", [])
 
-            if not module_active: # Deactivated
+            # Execute pre-hooks
+            for hook_name in setup:
+                hook_module = self.modules_by_name.get(hook_name)
+                if hook_module:
+                    logger.info(f"--- EXECUTING SETUP: {hook_name} for {module_name} ---")
+                    self._run_module_features(hook_module)
+                else:
+                    logger.warning(f"Setup module '{hook_name}' not found.")
+
+            # Execute main module
+            if not module_active:
                 logger.info(f"IGNORING MODULE: {module_name} (Deactivated)")
                 continue
             
-            logger.info(f"--- ACTIVE MODULE: {module_name} (Base Dir: {module_dir}) ---")
+            self._run_module_features(module_item)
 
-            # Sort features by 'order' when present
-            features_sorted = sorted(
-                features,
-                key=lambda f: (f.get('order') is None, f.get('order', 0))
-            )
-
-            for feature_item in features_sorted:
-                feature_file = feature_item.get("feature_file")
-                feature_active = feature_item.get("active", False)
-                feature_dir = feature_item.get("feature_dir", "")
-                tags = feature_item.get("tags")
-                feature_id = f"feature::{module_name}::{feature_dir}/{feature_file}"
-
-                if not feature_file: # Warning: Feature without 'feature_file'. Skipping.
-                    logger.warning("Feature without 'feature_file'. Skipping.")
-                    continue
-
-                if not feature_active: # IGNORED: {feature_dir}/{feature_file} (Feature Deactivated)
-                    logger.info(f"IGNORED: {feature_dir}/{feature_file} (Feature Deactivated)")
-                    continue
-
-                # Constructs the feature path considering empty directories
-                path_parts = [FEATURES_DIR]
-                if module_dir:
-                    path_parts.append(module_dir)
-                if feature_dir:
-                    path_parts.append(feature_dir)
-                path_parts.append(feature_file)
-                full_feature_path = os.path.join(*path_parts)
-                
-                if not os.path.exists(full_feature_path): # ERROR: File not found: {full_feature_path}. Skipping.
-                    logger.error(f"File not found: {full_feature_path}. Skipping.")
-                    continue
-
-                # Construir los argumentos para Behave
-                # Inicia con los argumentos extra (ej. --no-capture)
-                behave_args = list(self.extra_args) # Esto contendrá ['--no-capture']
-                
-                # Especificar el formateador 'plain' para la salida estándar (consola)
-                behave_args.extend(["-f", "plain", "-o", "-"])
-
-                # Especificar el formateador de Allure con su directorio de salida
-                behave_args.extend(["-f", "allure_behave.formatter:AllureFormatter", "-o", "reports/allure_results"])
-                
-                # Pasamos el ID del feature como un dato de usuario al contexto de behave.
-                behave_args.extend(["--define", f"feature_id={feature_id}"])
-
-                tag_info = ""
-                # 'tags' puede ser una lista de strings o null.
-                # Si es una lista, la unimos con comas para crear una expresión de tags OR.
-                if tags and isinstance(tags, list):
-                    tag_expression = ",".join(tags)
-                    behave_args.extend(["--tags", tag_expression])
-                    tag_info = f" (Filtro: {tag_expression})"
-
-                # Añadir la ruta del feature al final
-                behave_args.append(full_feature_path)
-
-                logger.info(f"  INCLUDED: {full_feature_path}{tag_info}")
-
-                # Execute behave using behave_main
-                exit_code = behave_main(behave_args)
-                if exit_code == 0:
-                    logger.info("Tests executed successfully.")
+            # Execute teardown
+            for hook_name in teardown:
+                hook_module = self.modules_by_name.get(hook_name)
+                if hook_module:
+                    logger.info(f"--- EXECUTING TEARDOWN: {hook_name} for {module_name} ---")
+                    self._run_module_features(hook_module)
                 else:
-                    logger.error(f"Tests failed with exit code: {exit_code}")
+                    logger.warning(f"Teardown module '{hook_name}' not found.")
 
         logger.info("--- Execution Finished ---")

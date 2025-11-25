@@ -89,7 +89,7 @@ const renderTree = (nodes: FileData[], fontSize: number, onContextMenu: (event: 
  * Componente de previsualización para el DragOverlay.
  * Muestra solo el ícono y el nombre del archivo.
  */
-const DraggableTreeItemPreview: React.FC<{ path: string }> = ({ path }) => {
+export const DraggableTreeItemPreview: React.FC<{ path: string }> = ({ path }) => {
   const fileName = path.split('/').pop() || path;
   return (
     <Box sx={{ display: 'flex', alignItems: 'center' }}>
@@ -100,13 +100,7 @@ const DraggableTreeItemPreview: React.FC<{ path: string }> = ({ path }) => {
   );
 };
 
-// Definimos un tipo para nuestro componente que incluye la propiedad estática.
-type FileExplorerComponent = React.FC<FileExplorerProps> & {
-  DraggableTreeItemPreview: React.FC<{ path: string }>;
-};
-
-// Usamos el nuevo tipo para el componente.
-const FileExplorer: FileExplorerComponent = ({ onFileSelect, fontSize }) => {
+const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, fontSize }) => {
   // La lógica de datos ahora está encapsulada en el hook.
   const { files, expanded, setExpanded, refreshFileTree } = useFileTree();
 
@@ -284,7 +278,5 @@ const FileExplorer: FileExplorerComponent = ({ onFileSelect, fontSize }) => {
   );
 };
 
-// Exportamos el componente de previsualización para que MainLayout pueda usarlo.
-FileExplorer.DraggableTreeItemPreview = DraggableTreeItemPreview;
 
 export default FileExplorer;

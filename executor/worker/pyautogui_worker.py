@@ -260,7 +260,8 @@ class PyAutoGUIWorker(WorkerInterface):
 
             # Use the first matching window
             window = windows[0]
-            logger.info(f"Window found: '{window.title}'")
+            sanitized_title = window.title.replace('\u200b', '')
+            logger.info(f"Window found: '{sanitized_title}'")
 
             # If the window is minimized, restore it.
             if window.isMinimized:
@@ -274,7 +275,7 @@ class PyAutoGUIWorker(WorkerInterface):
                 window.activate()
                 time.sleep(0.5)  # Pause for the focus to change.
 
-            logger.info(f"Window '{window.title}' is visible and active.")
+            logger.info(f"Window '{sanitized_title}' is visible and active.")
             return True
 
         except Exception as e:

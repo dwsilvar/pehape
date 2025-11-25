@@ -2,7 +2,7 @@ import os
 import json
 import subprocess
 from flask import Flask, jsonify, request, Response, send_from_directory
-import sys
+import sys, signal
 import threading
 from queue import Queue
 from behave.parser import Parser
@@ -22,10 +22,20 @@ FEATURES_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'feature
 # Instanciar el manejador del plan de ejecución
 plan_manager = ExecutionPlanManager(FEATURES_DIR)
 
-# --- Variables globales para el streaming de logs ---
-log_queue = Queue() # Cola segura para hilos para almacenar logs
-test_process = None # Para mantener una referencia al proceso de pruebas
-# ----------------------------------------------------
+# --- Estado de Ejecución de Pruebas y Watchdog ---
+log_queue = Queue()  # Cola segura para hilos para almacenar logs
+
+# Usamos un diccionario para mantener el estado de la ejecución activa.
+# Esto incluye el proceso y el temporizador del watchdog.
+active_test_state = {
+    "process": None,  # Para mantener una referencia al proceso de pruebas
+    "inactivity_timer": None  # Para el temporizador del watchdog
+}
+
+# Tiempo en segundos antes de considerar que un proceso está congelado si no hay salida.
+# 5 minutos por defecto.
+INACTIVITY_TIMEOUT_SECONDS = 5 * 60
+# -------------------------------------------------
 
 @app.route('/api/features', methods=['GET'])
 def list_features():
@@ -420,18 +430,59 @@ def refresh_execution_order():
     except Exception as e:
         return jsonify({"error": f"Un error inesperado ocurrió: {str(e)}"}), 500
 
-def _stream_process_output(process, queue):
-    """Lee la salida de un proceso línea por línea y la pone en una cola."""
-    # Lee stdout
-    for line in iter(process.stdout.readline, ''):
-        queue.put(line)
-    # Lee stderr
-    for line in iter(process.stderr.readline, ''):
-        queue.put(f"ERROR: {line}")
-    process.stdout.close()
-    process.stderr.close()
-    process.wait()
-    queue.put("---EXECUTION_FINISHED---") # Señal de fin
+def _cleanup_test_state():
+    """Función centralizada para limpiar el estado de la prueba activa."""
+    global active_test_state
+    if active_test_state["inactivity_timer"]:
+        active_test_state["inactivity_timer"].cancel()
+    active_test_state["process"] = None
+    active_test_state["inactivity_timer"] = None
+    print("Estado de la prueba limpiado. Listo para una nueva ejecución.")
+
+def _handle_inactivity_timeout():
+    """Función que se ejecuta cuando el watchdog de inactividad se dispara."""
+    global active_test_state
+    if active_test_state["process"]:
+        pid = active_test_state["process"].pid
+        print(f"¡WATCHDOG ACTIVADO! El proceso de prueba (PID: {pid}) no ha mostrado actividad en {INACTIVITY_TIMEOUT_SECONDS} segundos. Se considera congelado.")
+        log_queue.put(f"WATCHDOG: Proceso de prueba inactivo. Intentando terminarlo...")
+        
+        # Usar SIGKILL para forzar la terminación de un proceso que no responde.
+        try:
+            if os.name == 'nt':
+                os.kill(pid, signal.CTRL_BREAK_EVENT)
+            else:
+                os.killpg(os.getpgid(pid), signal.SIGKILL)
+            log_queue.put("---EXECUTION_KILLED_BY_WATCHDOG---")
+        except Exception as e:
+            print(f"Error al intentar terminar el proceso congelado con el watchdog: {e}")
+
+def _reset_inactivity_timer():
+    """Reinicia el temporizador de inactividad."""
+    global active_test_state
+    if active_test_state["inactivity_timer"]:
+        active_test_state["inactivity_timer"].cancel()
+    
+    timer = threading.Timer(INACTIVITY_TIMEOUT_SECONDS, _handle_inactivity_timeout)
+    timer.daemon = True
+    timer.start()
+    active_test_state["inactivity_timer"] = timer
+
+def _stream_process_output(process):
+    """Lee la salida de un proceso, la pone en la cola y reinicia el watchdog."""
+    def stream_reader(stream, is_stderr=False):
+        for line in iter(stream.readline, ''):
+            _reset_inactivity_timer()  # El proceso está vivo, reinicia el watchdog.
+            log_queue.put(f"ERROR: {line}" if is_stderr else line)
+        stream.close()
+
+    # Iniciar hilos para leer stdout y stderr de forma no bloqueante.
+    stdout_thread = threading.Thread(target=stream_reader, args=(process.stdout, False))
+    stderr_thread = threading.Thread(target=stream_reader, args=(process.stderr, True))
+    stdout_thread.start()
+    stderr_thread.start()
+    process.wait()  # Esperar a que el proceso termine.
+    log_queue.put("---EXECUTION_FINISHED---")  # Señal de fin.
 
 @app.route('/api/stream-logs')
 def stream_logs():
@@ -451,7 +502,7 @@ def stream_logs():
             except (json.JSONDecodeError, TypeError):
                 # Si no es JSON, trátalo como un log normal
                 pass
-
+            
             if line_strip == "---EXECUTION_FINISHED---":
                 # Cuando la ejecución termina, generamos la URL del reporte
                 # y la enviamos al frontend con una señal especial.
@@ -460,6 +511,10 @@ def stream_logs():
                 yield f"data: {json.dumps({'type': 'report_ready', 'reportUrl': report_url})}\n\n"
                 # Paso 2: Enviar la señal de finalización para que el frontend pueda cerrar la conexión.
                 yield f"data: {json.dumps({'log': '---EXECUTION_FINISHED---'})}\n\n"
+                break
+            elif line_strip in ("---EXECUTION_STOPPED_BY_USER---", "---EXECUTION_KILLED_BY_WATCHDOG---"):
+                # Si la ejecución fue detenida, solo envía la señal y termina.
+                yield f"data: {json.dumps({'log': line_strip})}\n\n"
                 break
             yield f"data: {json.dumps({'log': line_strip})}\n\n"
     return Response(generate(), mimetype='text/event-stream')
@@ -478,15 +533,17 @@ def stop_tests():
     """
     Endpoint para detener la ejecución de pruebas en curso.
     """
-    global test_process
-    if test_process and test_process.poll() is None: # .poll() is None si el proceso está corriendo
+    global active_test_state
+    process = active_test_state["process"]
+    if process and process.poll() is None: # .poll() is None si el proceso está corriendo
         try:
             # Enviar señal de terminación a todo el grupo de procesos.
             # Esto asegura que tanto behave_master.py como sus subprocesos (Allure) se detengan.
+            print(f"Petición manual para cancelar el proceso de tests con PID: {process.pid}")
             if os.name == 'nt': # Windows
-                os.kill(test_process.pid, subprocess.CTRL_BREAK_EVENT)
+                os.kill(process.pid, signal.CTRL_BREAK_EVENT)
             else: # Unix/Linux/macOS
-                os.killpg(os.getpgid(test_process.pid), subprocess.signal.SIGTERM)
+                os.killpg(os.getpgid(process.pid), signal.SIGTERM)
             log_queue.put("---EXECUTION_STOPPED_BY_USER---") # Señal para el frontend
             return jsonify({"message": "Se ha enviado la solicitud para detener la ejecución."}), 200
         except Exception as e:
@@ -504,8 +561,8 @@ def run_tests():
     Ejecuta el script en un proceso separado para no bloquear el servidor.
     """
     try:
-        global test_process
-        if test_process and test_process.poll() is None:
+        global active_test_state
+        if active_test_state["process"] and active_test_state["process"].poll() is None:
             return jsonify({"message": "Ya hay una ejecución de pruebas en curso."}), 409 # Conflict
 
         # Limpiar la cola de logs de ejecuciones anteriores
@@ -525,7 +582,12 @@ def run_tests():
         preexec_fn = None if os.name == 'nt' else os.setsid
         creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == 'nt' else 0
 
-        test_process = subprocess.Popen(
+        # Forzar la codificación UTF-8 para el subproceso.
+        # Esto resuelve los UnicodeEncodeError en Windows al imprimir en stdout/stderr.
+        env = os.environ.copy()
+        env['PYTHONIOENCODING'] = 'utf-8'
+
+        process = subprocess.Popen(
             [sys.executable, script_path],
             cwd=project_root,
             stdout=subprocess.PIPE,
@@ -536,12 +598,23 @@ def run_tests():
             bufsize=1, # Line-buffered
             # --- Parámetros para la creación del grupo de procesos ---
             preexec_fn=preexec_fn, # En Unix, crea una nueva sesión
-            creationflags=creationflags # En Windows, crea un nuevo grupo de procesos
+            creationflags=creationflags, # En Windows, crea un nuevo grupo de procesos
+            env=env # Pasa el entorno modificado al subproceso
             # ---------------------------------------------------------
         )
 
+        active_test_state["process"] = process
+        print(f"Ejecución de pruebas iniciada con PID: {process.pid}")
+
+        # Iniciar el watchdog por primera vez.
+        _reset_inactivity_timer()
+
         # Iniciar un hilo para leer la salida del proceso sin bloquear
-        thread = threading.Thread(target=_stream_process_output, args=(test_process, log_queue))
+        # y manejar la limpieza cuando termine.
+        def process_handler_thread():
+            _stream_process_output(process)
+            _cleanup_test_state() # Limpia el estado cuando el proceso ha terminado.
+        thread = threading.Thread(target=process_handler_thread)
         thread.start()
 
         return jsonify({"message": "La ejecución de pruebas ha comenzado."}), 202 # 202 Accepted

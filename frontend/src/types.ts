@@ -33,6 +33,8 @@ export interface Module {
   features: FeatureItem[];
   color?: string;
   is_collapsed?: boolean; // Estado de colapso para la UI
+  setup?: (string | Module)[];
+  teardown?: (string | Module)[];
 }
 
 /**

@@ -18,14 +18,7 @@ import {
   Tooltip,
   Chip,
   ToggleButton,
-  Collapse,
-  List,
-  ListItemButton,
-  DialogContentText,
-  RadioGroup,
-  FormControlLabel,
-  Radio,
-  Checkbox,
+  Collapse, 
 } from '@mui/material';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
@@ -52,12 +45,7 @@ const DEFAULT_FEATURE_COLOR = '#4db6ac';
 
 const DEFAULT_MODULE_COLOR = '#7e57c2'; 
 
-interface HookItemProps {
-  hook: Module | string;
-  onDelete: () => void;
-}
-
-const HookItem: React.FC<HookItemProps> = ({ hook, onDelete }) => {
+const HookItem: React.FC<{ hook: Module | string }> = ({ hook }) => {
     const isObject = typeof hook === 'object' && hook !== null;
     const moduleName = isObject ? (hook as Module).module_name : hook;
     const isActive = isObject ? (hook as Module).active : false;
@@ -67,25 +55,21 @@ const HookItem: React.FC<HookItemProps> = ({ hook, onDelete }) => {
     };
 
     return (
-      <Box sx={{ mb: 1, p: 1, pl: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Typography
-            variant="body2"
-            onClick={handleHookClick}
-            sx={{
-              color: isActive ? 'primary.main' : 'text.secondary',
-              cursor: 'pointer',
-              '&:hover': {
-                textDecoration: 'underline',
-              },
-            }}
-          >
-              {moduleName}
-          </Typography>
-        </Box>
-        <IconButton onClick={onDelete} size="small" edge="end">
-            <DeleteIcon fontSize="small" />
-        </IconButton>
+        <Box sx={{ mb: 1, p: 1, pl: 2, display: 'flex', alignItems: 'center' }}>
+        <Typography
+          variant="body2"
+          onClick={handleHookClick}
+          sx={{
+            flexGrow: 1,
+            color: isActive ? 'primary.main' : 'text.secondary',
+            cursor: 'pointer',
+            '&:hover': {
+              textDecoration: 'underline',
+            },
+          }}
+        >
+            {moduleName}
+        </Typography>
     </Box>
     );
 };
@@ -103,7 +87,7 @@ const CollapsibleSection: React.FC<{ title: string, count: number, children: Rea
         </Button>
         {isOpen && onAddModule && (
           <Button onClick={onAddModule} size="small" variant="outlined" sx={{ ml: 1 }}>
-            Añadir Hook
+            Añadir Módulo
           </Button>
         )}
       </Box>
@@ -437,7 +421,7 @@ interface ExecutionOrderProps {
   onStopTests: () => void;
 }
 
-const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ 
+const Modules: React.FC<ExecutionOrderProps> = ({ 
   fontSize, 
   onFeatureSelect, 
   modules, 
@@ -473,7 +457,30 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
     setCollapsedSections(initiallyCollapsed);
   }, [modules]);
 
-  const displayedModules = (modules || []).filter(m => m.active);
+  const displayedModules = modules || [];
+
+  const handleToggleModuleCollapse = (moduleName: string) => {
+    const isCollapsed = collapsedSections.has(`${moduleName}::features`);
+    const newCollapsedState = !isCollapsed;
+
+    setCollapsedSections(prev => {
+      const newSet = new Set(prev);
+      const sections = ['setup', 'features', 'teardown'];
+      sections.forEach(section => {
+        const sectionId = `${moduleName}::${section}`;
+        if (newCollapsedState) {
+          newSet.add(sectionId);
+        } else {
+          newSet.delete(sectionId);
+        }
+      });
+      return newSet;
+    });
+
+    // Aquí podrías añadir la llamada a la API si quieres persistir este estado "maestro"
+    // Por ahora, solo controla la UI.
+    // fetch(`/api/ui-settings/module-collapse`, { ... });
+  };
 
   const handleToggleSectionCollapse = async (moduleName: string, section: 'setup' | 'features' | 'teardown') => {
     const sectionId = `${moduleName}::${section}`;
@@ -504,151 +511,75 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
     }
   };
 
-  const handleToggleModuleCollapse = (moduleName: string) => {
-    const isCollapsed = collapsedSections.has(`${moduleName}::features`);
-    const newCollapsedState = !isCollapsed;
-
-    setCollapsedSections(prev => {
-      const newSet = new Set(prev);
-      const sections = ['setup', 'features', 'teardown'];
-      sections.forEach(section => {
-        const sectionId = `${moduleName}::${section}`;
-        if (newCollapsedState) {
-          newSet.add(sectionId);
-        } else {
-          newSet.delete(sectionId);
-        }
-      });
-      return newSet;
-    });
-
-    // Aquí podrías añadir la llamada a la API si quieres persistir este estado "maestro"
-    // Por ahora, solo controla la UI.
-    // fetch(`/api/ui-settings/module-collapse`, { ... });
-  };
-
-
   // --- State y Handlers para el diálogo de "Agregar Módulo" ---
   const [dialogOpen, setDialogOpen] = React.useState(false);
-  const [availableModules, setAvailableModules] = React.useState<Module[]>([]);
-  const [selectedModules, setSelectedModules] = React.useState<Set<string>>(new Set());
-
-  // --- State y Handlers para el diálogo de "Agregar Hook" ---
-  const [hookDialogOpen, setHookDialogOpen] = React.useState(false);
-  const [hookDialogData, setHookDialogData] = React.useState<{ targetModuleName: string; hookType: 'setup' | 'teardown' } | null>(null);
-  const [availableHookModules, setAvailableHookModules] = React.useState<Module[]>([]);
-  const [selectedHookModule, setSelectedHookModule] = React.useState<string>('');
-
+  const [newModuleName, setNewModuleName] = React.useState('');
+  const [newModuleOrder, setNewModuleOrder] = React.useState('');
 
   const handleOpenDialog = () => { 
-    // Filtra los módulos que no están activos para mostrarlos en el diálogo
-    const inactiveModules = modules.filter(m => !m.active);
-    setAvailableModules(inactiveModules);
-    setSelectedModules(new Set()); // Limpia la selección anterior
     setDialogOpen(true);
   };
 
   const handleCloseDialog = () => {
     setDialogOpen(false);
-  };
-
-  const handleOpenHookDialog = (targetModuleName: string, hookType: 'setup' | 'teardown') => {
-    // Filtra los módulos que no tienen setup/teardown y no son el módulo actual
-    const filteredModules = modules.filter(m => 
-      m.module_name !== targetModuleName &&
-      (!m.setup || m.setup.length === 0) &&
-      (!m.teardown || m.teardown.length === 0)
-    );
-    setAvailableHookModules(filteredModules);
-    setHookDialogData({ targetModuleName, hookType });
-    setSelectedHookModule(''); // Limpia selección anterior
-    setHookDialogOpen(true);
-  };
-
-  const handleCloseHookDialog = () => {
-    setHookDialogOpen(false);
-    setHookDialogData(null);
-    setSelectedHookModule('');
+    setNewModuleName('');
+    setNewModuleOrder('');
   };
 
   const handleConfirmAddModule = async () => {
-    // Itera sobre los módulos seleccionados y los activa uno por uno.
-    // El 'false' en el segundo argumento simula que el estado actual es 'inactivo',
-    // forzando a handleToggleModuleActivity a enviar 'active: true' al backend.
-    const activationPromises = Array.from(selectedModules).map(moduleName => 
-      handleToggleModuleActivity(moduleName, false)
-    );
-    
-    const results = await Promise.all(activationPromises);
+    const order = parseInt(newModuleOrder, 10);
+    if (newModuleName && !isNaN(order)) {
+      try {
+        const response = await fetch('/api/modules', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            module_name: newModuleName,
+            order: order,
+          }),
+        });
 
-    // Después de que todas las promesas se resuelvan, tomamos el resultado de la última
-    // llamada a la API (que contiene la lista de módulos más actualizada) y actualizamos el estado.
-    if (results && results.length > 0) {
-      const finalUpdatedModules = results[results.length - 1];
-      if (finalUpdatedModules) setModules(finalUpdatedModules);
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to add module');
+        }
+
+        const updatedModules = await response.json();
+        setModules(updatedModules); // Actualiza el estado con la respuesta del backend
+        handleCloseDialog();
+      } catch (error) {
+        console.error('Error al agregar el módulo:', error);
+        // Opcional: mostrar un mensaje de error al usuario
+      }
     }
-
-    handleCloseDialog();
   };
-
-  const handleToggleSelection = (moduleName: string) => {
-    setSelectedModules(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(moduleName)) {
-        newSet.delete(moduleName);
-      } else {
-        newSet.add(moduleName);
-      }
-      return newSet;
-    });
-  };
-
-  const handleConfirmAddHook = async () => {
-    if (!selectedHookModule || !hookDialogData) return;
-
-    const { targetModuleName, hookType } = hookDialogData;
-
-    // Actualiza el estado localmente
-    const updatedModules = modules.map(m => {
-      if (m.module_name === targetModuleName) {
-        const newHooks = [...(m[hookType] || []), selectedHookModule];
-        return { ...m, [hookType]: newHooks };
-      }
-      return m;
-    });
-
-    setModules(updatedModules);
-
-    // Cierra el diálogo
-    onSaveModules(updatedModules);
-    handleCloseHookDialog();
-  };
-
-  const handleDeleteHook = (targetModuleName: string, hookType: 'setup' | 'teardown', hookIndex: number) => {
-    const updatedModules = modules.map(m => {
-      if (m.module_name === targetModuleName) {
-        const currentHooks = m[hookType] || [];
-        // Filtra el hook por su índice
-        const newHooks = currentHooks.filter((_, index) => index !== hookIndex);
-        return { ...m, [hookType]: newHooks };
-      }
-      return m;
-    });
-
-    setModules(updatedModules);
-    onSaveModules(updatedModules);
-  };
-
   // -------------------------------------------------------------
   const handleDeleteModule = async (moduleName: string) => {
-    // El comportamiento se cambia para que solo desactive el módulo, no lo elimine.
-    // Se llama a la función de toggle, pero asegurando que el estado final sea 'inactivo'.
-    // El 'true' en el segundo argumento simula que el estado actual es 'activo',
-    // forzando a handleToggleModuleActivity a enviar 'active: false' al backend.
-    await handleToggleModuleActivity(moduleName, true);
+    // Opcional: pedir confirmación al usuario
+    // if (!window.confirm(`¿Estás seguro de que quieres eliminar el módulo "${moduleName}"?`)) {
+    //   return;
+    // }
+
+    try {
+      const response = await fetch(`/api/modules/${encodeURIComponent(moduleName)}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete module');
+      }
+
+      const updatedModules = await response.json();
+      setModules(updatedModules); // Actualiza el estado con la respuesta del backend
+    } catch (error) {
+      console.error('Error al eliminar el módulo:', error);
+    }
   };
 
-  const handleToggleModuleActivity = async (moduleName:string, currentActivity: boolean) => {
+  const handleToggleModuleActivity = async (moduleName: string, currentActivity: boolean) => {
     try {
       const response = await fetch(`/api/modules/${encodeURIComponent(moduleName)}/activity`, {
         method: 'PUT',
@@ -663,17 +594,8 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
         throw new Error(errorData.error || 'Failed to toggle module activity');
       }
 
-      // Para evitar múltiples re-renderizados, solo actualizamos el estado una vez
-      // si no estamos en el proceso de agregar múltiples módulos.
-      // La actualización final se hará al cerrar el diálogo en ese caso.
-      if (!dialogOpen) {
-        const updatedModules = await response.json();
-        setModules(updatedModules);
-      }
-      // Clonamos la respuesta para poder leer el JSON aquí y también devolverlo.
-      const clonedResponse = response.clone();
-      // Devolvemos la promesa que resuelve con los módulos actualizados para Promise.all
-      return clonedResponse.json(); 
+      const updatedModules = await response.json();
+      setModules(updatedModules); // Actualiza el estado con la respuesta del backend
     } catch (error) {
       console.error('Error al cambiar el estado del módulo:', error);
     }
@@ -865,23 +787,12 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
         <Typography variant="subtitle1" flex={1} sx={{ fontSize: `${fontSize}px` }}>
           Execution Order
         </Typography>
-        <Button variant="outlined" size="small" sx={{ mr: 1 }} onClick={handleOpenDialog}>
-          Agregar Módulo
+        <Button variant="outlined" size="small" sx={{ mr: 1 }} onClick={handleOpenDialog} id="create-module-button">
+          Crear Módulo
         </Button>
         <Tooltip title="Sincronizar Scenarios y Tags desde archivos .feature">
           <Button variant="outlined" size="small" sx={{ mr: 1 }} onClick={handleRefreshFeatures}>
             <SyncIcon />
-          </Button>
-        </Tooltip>
-        <Tooltip title={isExecuting ? "Detener Ejecución" : "Ejecutar Plan de Pruebas"}>
-          <Button 
-            variant="contained" 
-            color={isExecuting ? "error" : "primary"} 
-            size="small" sx={{ mr: 1 }} 
-            onClick={isExecuting ? onStopTests : onRunTests}
-            disabled={isExecuting && modules.length === 0} // Deshabilita si está ejecutando y no hay módulos
-          >
-            {isExecuting ? <StopIcon /> : <PlayArrowIcon />}
           </Button>
         </Tooltip>
       </Box>
@@ -929,24 +840,6 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
                   </>
                 }
               >
-                {module.active && (
-                <>
-                  <CollapsibleSection 
-                    title="Setup" 
-                    count={(module.setup || []).length}
-                    isOpen={!collapsedSections.has(`${module.module_name}::setup`)}
-                    onToggle={() => handleToggleSectionCollapse(module.module_name, 'setup')}
-                    onAddModule={() => handleOpenHookDialog(module.module_name, 'setup')}
-                  >
-                    {(module.setup || []).map((hook, index) => (
-                      <HookItem 
-                        key={typeof hook === 'string' ? hook : (hook as Module).module_name + index} 
-                        hook={hook} 
-                        onDelete={() => handleDeleteHook(module.module_name, 'setup', index)} />
-                    ))}
-                  </CollapsibleSection>
-                </>
-                )}
                 <CollapsibleSection title="Features" count={module.features.length} isOpen={!collapsedSections.has(`${module.module_name}::features`)} onToggle={() => handleToggleSectionCollapse(module.module_name, 'features')}>
                   {!collapsedSections.has(`${module.module_name}::features`) && (
                   <SortableContext
@@ -954,7 +847,8 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
                     items={module.features.map((f: FeatureItem) => f.id)}
                     strategy={verticalListSortingStrategy}
                   >
-                    {[...(module.features || [])].sort((a, b) => a.order - b.order)
+                    {[...(module.features || [])]
+                      .sort((a, b) => a.order - b.order)
                       .map((feature: FeatureItem, index: number) => (
                       <ExecutionItem
                         key={feature.id} item={feature} fontSize={fontSize}
@@ -975,25 +869,6 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
                   </SortableContext>
                   )}
                 </CollapsibleSection>
-
-                {module.active && (
-                  <>
-                    <CollapsibleSection 
-                      title="Teardown" 
-                      count={(module.teardown || []).length}
-                      isOpen={!collapsedSections.has(`${module.module_name}::teardown`)}
-                      onToggle={() => handleToggleSectionCollapse(module.module_name, 'teardown')}
-                      onAddModule={() => handleOpenHookDialog(module.module_name, 'teardown')}
-                    >
-                      {(module.teardown || []).map((hook, index) => (
-                        <HookItem 
-                          key={typeof hook === 'string' ? hook : (hook as Module).module_name + index} 
-                          hook={hook} 
-                          onDelete={() => handleDeleteHook(module.module_name, 'teardown', index)} />
-                      ))}
-                    </CollapsibleSection>
-                  </>
-                )}
               </SortableModule>
             ))}
           </SortableContext>
@@ -1006,74 +881,39 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
       </Box>
 
       <Dialog open={dialogOpen} onClose={handleCloseDialog}>
-        <DialogTitle>Agregar Módulos al Plan de Ejecución</DialogTitle>
+        <DialogTitle>Agregar Nuevo Módulo</DialogTitle>
         <DialogContent>
-          {availableModules.length > 0 ? (
-            <List>
-              {availableModules.map(module => (
-                <ListItemButton key={module.module_name} onClick={() => handleToggleSelection(module.module_name)}>
-                  <Checkbox
-                    edge="start"
-                    checked={selectedModules.has(module.module_name)}
-                    tabIndex={-1}
-                    disableRipple
-                  />
-                  <ListItemText primary={module.module_name} />
-                </ListItemButton>
-              ))}
-            </List>
-          ) : (
-            <Typography sx={{ p: 2, textAlign: 'center', color: 'text.secondary' }}>
-              No hay módulos inactivos para agregar.
-            </Typography>
-          )}
+          <TextField
+            autoFocus
+            margin="dense"
+            id="module-name"
+            name="module-name"
+            label="Nombre del Módulo"
+            type="text"
+            fullWidth
+            variant="standard"
+            value={newModuleName}
+            onChange={(e) => setNewModuleName(e.target.value)}
+          />
+          <TextField
+            margin="dense"
+            id="module-order"
+            name="module-order"
+            label="Orden"
+            type="number"
+            fullWidth
+            variant="standard"
+            value={newModuleOrder}
+            onChange={(e) => setNewModuleOrder(e.target.value)}
+          />
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseDialog}>Cancelar</Button>
-          <Button onClick={handleConfirmAddModule} disabled={selectedModules.size === 0}>
-            Agregar Seleccionados
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog open={hookDialogOpen} onClose={handleCloseHookDialog} fullWidth maxWidth="xs">
-        <DialogTitle>
-          Agregar Hook de '{hookDialogData?.hookType}'
-          <DialogContentText sx={{ fontSize: '0.9rem', mt: 1 }}>
-            Solo se pueden agregar módulos que no tengan sus propios hooks de setup y teardown.
-          </DialogContentText>
-        </DialogTitle>
-        <DialogContent>
-          {availableHookModules.length > 0 ? (
-            <List>
-              <RadioGroup
-                value={selectedHookModule}
-                onChange={(e) => setSelectedHookModule(e.target.value)}
-              >
-                {availableHookModules.map(module => (
-                  <ListItemButton key={module.module_name} dense onClick={() => setSelectedHookModule(module.module_name)}>
-                    <FormControlLabel 
-                      value={module.module_name} 
-                      control={<Radio />} 
-                      label={module.module_name}
-                    />
-                  </ListItemButton>
-                ))}
-              </RadioGroup>
-            </List>
-          ) : (
-            <Typography sx={{ p: 2, textAlign: 'center', color: 'text.secondary' }}>
-              No hay módulos disponibles para agregar como hook.
-            </Typography>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseHookDialog}>Cancelar</Button>
-          <Button onClick={handleConfirmAddHook} disabled={!selectedHookModule}>Agregar</Button>
+          <Button onClick={handleConfirmAddModule}>Confirmar</Button>
         </DialogActions>
       </Dialog>
     </Box>
   );
 };
 
-export default ExecutionOrder;
+export default Modules;

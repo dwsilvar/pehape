@@ -1,59 +1,63 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Module } from '../types'; // Importar el tipo Module
+import { Module } from '../types';
+import type React from 'react';
 
-type StatusType = 'success' | 'error' | 'info' | null;
+const processModules = (modules: Module[]): Module[] => {
+    const moduleMap = modules.reduce((acc, module) => {
+        acc[module.module_name] = module;
+        return acc;
+    }, {} as { [key: string]: Module });
+
+    return modules.map(module => ({
+        ...module,
+        setup: ((module.setup as any[]) || []).map(hook => 
+            typeof hook === 'string' ? moduleMap[hook] : hook
+        ).filter(Boolean),
+        teardown: ((module.teardown as any[]) || []).map(hook => 
+            typeof hook === 'string' ? moduleMap[hook] : hook
+        ).filter(Boolean),
+    }));
+};
+
 
 export const useExecutionOrder = () => {
-  const [modules, setModules] = useState<Module[]>([]);
-  const [status, setStatus] = useState<{ text: string; type: StatusType }>({ text: '', type: null });
-  const [isLoading, setIsLoading] = useState(false);
+  const [modules, setModulesState] = useState<Module[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Cargar la secuencia inicial al montar el componente
-  useEffect(() => {
-    const fetchInitialSequence = async () => {
-      try {
-        const response = await fetch('/api/execution-order');
-        if (!response.ok) {
-          throw new Error('Failed to fetch execution order');
-        }
-        const data = await response.json();
-        setModules(data);
-      } catch (error) {
-        console.error("Error fetching initial execution order:", error);
-      }
-    };
-
-    fetchInitialSequence();
-  }, []);
-
-  // Función para guardar la secuencia
-  const handleSave = useCallback(async () => {
+  const fetchAndProcessModules = useCallback(async () => {
     setIsLoading(true);
-    setStatus({ text: 'Guardando orden de ejecución...', type: 'info' });
     try {
-      const response = await fetch('/api/execution-order', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(modules),
-      });
-  
+      const response = await fetch('/api/execution-order?include_inactive=true');
       if (!response.ok) {
-        throw new Error('Failed to save execution order');
+        throw new Error('Failed to fetch execution order');
       }
-  
-      const updatedSequence = await response.json(); // <-- El paso clave
-      setModules(updatedSequence); // <-- Actualizar el estado con la respuesta del servidor
-      setStatus({ text: 'Orden guardada correctamente.', type: 'success' });
+      const data: Module[] = await response.json();
+      setModules(processModules(data));
     } catch (error) {
-      console.error("Error saving execution order:", error);
-      setStatus({ text: 'Error al guardar el orden.', type: 'error' });
+      console.error("Error fetching execution order:", error);
+      setModules([]);
     } finally {
       setIsLoading(false);
-      // Limpiar el mensaje después de unos segundos
-      setTimeout(() => setStatus({ text: '', type: null }), 3000);
     }
-  }, [modules]); // Depende de 'modules' para enviar siempre el estado más reciente
+  }, []);
 
-  // 4. Exponer el nuevo estado
-  return { modules, setModules, handleSave, status, isLoading };
+  useEffect(() => {
+    fetchAndProcessModules();
+  }, [fetchAndProcessModules]);
+
+  const setModules = (action: React.SetStateAction<Module[]>) => {
+    if (typeof action === 'function') {
+      // functional updater
+      setModulesState((prev) => {
+        const compute = action as (prev: Module[]) => Module[];
+        const next = compute(prev);
+        return processModules(next);
+      });
+    } else {
+      // direct array replacement
+      setModulesState(processModules(action));
+    }
+  };
+
+  return { modules, isLoading, setModules, refetch: fetchAndProcessModules };
 };

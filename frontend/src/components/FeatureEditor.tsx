@@ -13,26 +13,38 @@ interface FeatureEditorProps {
 export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorContent, onEditorChange, theme }) => {
   const handleEditorDidMount: OnMount = (editor, monaco) => {
     const applyTheme = async (themeName: string) => {
-      // El tema 'vs-dark' es nativo, no necesita importación.
       if (themeName === 'vs-dark') {
         monaco.editor.setTheme(themeName);
         return;
       }
 
+      // Mapa de nombres de tema a nombres de archivo reales
+      const themeFileMap: { [key: string]: string } = {
+        'monokai': 'Monokai',
+        'solarized-dark': 'Solarized Dark',
+        'dracula': 'Dracula',
+        'cobalt': 'Cobalt',
+      };
+
+      const themeFileName = themeFileMap[themeName];
+      if (!themeFileName) {
+        console.error(`Theme '${themeName}' is not defined in the theme map.`);
+        monaco.editor.setTheme('vs-dark');
+        return;
+      }
+
       try {
-        // Importación dinámica del archivo de tema.
-        const themeData = await import(`monaco-themes/themes/${themeName.replace(/-/g, ' ')}.json`);
+        const themeData = await import(`monaco-themes/themes/${themeFileName}.json`);
         monaco.editor.defineTheme(themeName, themeData);
         monaco.editor.setTheme(themeName);
       } catch (error) {
         console.error(`Failed to load theme ${themeName}:`, error);
-        monaco.editor.setTheme('vs-dark'); // Fallback a un tema seguro
+        monaco.editor.setTheme('vs-dark'); // Fallback to a safe theme
       }
     };
 
     applyTheme(theme);
-    // Assign a unique ID to the editor's internal textarea for accessibility
-    // and to prevent browser warnings about form fields without a name.
+    
     const editorElement = editor.getDomNode();
     if (editorElement) {
       const textarea = editorElement.querySelector('textarea');
@@ -40,12 +52,6 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
         textarea.id = 'feature-editor-textarea';
       }
     }
-  };
-
-  // Este efecto se asegura de que el tema se actualice si cambia mientras el editor ya está montado.
-  const handleEditorWillMount: OnMount = (editor, monaco) => {
-    // Esto es un truco para tener la instancia de monaco disponible fuera del onMount
-    (window as any).monacoInstance = monaco;
   };
 
   return (
@@ -61,7 +67,7 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
             roundedSelection: false,
             scrollBeyondLastLine: false,
             readOnly: !selectedFile,
-            theme: theme, // Aplicar el tema inicial y permitir que onMount lo sobreescriba
+            theme: theme,
           }}
           onMount={handleEditorDidMount}
           language={selectedFile ? 'gherkin' : undefined}
@@ -70,5 +76,3 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
     </Box>
   );
 };
-
-export default FeatureEditor;
