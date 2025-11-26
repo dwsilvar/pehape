@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Box,
   CircularProgress,
@@ -45,20 +45,16 @@ const DEFAULT_FEATURE_COLOR = '#4db6ac';
 
 const DEFAULT_MODULE_COLOR = '#7e57c2'; 
 
-const HookItem: React.FC<{ hook: Module | string }> = ({ hook }) => {
+const HookItem: React.FC<{ hook: Module | string, onNavigate: (moduleName: string) => void }> = ({ hook, onNavigate }) => {
     const isObject = typeof hook === 'object' && hook !== null;
     const moduleName = isObject ? (hook as Module).module_name : hook;
     const isActive = isObject ? (hook as Module).active : false;
-
-    const handleHookClick = () => {
-      console.log(`TODO: Go to module: ${moduleName}`);
-    };
 
     return (
         <Box sx={{ mb: 1, p: 1, pl: 2, display: 'flex', alignItems: 'center' }}>
         <Typography
           variant="body2"
-          onClick={handleHookClick}
+          onClick={() => onNavigate(moduleName)}
           sx={{
             flexGrow: 1,
             color: isActive ? 'primary.main' : 'text.secondary',
@@ -340,14 +336,15 @@ const SortableModule = React.forwardRef<HTMLDivElement, {
     },
   });
 
+  // Combina las refs de dnd-kit con la ref que pasamos desde fuera (forwardRef)
   const combinedRef = (node: HTMLDivElement | null) => {
-    setNodeRef(node);
-    setDroppableNodeRef(node);
-    if (typeof ref === 'function') ref(node);
+    setNodeRef(node); // Para useSortable
+    setDroppableNodeRef(node); // Para useDroppable
+    if (typeof ref === 'function') ref(node); // Para el resaltado
   };
 
   return (
-    <Box ref={combinedRef} style={style} sx={{ position: 'relative' }}>
+    <Box ref={combinedRef} style={style} sx={{ position: 'relative' }}> {/* La ref combinada se aplica aquí */}
       <Box
         {...attributes}
         {...listeners}
@@ -419,6 +416,8 @@ interface ExecutionOrderProps {
   onToggleSectionCollapse: (sectionId: string) => void;
   focusedModule: string | null;
   onStopTests: () => void;
+  navigateToModule: (moduleName: string) => void;
+  onFocusConsumed: () => void; // Nueva prop para notificar que el foco ha sido consumido.
 }
 
 const Modules: React.FC<ExecutionOrderProps> = ({ 
@@ -436,6 +435,8 @@ const Modules: React.FC<ExecutionOrderProps> = ({
   onToggleSectionCollapse,
   focusedModule,
   onStopTests,
+  navigateToModule,
+  onFocusConsumed,
 }) => {
   // Necesitamos acceder al elemento activo para deshabilitar el SortableContext si no es un módulo.
   // Esto es un patrón avanzado para permitir que droppables externos funcionen dentro de un SortableContext.
@@ -447,30 +448,46 @@ const Modules: React.FC<ExecutionOrderProps> = ({
 
   const moduleRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
+  // Ref para evitar que el efecto de foco se ejecute varias veces.
+  const focusEffectHasRun = useRef(false);
+
   useEffect(() => {
     if (focusedModule && moduleRefs.current[focusedModule]) {
-      const element = moduleRefs.current[focusedModule];
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        // Añade un resaltado temporal
-        element.style.transition = 'background-color 0.5s ease-in-out';
-        element.style.backgroundColor = 'rgba(255, 255, 0, 0.2)'; // Amarillo semitransparente
-        setTimeout(() => {
-          element.style.backgroundColor = '';
-        }, 1500); // El resaltado dura 1.5 segundos
+      // Si el módulo de destino está colapsado, lo expandimos.
+      const featuresSectionId = `${focusedModule}::features`;
+      if (collapsedSections.has(featuresSectionId)) {
+        onToggleSectionCollapse(featuresSectionId);
       }
+
+      // Añadimos un pequeño retardo para asegurar que el DOM esté listo,
+      // especialmente si el módulo estaba colapsado.
+      setTimeout(() => {
+        const element = moduleRefs.current[focusedModule];
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          // Añade un resaltado temporal
+          element.style.transition = 'background-color 0.5s ease-in-out';
+          element.style.backgroundColor = 'rgba(255, 255, 0, 0.2)'; // Amarillo semitransparente
+          setTimeout(() => {
+            element.style.backgroundColor = '';
+            // Una vez que el efecto ha terminado, notificamos al padre para que limpie el estado.
+            onFocusConsumed();
+          }, 2000); // El resaltado dura 2 segundos
+        } else {
+          // Si el elemento no se encuentra (p. ej. aún no se ha renderizado), limpiamos el foco para evitar bucles.
+          onFocusConsumed();
+        }
+      }, 100); // 100ms de retardo
     }
-  }, [focusedModule]);
+  // La dependencia de focusedModule es la clave. Las demás son funciones estables.
+  }, [focusedModule, onToggleSectionCollapse, onFocusConsumed]);
 
   const displayedModules = modules || [];
 
-  const handleToggleModuleCollapse = (moduleName: string) => {
-    const sections: ('setup' | 'features' | 'teardown')[] = ['setup', 'features', 'teardown'];
-    sections.forEach(section => {
-      const sectionId = `${moduleName}::${section}`;
-      onToggleSectionCollapse(sectionId);
-    });
-  };
+  const handleToggleModuleCollapse = useCallback((moduleName: string) => {
+    const sectionId = `${moduleName}::features`;
+    onToggleSectionCollapse(sectionId);
+  }, [onToggleSectionCollapse]);
 
   const handleToggleSectionCollapse = async (moduleName: string, section: 'setup' | 'features' | 'teardown') => {
     const sectionId = `${moduleName}::${section}`;

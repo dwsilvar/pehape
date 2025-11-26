@@ -76,7 +76,7 @@ const HookItem: React.FC<HookItemProps> = ({ hook, onDelete, onNavigate }) => {
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Typography
             variant="body2"
-            onClick={() => onNavigate(moduleName)}
+            onClick={() => onNavigate(moduleName)} // Se asegura que el clic llame a la función de navegación
             sx={{
               mr: 1, // Margen para separar el texto del botón
               color: isActive ? 'primary.main' : 'text.secondary',

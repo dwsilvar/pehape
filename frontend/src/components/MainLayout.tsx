@@ -114,7 +114,7 @@ const MainLayout: React.FC = () => {
     }
   }, [modules]);
 
-  const createToggleHandler = (
+  const createToggleHandler = useCallback((
     view: 'execution_order' | 'modules_view',
     setter: React.Dispatch<React.SetStateAction<Set<string>>>
   ) => async (sectionId: string) => {
@@ -139,7 +139,7 @@ const MainLayout: React.FC = () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ view, section_id: sectionId, is_collapsed: newCollapsedState }),
     });
-  };
+  }, []);
 
   const handleToggleExecutionOrderCollapse = createToggleHandler('execution_order', setExecutionOrderCollapsed);
   const handleToggleModulesViewCollapse = createToggleHandler('modules_view', setModulesViewCollapsed);
@@ -287,10 +287,15 @@ const MainLayout: React.FC = () => {
     }
   }, [selectedFile, editorContent, isDirty]);
 
-  const navigateToModule = (moduleName: string) => {
-    setTabValue(2); // Cambia a la pestaña "Modulos"
+  const navigateToModule = useCallback((moduleName: string) => {
+    setTabValue(1); // Cambia a la pestaña "Modulos" (ahora en el índice 1)
     setFocusedModule(moduleName);
-  };
+  }, []); // No tiene dependencias, por lo que se puede dejar vacío.
+
+  // Nueva función para limpiar el estado de "focused" después de usarlo.
+  const clearFocusedModule = useCallback(() => {
+    setFocusedModule(null);
+  }, []);
 
   // --- Lógica de ejecución de pruebas, ahora en el layout principal ---
   const handleRunTests = async () => {
@@ -629,6 +634,8 @@ const MainLayout: React.FC = () => {
                   onToggleSectionCollapse={handleToggleModulesViewCollapse}
                   focusedModule={focusedModule}
                   onStopTests={handleStopTests}
+                  navigateToModule={navigateToModule}
+                  onFocusConsumed={clearFocusedModule}
                 />
               </TabPanel>
               <TabPanel value={tabValue} index={2}>
