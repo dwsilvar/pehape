@@ -1,5 +1,6 @@
 import os
 import json
+import shutil
 import subprocess
 from flask import Flask, jsonify, request, Response, send_from_directory
 import sys, signal
@@ -69,11 +70,15 @@ def list_features():
         return tree
 
     try:
-        file_tree = build_tree(FEATURES_DIR)
-        #print("***************************************************************************************************")
-        #print(file_tree)
-        #print("***************************************************************************************************")
-        return jsonify(file_tree)
+        children_tree = build_tree(FEATURES_DIR)
+        # Envolver el árbol de archivos en un nodo raíz "Features"
+        root_node = [{
+            "name": "Features",
+            "type": "directory",
+            "path": "", # El path de la raíz es vacío
+            "children": children_tree
+        }]
+        return jsonify(root_node)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -172,6 +177,35 @@ def create_file():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/resource/<path:resource_path>', methods=['DELETE'])
+def delete_resource(resource_path):
+    """
+    Endpoint genérico para eliminar un archivo o directorio.
+    """
+    try:
+        # Aseguramos que el path es seguro y no sale del directorio de features
+        full_path = os.path.abspath(os.path.join(FEATURES_DIR, resource_path))
+        if os.path.commonpath([full_path, os.path.abspath(FEATURES_DIR)]) != os.path.abspath(FEATURES_DIR):
+            return jsonify({"error": "Ruta inválida o acceso denegado"}), 403
+
+        if not os.path.exists(full_path):
+            return jsonify({"error": f"El recurso '{resource_path}' no fue encontrado."}), 404
+
+        if os.path.isfile(full_path):
+            os.remove(full_path)
+            message = f"Archivo '{resource_path}' eliminado exitosamente."
+        elif os.path.isdir(full_path):
+            shutil.rmtree(full_path)
+            message = f"Directorio '{resource_path}' y todo su contenido eliminado exitosamente."
+        else:
+            return jsonify({"error": "El recurso no es ni un archivo ni un directorio."}), 400
+
+        return jsonify({"message": message}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 def _add_ids_to_sequence(sequence):
     """Función auxiliar para añadir IDs únicos a los features para el frontend."""
@@ -275,13 +309,14 @@ def update_module_collapse():
     """
     try:
         data = request.json
-        module_name = data.get('module_name')
+        view = data.get('view')
+        section_id = data.get('section_id')
         is_collapsed = data.get('is_collapsed')
 
-        if not module_name or is_collapsed is None:
-            return jsonify({"error": "Se requiere 'module_name' y 'is_collapsed'"}), 400
+        if not view or not section_id or is_collapsed is None:
+            return jsonify({"error": "Se requiere 'view', 'section_id' y 'is_collapsed'"}), 400
 
-        result = plan_manager.update_module_collapse_state(module_name, is_collapsed)
+        result = plan_manager.update_view_collapse_state(view, section_id, is_collapsed)
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -335,7 +370,7 @@ def add_feature_to_module(module_name):
 def delete_feature_from_module(module_name):
     """
     Endpoint para eliminar un feature de un módulo existente.
-    La identificación del feature se pasa en el cuerpo de la solicitud.
+    Se usa DELETE con un body para la identificación del feature.
     """
     try:
         data = request.json
@@ -349,6 +384,27 @@ def delete_feature_from_module(module_name):
         return jsonify(_add_ids_to_sequence(updated_sequence))
 
     except ValueError as e: # Captura errores como "no encontrado"
+        return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/modules/<string:module_name>/features/activity', methods=['PUT'])
+def toggle_feature_activity(module_name):
+    """
+    Endpoint para activar o desactivar un feature dentro de un módulo.
+    """
+    try:
+        data = request.json
+        feature_file = data.get('feature_file')
+        feature_dir = data.get('feature_dir', '')
+        active = data.get('active')
+
+        if not feature_file or active is None:
+            return jsonify({"error": "Se requiere 'feature_file' y 'active'"}), 400
+
+        updated_sequence = plan_manager.toggle_feature_activity(module_name, feature_file, feature_dir, bool(active))
+        return jsonify(_add_ids_to_sequence(updated_sequence))
+    except ValueError as e:
         return jsonify({"error": str(e)}), 404
     except Exception as e:
         return jsonify({"error": str(e)}), 500

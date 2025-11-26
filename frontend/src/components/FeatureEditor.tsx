@@ -1,6 +1,7 @@
 import { FC } from 'react';
-import { Box } from '@mui/material';
-import Editor, { OnMount } from '@monaco-editor/react';
+import { Box, Typography, Button } from '@mui/material';
+import SaveIcon from '@mui/icons-material/Save';
+import MonacoEditor, { OnMount } from '@monaco-editor/react';
 import { FileData } from '../types';
 
 interface FeatureEditorProps {
@@ -8,56 +9,47 @@ interface FeatureEditorProps {
   editorContent: string;
   onEditorChange: (value: string | undefined) => void;
   theme: string; // Nueva prop para el tema
+  onSave: () => void; // Nueva prop para guardar
+  isDirty: boolean; // Nueva prop para saber si hay cambios
+  isResizing: boolean; // Nueva prop para saber si se está redimensionando
 }
 
-export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorContent, onEditorChange, theme }) => {
-  const handleEditorDidMount: OnMount = (editor, monaco) => {
-    const applyTheme = async (themeName: string) => {
-      if (themeName === 'vs-dark') {
-        monaco.editor.setTheme(themeName);
-        return;
-      }
-
-      // Mapa de nombres de tema a nombres de archivo reales
-      const themeFileMap: { [key: string]: string } = {
-        'monokai': 'Monokai',
-        'solarized-dark': 'Solarized Dark',
-        'dracula': 'Dracula',
-        'cobalt': 'Cobalt',
-      };
-
-      const themeFileName = themeFileMap[themeName];
-      if (!themeFileName) {
-        console.error(`Theme '${themeName}' is not defined in the theme map.`);
-        monaco.editor.setTheme('vs-dark');
-        return;
-      }
-
-      try {
-        const themeData = await import(`monaco-themes/themes/${themeFileName}.json`);
-        monaco.editor.defineTheme(themeName, themeData);
-        monaco.editor.setTheme(themeName);
-      } catch (error) {
-        console.error(`Failed to load theme ${themeName}:`, error);
-        monaco.editor.setTheme('vs-dark'); // Fallback to a safe theme
-      }
-    };
-
-    applyTheme(theme);
-    
-    const editorElement = editor.getDomNode();
-    if (editorElement) {
-      const textarea = editorElement.querySelector('textarea');
-      if (textarea) {
-        textarea.id = 'feature-editor-textarea';
-      }
-    }
-  };
+export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorContent, onEditorChange, theme, onSave, isDirty, isResizing }) => {
+  const handleEditorDidMount: OnMount = (editor, monaco) => {};
 
   return (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+      {isResizing && (
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 10, // Asegura que esté por encima del editor
+            backgroundColor: 'rgba(0,0,0,0.0)', // Transparente pero captura eventos
+          }}
+        />
+      )}
+      {selectedFile && (
+        <Box sx={{ p: 1, display: 'flex', alignItems: 'center', borderBottom: 1, borderColor: 'divider' }}>
+          <Typography variant="subtitle2" sx={{ flexGrow: 1 }}>
+            {selectedFile.path}
+          </Typography>
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<SaveIcon />}
+            onClick={onSave}
+            disabled={!isDirty}
+          >
+            Guardar
+          </Button>
+        </Box>
+      )}
       <Box sx={{ flex: 1, minHeight: 0 }}> {/* minHeight: 0 is crucial for child's scroll */}
-        <Editor
+        <MonacoEditor
           height="100%"
           value={selectedFile ? editorContent : '-- Select a file to view its content --'}
           onChange={onEditorChange}
@@ -68,6 +60,7 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
             scrollBeyondLastLine: false,
             readOnly: !selectedFile,
             theme: theme,
+            useShadowDOM: false, // ¡Esta es la clave! Evita que Mónaco cree un iframe que capture los eventos del ratón.
           }}
           onMount={handleEditorDidMount}
           language={selectedFile ? 'gherkin' : undefined}

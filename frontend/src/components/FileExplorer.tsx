@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Box, Typography, Menu, MenuItem, Dialog, DialogTitle, DialogContent, TextField, DialogActions, Button } from '@mui/material';
+import { Box, Typography, Menu, MenuItem, Dialog, DialogTitle, DialogContent, TextField, DialogActions, Button, DialogContentText, Divider } from '@mui/material';
 import { SimpleTreeView } from '@mui/x-tree-view/SimpleTreeView';
 import { TreeItem } from '@mui/x-tree-view/TreeItem';
 import FolderIcon from '@mui/icons-material/Folder';
@@ -47,24 +47,24 @@ const DraggableTreeItem: React.FC<{
       itemId={node.path}
       label={
         <Box sx={{ display: 'flex', alignItems: 'center' }} onContextMenu={(e) => onContextMenu(e, node)}>
-          {/* El ícono de arrastre solo aparece para los archivos y es el que tiene los listeners */}
           {isFile ? (
             <Box
               ref={setNodeRef}
               {...listeners}
               {...attributes}
               sx={{
-                cursor: 'grab',
-                display: 'flex',
-                alignItems: 'center',
-                mr: 1,
-                color: 'action.active'
+                  cursor: 'grab',
+                  display: 'flex',
+                  alignItems: 'center',
+                  ml: '0px', // Margen izquierdo para alinear con el icono de carpeta
+                  mr: '1px', // Margen derecho reducido para acercar al icono de archivo
+                  color: 'action.active'
               }}
             >
               <DragIndicatorIcon fontSize="small" />
             </Box>
           ) : (
-            <Box sx={{ width: 24, mr: 1 }} /> // Espaciador para alinear carpetas y archivos
+            <Box sx={{ width: '0px', mr: '0px' }} /> // Espaciador para alinear carpetas y archivos
           )}
           {isFile ? <DescriptionIcon sx={{ mr: 1, color: 'grey.700' }} /> : <FolderIcon sx={{ mr: 1 }} />}
           <Typography variant="body2" sx={{ fontSize: `${fontSize}px` }}>{node.name}</Typography>
@@ -116,6 +116,11 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, fontSize }) =
     basePath: string;
   } | null>(null);
 
+  const [deleteDialog, setDeleteDialog] = useState<{
+    open: boolean;
+    node: FileData | null;
+  }>({ open: false, node: null });
+
   const [newItemName, setNewItemName] = useState('');
 
   const handleContextMenu = (event: React.MouseEvent, node: FileData) => {
@@ -153,6 +158,16 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, fontSize }) =
     setNewItemName('');
   };
 
+  const handleOpenDeleteDialog = () => {
+    if (!contextMenu) return;
+    setDeleteDialog({ open: true, node: contextMenu.node });
+    handleCloseContextMenu();
+  };
+
+  const handleCloseDeleteDialog = () => {
+    setDeleteDialog({ open: false, node: null });
+  };
+
   const handleConfirmNewItem = async () => {
     if (!newItemName || !dialog) return;
 
@@ -179,6 +194,32 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, fontSize }) =
       // Aquí podrías mostrar una notificación de error al usuario
     } finally {
       handleCloseDialog();
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteDialog.node) return;
+
+    const path = deleteDialog.node.path;
+    const type = deleteDialog.node.type;
+    const endpoint = `/api/resource/${encodeURIComponent(path)}`;
+
+    try {
+      const response = await fetch(endpoint, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to delete ${type}`);
+      }
+
+      await refreshFileTree();
+
+    } catch (error) {
+      console.error(`Error deleting ${type}:`, error);
+    } finally {
+      handleCloseDeleteDialog();
     }
   };
 
@@ -237,6 +278,8 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, fontSize }) =
       >
         <MenuItem onClick={() => handleOpenNewItemDialog('folder')}>Nueva Carpeta</MenuItem>
         <MenuItem onClick={() => handleOpenNewItemDialog('file')}>Nuevo Archivo Feature</MenuItem>
+        <Divider />
+        <MenuItem onClick={handleOpenDeleteDialog} sx={{ color: 'error.main' }}>Eliminar</MenuItem>
       </Menu>
 
       <Dialog open={dialog?.open || false} onClose={handleCloseDialog}>
@@ -271,6 +314,23 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, fontSize }) =
           <Button onClick={handleCloseDialog}>Cancelar</Button>
           <Button onClick={handleConfirmNewItem} disabled={!newItemName}>
             Confirmar
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={deleteDialog.open} onClose={handleCloseDeleteDialog}>
+        <DialogTitle>Confirmar Eliminación</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            ¿Estás seguro de que quieres eliminar 
+            <strong>{` "${deleteDialog.node?.name}"`}</strong>
+            ? Esta acción no se puede deshacer.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseDeleteDialog}>Cancelar</Button>
+          <Button onClick={handleConfirmDelete} color="error">
+            Eliminar
           </Button>
         </DialogActions>
       </Dialog>

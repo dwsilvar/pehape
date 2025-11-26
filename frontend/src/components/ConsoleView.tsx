@@ -21,8 +21,8 @@ const ConsoleView: React.FC<ConsoleViewProps> = ({ logs }) => {
         overflowY: 'auto', 
         backgroundColor: 'black', 
         color: 'lightgray', 
-        fontFamily: 'Consolas, "Courier New", monospace',
-        fontSize: '0.85rem'
+        fontFamily: '"Lucida Console", Consolas, "Courier New", monospace',
+        fontSize: '0.3rem'
       }}
     >
       {logs.map((log, index) => (

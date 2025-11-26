@@ -40,6 +40,7 @@ function TabPanel(props: TabPanelProps) {
 const MainLayout: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<FileData | null>(null);
   const [editorContent, setEditorContent] = useState<string>('');
+  const [isDirty, setIsDirty] = useState(false); // Estado para rastrear cambios
   const [fontSize] = useState(14);
   const [themeName, setThemeName] = useState<string>(() => {
     return localStorage.getItem('editorTheme') || 'monokai';
@@ -48,17 +49,124 @@ const MainLayout: React.FC = () => {
   const { modules, setModules, isLoading, refetch } = useExecutionOrder();
   const [tabValue, setTabValue] = useState(0);
   const modulesRef = useRef(modules);
+  const [focusedModule, setFocusedModule] = useState<string | null>(null);
+  
+  // --- LIFTED STATE FOR COLLAPSE/EXPAND ---
+  const [executionOrderCollapsed, setExecutionOrderCollapsed] = useState<Set<string>>(new Set());
+  const [modulesViewCollapsed, setModulesViewCollapsed] = useState<Set<string>>(new Set());
+  const [fileExplorerWidth, setFileExplorerWidth] = useState(250);
+
+  // --- Lógica para redimensionar el File Explorer ---
+  const layoutRef = useRef<HTMLDivElement>(null);
+  const isResizingRef = useRef(false);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizingRef.current = true;
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (!isResizingRef.current || !layoutRef.current) return;
+    const layoutRect = layoutRef.current.getBoundingClientRect();
+    const newWidth = e.clientX - layoutRect.left;
+
+    // Limites: no más de 1/3 del ancho total y no menos de 150px
+    const maxWidth = layoutRect.width / 3;
+    const minWidth = 150;
+
+    // Sujeta el nuevo ancho para que siempre esté entre los límites mínimo y máximo.
+    const clampedWidth = Math.max(minWidth, Math.min(newWidth, maxWidth));
+    setFileExplorerWidth(clampedWidth);
+  }, []); // No tiene dependencias externas, por lo que se puede dejar vacío.
+
+  const handleMouseUp = useCallback(() => {
+    isResizingRef.current = false;
+    document.removeEventListener('mousemove', handleMouseMove);
+    document.removeEventListener('mouseup', handleMouseUp);
+  }, [handleMouseMove]); // Depende de handleMouseMove
+
+  useEffect(() => {
+    // Limpieza del event listener
+    return () => handleMouseUp();
+  }, [handleMouseUp]); // Solo necesita handleMouseUp como dependencia
+  // ----------------------------------------------------
 
   useEffect(() => {
     modulesRef.current = modules;
   }, [modules]);
 
+  // Este efecto se ejecuta cuando los módulos se cargan para inicializar los estados de colapso
+  useEffect(() => {
+    if (modules.length > 0) {
+      const initialExecOrder = new Set<string>();
+      const initialModulesView = new Set<string>();
+      modules.forEach(module => {
+        const execOrderStates = module.view_states?.execution_order || {};
+        Object.keys(execOrderStates).forEach(sectionId => { if (execOrderStates[sectionId]) initialExecOrder.add(sectionId); });
+
+        const modulesViewStates = module.view_states?.modules_view || {};
+        Object.keys(modulesViewStates).forEach(sectionId => { if (modulesViewStates[sectionId]) initialModulesView.add(sectionId); });
+      });
+      setExecutionOrderCollapsed(initialExecOrder);
+      setModulesViewCollapsed(initialModulesView);
+    }
+  }, [modules]);
+
+  const createToggleHandler = (
+    view: 'execution_order' | 'modules_view',
+    setter: React.Dispatch<React.SetStateAction<Set<string>>>
+  ) => async (sectionId: string) => {
+    let newCollapsedState = false;
+    
+    setter(prev => {
+      const newSet = new Set(prev);
+      const isCurrentlyCollapsed = newSet.has(sectionId);
+      newCollapsedState = !isCurrentlyCollapsed;
+
+      if (newCollapsedState) newSet.add(sectionId);
+      else newSet.delete(sectionId);
+      return newSet;
+    });
+
+    // Espera un momento para que el estado se actualice antes de enviar la llamada a la API.
+    // Esto no es ideal, pero es una solución simple para este patrón.
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    await fetch('/api/ui-settings/module-collapse', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ view, section_id: sectionId, is_collapsed: newCollapsedState }),
+    });
+  };
+
+  const handleToggleExecutionOrderCollapse = createToggleHandler('execution_order', setExecutionOrderCollapsed);
+  const handleToggleModulesViewCollapse = createToggleHandler('modules_view', setModulesViewCollapsed);
+
+  // Función para limpiar los datos de los módulos antes de guardarlos.
+  // Elimina propiedades que son solo para la UI y no deben persistir en run_list.json.
+  const cleanModulesForSave = (modulesToClean: Module[]): any[] => {
+    return modulesToClean.map(module => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { color, is_collapsed, ...restOfModule } = module;
+      return {
+        ...restOfModule,
+        features: module.features.map(feature => {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { display_tags, scenarios, color, ...restOfFeature } = feature;
+          return restOfFeature;
+        }),
+      };
+    });
+  };
+
   // Persist modules to backend (used after drag modifications).
   // The hook doesn't provide a handleSave function so we implement a minimal one here.
   const handleSave = useCallback(async (modulesToSave?: Module[]) => {
     try {
-      const payload = modulesToSave || modulesRef.current;
-      const response = await fetch('/api/execution-order', {
+      const payload = cleanModulesForSave(modulesToSave || modulesRef.current);
+      const response = await fetch('/api/execution-order', { // Este endpoint debe guardar en run_list.json
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload), // Usar la referencia para evitar estado rancio o el payload directo
@@ -135,21 +243,53 @@ const MainLayout: React.FC = () => {
       if (!response.ok) throw new Error('Failed to fetch file content');
       const data = await response.json();
       setEditorContent(data.content);
+      setIsDirty(false); // Limpia el estado de "sucio" al cargar un nuevo archivo
       setTabValue(0); // Switch to editor tab on file select
     } catch (error) {
       console.error("Error loading file:", error);
       setEditorContent(`-- Error loading ${path}.`);
+      setIsDirty(false);
     }
   }, [setEditorContent, setSelectedFile, setTabValue]);
 
   const handleEditorChange = useCallback((value: string | undefined) => {
     if (value !== undefined) {
       setEditorContent(value);
+      setIsDirty(true); // Marca como "sucio" cuando el contenido cambia
     }
   }, []);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
+  };
+
+  const handleSaveFile = useCallback(async () => {
+    if (!selectedFile || !isDirty) return;
+
+    try {
+      const response = await fetch(`/api/features/${encodeURIComponent(selectedFile.path)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: editorContent }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to save file');
+      }
+
+      setIsDirty(false); // Limpia el estado de "sucio" después de guardar
+      // Opcional: mostrar una notificación de éxito
+
+    } catch (error) {
+      console.error('Error saving file:', error);
+      // Opcional: mostrar una notificación de error
+    }
+  }, [selectedFile, editorContent, isDirty]);
+
+  const navigateToModule = (moduleName: string) => {
+    setTabValue(2); // Cambia a la pestaña "Modulos"
+    setFocusedModule(moduleName);
   };
 
   // --- Lógica de ejecución de pruebas, ahora en el layout principal ---
@@ -407,10 +547,11 @@ const MainLayout: React.FC = () => {
 
                 // Llama a la API para persistir el cambio
                 try {
+                  const featuresToSave = updatedFeaturesWithOrder.map(({ display_tags, scenarios, color, ...rest }) => rest);
                   const response = await fetch(`/api/modules/${encodeURIComponent(moduleName)}/features/reorder`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(updatedFeaturesWithOrder),
+                    body: JSON.stringify({ features: featuresToSave }),
                   });
                   if (!response.ok) {
                     // Si la API falla, revertimos al estado original.
@@ -426,23 +567,37 @@ const MainLayout: React.FC = () => {
             return; // Finaliza el manejador aquí
           }
         }}>
-          <Box sx={{ display: 'flex', flexGrow: 1, alignItems: 'stretch', overflow: 'hidden' }}>
+          <Box ref={layoutRef} sx={{ display: 'flex', flexGrow: 1, alignItems: 'stretch', overflow: 'hidden' }}>
             {/* File Explorer */}
             <Paper
               elevation={2}
-              sx={{ width: 250, overflow: 'auto', borderRight: 1, borderColor: 'divider' }}
+              sx={{ width: fileExplorerWidth, minWidth: '150px', overflow: 'auto' }}
             >
               <FileExplorer onFileSelect={handleFileSelect} fontSize={fontSize} />
             </Paper>
-
+            {/* Manija para redimensionar */}
+            <Box
+              onMouseDown={handleMouseDown}
+              sx={{
+                width: '5px',
+                cursor: 'col-resize',
+                backgroundColor: 'divider',
+                '&:hover': { backgroundColor: 'primary.main' },
+                flexShrink: 0,
+              }}
+            />
             {/* Right Panel with Tabs */}
             <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
               <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
                 <Box sx={{ flexGrow: 1 }}>
-                  <Tabs value={tabValue} onChange={handleTabChange} aria-label="main tabs">
-                    <Tab label={selectedFile?.name || 'Feature Editor'} id="main-tab-0" aria-controls="main-tabpanel-0" />
-                    <Tab label="Execution Order" id="main-tab-1" aria-controls="main-tabpanel-1" />
-                    <Tab label="Modulos" id="main-tab-2" aria-controls="main-tabpanel-2" />
+                  <Tabs value={tabValue} onChange={handleTabChange} aria-label="main tabs" sx={{ '& .MuiTab-root': { textTransform: 'none' } }}>
+                    <Tab
+                      label={isDirty ? `${selectedFile?.name || 'Editor'} *` : (selectedFile?.name || 'Feature Editor')}
+                      id="main-tab-0"
+                      aria-controls="main-tabpanel-0"
+                    />
+                    <Tab label="Modulos" id="main-tab-1" aria-controls="main-tabpanel-1" />
+                    <Tab label="Execution Order" id="main-tab-2" aria-controls="main-tabpanel-2" />
                     <Tab label={<ConsoleTabLabel />} id="main-tab-3" aria-controls="main-tabpanel-3" />
                   </Tabs>
                 </Box>
@@ -453,24 +608,12 @@ const MainLayout: React.FC = () => {
                   editorContent={editorContent}
                   onEditorChange={handleEditorChange}
                   theme={themeName}
+                  onSave={handleSaveFile}
+                  isDirty={isDirty}
+                  isResizing={isResizingRef.current}
                 />
               </TabPanel>
               <TabPanel value={tabValue} index={1}>
-                <ExecutionOrder
-                  fontSize={fontSize}
-                  onFeatureSelect={handleFileSelect}
-                  modules={modules}
-                  setModules={setModules}
-                  scenarioStatuses={scenarioStatuses}
-                  setScenarioStatuses={setScenarioStatuses}
-                  isExecuting={isExecuting}
-                  runningFeatureId={runningFeatureId}
-                  onRunTests={handleRunTests}
-                  onSaveModules={handleSave}
-                  onStopTests={handleStopTests}
-                />
-              </TabPanel>
-              <TabPanel value={tabValue} index={2}>
                 <ModulesComponent
                   fontSize={fontSize}
                   onFeatureSelect={handleFileSelect}
@@ -482,6 +625,27 @@ const MainLayout: React.FC = () => {
                   runningFeatureId={runningFeatureId}
                   onRunTests={handleRunTests}
                   onSaveModules={handleSave}
+                  collapsedSections={modulesViewCollapsed}
+                  onToggleSectionCollapse={handleToggleModulesViewCollapse}
+                  focusedModule={focusedModule}
+                  onStopTests={handleStopTests}
+                />
+              </TabPanel>
+              <TabPanel value={tabValue} index={2}>
+                <ExecutionOrder
+                  fontSize={fontSize}
+                  onFeatureSelect={handleFileSelect}
+                  modules={modules}
+                  setModules={setModules}
+                  scenarioStatuses={scenarioStatuses}
+                  setScenarioStatuses={setScenarioStatuses}
+                  isExecuting={isExecuting}
+                  runningFeatureId={runningFeatureId}
+                  onRunTests={handleRunTests}
+                  onSaveModules={handleSave}
+                  collapsedSections={executionOrderCollapsed}
+                  onToggleSectionCollapse={handleToggleExecutionOrderCollapse}
+                  navigateToModule={navigateToModule}
                   onStopTests={handleStopTests}
                 />
               </TabPanel>

@@ -108,7 +108,8 @@ interface ExecutionItemProps {
   onMoveDown?: () => void;
   fontSize: number;
   onDoubleClick: (item: FeatureItem) => void;
-  onDelete: (item: FeatureItem) => void;
+  onToggleActivity: (item: FeatureItem) => void;
+  onDelete: (item: FeatureItem) => void; // Para eliminación real
   onTagClick: (featureId: string, tag: string) => void;
   scenarioStatuses: ScenarioStatusMap;
   isRunning: boolean; 
@@ -122,6 +123,7 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
   onMoveDown,
   fontSize,
   onDoubleClick,
+  onToggleActivity,
   onDelete,
   onTagClick,
   scenarioStatuses,
@@ -164,6 +166,11 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
 
   const handleOpenInEditor = () => {
     onDoubleClick(item); // Reutiliza la lógica existente para abrir el editor
+    handleClose();
+  };
+
+  const handleToggle = () => {
+    onToggleActivity(item);
     handleClose();
   };
 
@@ -232,14 +239,11 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
             {item.display_tags && item.display_tags.length > 0 && (
               item.display_tags.map((tag) => (
                 <Chip
-                  clickable
                   key={tag}
                   label={tag}
                   icon={<LocalOfferIcon fontSize="small" />}
                   size="small"
-                  color={item.tags?.includes(tag) ? 'primary' : 'default'}
-                  variant={item.tags?.includes(tag) ? 'filled' : 'outlined'}
-                  onClick={() => onTagClick(item.id, tag)}
+                  variant={'outlined'}
                   sx={{ fontSize: '0.7rem', height: '22px', borderRadius: '4px' }} // Hacemos el chip más rectangular
                 />
               ))
@@ -251,14 +255,6 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
               {item.scenarios.map((scenario) => {
                 // Construimos la clave única para este escenario específico
                 const uniqueScenarioId = `${item.id}::${scenario}`;
-                const status = scenarioStatuses[uniqueScenarioId] || 'untested';
-                const colorMap = {
-                  passed: 'success',
-                  failed: 'error',
-                  skipped: 'warning',
-                  untested: 'default',
-                  running: 'info',
-                } as const;
 
                 const truncatedLabel = scenario.length > 25 ? `${scenario.substring(0, 25)}...` : scenario;
 
@@ -266,14 +262,10 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
                   <Tooltip key={scenario} title={scenario} arrow>
                     <Chip
                       icon={
-                        status === 'running' ? (
-                          <CircularProgress size={14} color="inherit" />
-                        ) : undefined
+                        undefined
                       }
                       label={truncatedLabel}
                       size="small"
-                      color={colorMap[status]}
-                      variant={status === 'untested' ? 'outlined' : 'filled'}
                       sx={{ fontSize: '0.7rem', height: '20px' }}
                     />
                   </Tooltip>
@@ -289,9 +281,11 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
         <IconButton key={`${item.id}-down`} edge="end" onClick={onMoveDown} size="small" disabled={isLast}>
           <ArrowDownwardIcon />
         </IconButton>
-        <IconButton edge="end" onClick={() => onDelete(item)} size="small" sx={{ ml: 1 }}>
-          <DeleteIcon fontSize="small" />
-        </IconButton>
+        <Tooltip title="Eliminar feature">
+          <IconButton edge="end" onClick={() => onDelete(item)} size="small" sx={{ ml: 1 }}>
+            <DeleteIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
       </Paper>
       <Menu
         open={contextMenu !== null}
@@ -304,17 +298,19 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
         }
       >
         <MenuItem onClick={handleOpenInEditor}>Abrir en editor</MenuItem>
+        <MenuItem onClick={handleToggle}>{item.active ? 'Desactivar' : 'Activar'}</MenuItem>
         <MenuItem onClick={handleDelete}>Eliminar</MenuItem>
       </Menu>
     </>
   );
 };
 
-const SortableModule: React.FC<{
+const SortableModule = React.forwardRef<HTMLDivElement, {
   module: Module;
   controls: React.ReactNode;
   children: React.ReactNode;
-}> = ({ module, controls, children }) => {
+}>((props, ref) => {
+  const { module, controls, children } = props;
   const {
     attributes,
     listeners,
@@ -344,9 +340,10 @@ const SortableModule: React.FC<{
     },
   });
 
-  const combinedRef = (node: HTMLElement | null) => {
+  const combinedRef = (node: HTMLDivElement | null) => {
     setNodeRef(node);
     setDroppableNodeRef(node);
+    if (typeof ref === 'function') ref(node);
   };
 
   return (
@@ -405,7 +402,7 @@ const SortableModule: React.FC<{
       </Paper>
     </Box>
   );
-};
+});
 
 interface ExecutionOrderProps {
   fontSize: number;
@@ -418,6 +415,9 @@ interface ExecutionOrderProps {
   runningFeatureId: string | null;
   onRunTests: () => void;
   onSaveModules: (modulesToSave?: Module[]) => void;
+  collapsedSections: Set<string>;
+  onToggleSectionCollapse: (sectionId: string) => void;
+  focusedModule: string | null;
   onStopTests: () => void;
 }
 
@@ -432,6 +432,9 @@ const Modules: React.FC<ExecutionOrderProps> = ({
   runningFeatureId,
   onRunTests,
   onSaveModules,
+  collapsedSections,
+  onToggleSectionCollapse,
+  focusedModule,
   onStopTests,
 }) => {
   // Necesitamos acceder al elemento activo para deshabilitar el SortableContext si no es un módulo.
@@ -442,73 +445,36 @@ const Modules: React.FC<ExecutionOrderProps> = ({
     id: 'execution-order-droppable-area',
   });
 
-  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set()); 
+  const moduleRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   useEffect(() => {
-    const initiallyCollapsed = new Set<string>();
-    modules.forEach(module => {
-        if (module.is_collapsed) {
-          // Si el módulo debe estar colapsado por defecto, colapsamos todas sus secciones
-          initiallyCollapsed.add(`${module.module_name}::setup`);
-          initiallyCollapsed.add(`${module.module_name}::features`);
-          initiallyCollapsed.add(`${module.module_name}::teardown`);
-        }
-    });
-    setCollapsedSections(initiallyCollapsed);
-  }, [modules]);
+    if (focusedModule && moduleRefs.current[focusedModule]) {
+      const element = moduleRefs.current[focusedModule];
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Añade un resaltado temporal
+        element.style.transition = 'background-color 0.5s ease-in-out';
+        element.style.backgroundColor = 'rgba(255, 255, 0, 0.2)'; // Amarillo semitransparente
+        setTimeout(() => {
+          element.style.backgroundColor = '';
+        }, 1500); // El resaltado dura 1.5 segundos
+      }
+    }
+  }, [focusedModule]);
 
   const displayedModules = modules || [];
 
   const handleToggleModuleCollapse = (moduleName: string) => {
-    const isCollapsed = collapsedSections.has(`${moduleName}::features`);
-    const newCollapsedState = !isCollapsed;
-
-    setCollapsedSections(prev => {
-      const newSet = new Set(prev);
-      const sections = ['setup', 'features', 'teardown'];
-      sections.forEach(section => {
-        const sectionId = `${moduleName}::${section}`;
-        if (newCollapsedState) {
-          newSet.add(sectionId);
-        } else {
-          newSet.delete(sectionId);
-        }
-      });
-      return newSet;
+    const sections: ('setup' | 'features' | 'teardown')[] = ['setup', 'features', 'teardown'];
+    sections.forEach(section => {
+      const sectionId = `${moduleName}::${section}`;
+      onToggleSectionCollapse(sectionId);
     });
-
-    // Aquí podrías añadir la llamada a la API si quieres persistir este estado "maestro"
-    // Por ahora, solo controla la UI.
-    // fetch(`/api/ui-settings/module-collapse`, { ... });
   };
 
   const handleToggleSectionCollapse = async (moduleName: string, section: 'setup' | 'features' | 'teardown') => {
     const sectionId = `${moduleName}::${section}`;
-    const isCurrentlyCollapsed = collapsedSections.has(sectionId);
-    const newCollapsedState = !isCurrentlyCollapsed;
-
-    // Actualización optimista de la UI
-    setCollapsedSections((prev: Set<string>) => {
-      const newSet = new Set(prev);
-      if (newCollapsedState) {
-        newSet.add(sectionId);
-      } else {
-        newSet.delete(sectionId);
-      }
-      return newSet;
-    });
-
-    // Persistir el cambio en el backend
-    try {
-      await fetch('/api/ui-settings/module-collapse', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ module_name: moduleName, is_collapsed: newCollapsedState }),
-      });
-    } catch (error) {
-      console.error('Error al guardar el estado de colapso:', error);
-      // Opcional: revertir el cambio en la UI si la llamada a la API falla.
-    }
+    onToggleSectionCollapse(sectionId);
   };
 
   // --- State y Handlers para el diálogo de "Agregar Módulo" ---
@@ -598,6 +564,31 @@ const Modules: React.FC<ExecutionOrderProps> = ({
       setModules(updatedModules); // Actualiza el estado con la respuesta del backend
     } catch (error) {
       console.error('Error al cambiar el estado del módulo:', error);
+    }
+  };
+
+  const handleToggleFeatureActivity = async (moduleName: string, featureToToggle: FeatureItem) => {
+    // Actualización optimista
+    const originalModules = modules;
+    setModules(prev => prev.map(m => 
+      m.module_name === moduleName 
+        ? { ...m, features: m.features.map(f => f.id === featureToToggle.id ? { ...f, active: !f.active } : f) }
+        : m
+    ));
+
+    try {
+      await fetch(`/api/modules/${encodeURIComponent(moduleName)}/features/activity`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          feature_file: featureToToggle.feature_file,
+          feature_dir: featureToToggle.feature_dir,
+          active: !featureToToggle.active,
+        }),
+      });
+    } catch (error) {
+      console.error('Error al cambiar la actividad del feature:', error);
+      setModules(originalModules);
     }
   };
 
@@ -804,7 +795,10 @@ const Modules: React.FC<ExecutionOrderProps> = ({
             disabled={active != null && active.data.current?.type !== 'module'}
           >
             {displayedModules.map((module, index) => ( 
-              <SortableModule 
+              <SortableModule
+                ref={(el: HTMLDivElement | null) => {
+                  moduleRefs.current[module.module_name] = el;
+                }}
                 key={module.module_name} 
                 module={module}
                 controls={
@@ -856,6 +850,7 @@ const Modules: React.FC<ExecutionOrderProps> = ({
                           const fullPath = [item.feature_dir, item.feature_file].filter(Boolean).join('/');
                           onFeatureSelect(fullPath);
                         }}
+                        onToggleActivity={() => handleToggleFeatureActivity(module.module_name, feature)}
                         onDelete={() => handleDeleteFeature(module.module_name, feature)}
                         onMoveUp={() => handleMoveFeature(module.module_name, feature, 'up')}
                         onMoveDown={() => handleMoveFeature(module.module_name, feature, 'down')}

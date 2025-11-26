@@ -55,24 +55,30 @@ const DEFAULT_MODULE_COLOR = '#7e57c2';
 interface HookItemProps {
   hook: Module | string;
   onDelete: () => void;
+  onNavigate: (moduleName: string) => void;
 }
 
-const HookItem: React.FC<HookItemProps> = ({ hook, onDelete }) => {
+const HookItem: React.FC<HookItemProps> = ({ hook, onDelete, onNavigate }) => {
     const isObject = typeof hook === 'object' && hook !== null;
     const moduleName = isObject ? (hook as Module).module_name : hook;
     const isActive = isObject ? (hook as Module).active : false;
 
-    const handleHookClick = () => {
-      console.log(`TODO: Go to module: ${moduleName}`);
-    };
-
     return (
-      <Box sx={{ mb: 1, p: 1, pl: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <Box sx={{ 
+        mb: 1, 
+        mr: 1, // Margen derecho para separar los hooks entre sí
+        p: 1,
+        display: 'inline-flex', // Para que el contenedor se ajuste al contenido
+        alignItems: 'center', 
+        backgroundColor: 'action.selected', // Un color de fondo ligeramente más claro
+        borderRadius: 1, // Bordes redondeados
+      }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Typography
             variant="body2"
-            onClick={handleHookClick}
+            onClick={() => onNavigate(moduleName)}
             sx={{
+              mr: 1, // Margen para separar el texto del botón
               color: isActive ? 'primary.main' : 'text.secondary',
               cursor: 'pointer',
               '&:hover': {
@@ -124,7 +130,8 @@ interface ExecutionItemProps {
   onMoveDown?: () => void;
   fontSize: number;
   onDoubleClick: (item: FeatureItem) => void;
-  onDelete: (item: FeatureItem) => void;
+  onToggleActivity: (item: FeatureItem) => void;
+  onDelete: (item: FeatureItem) => void; // Para eliminación real
   onTagClick: (featureId: string, tag: string) => void;
   scenarioStatuses: ScenarioStatusMap;
   isRunning: boolean; 
@@ -138,7 +145,8 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
   onMoveDown,
   fontSize,
   onDoubleClick,
-  onDelete,
+  onToggleActivity,
+  onDelete, // Nueva prop
   onTagClick,
   scenarioStatuses,
   isRunning,
@@ -152,9 +160,10 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
     transform,
     transition,
     isDragging,
-  } = useSortable({ 
+  } = useSortable({
     id: item.id,
-    data: { type: 'feature' } // Identificamos este elemento como una 'feature'
+    data: { type: 'feature' }, // Identificamos este elemento como una 'feature'
+    disabled: !item.active, // Deshabilita el arrastre si el feature está inactivo
   });
 
   const [contextMenu, setContextMenu] = React.useState<{
@@ -163,6 +172,7 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
   } | null>(null);
 
   const handleContextMenu = (event: React.MouseEvent) => {
+    if (!item.active) return; // No mostrar menú contextual si está inactivo
     event.preventDefault();
     setContextMenu(
       contextMenu === null
@@ -183,6 +193,11 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
     handleClose();
   };
 
+  const handleToggle = () => {
+    onToggleActivity(item);
+    handleClose();
+  };
+
   const handleDelete = () => {
     onDelete(item);
     handleClose();
@@ -198,16 +213,16 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
       <Paper
         ref={setNodeRef}
         style={style}
-        elevation={4} // Sombra para destacar que es un elemento individual
-        onDoubleClick={() => onDoubleClick(item)}
+        elevation={isDragging ? 6 : 4} // Sombra para destacar que es un elemento individual
+        onDoubleClick={() => item.active && onDoubleClick(item)}
         onContextMenu={handleContextMenu}
         sx={{
           mb: 1,
           display: 'flex',
           alignItems: 'center',
-          opacity: isDragging ? 0.5 : 1,
-          backgroundColor: 'background.default', // Usar color del tema
-          position: 'relative', // Necesario para posicionar el handle
+          opacity: isDragging ? 0.5 : (item.active ? 1 : 0.6),
+          backgroundColor: item.active ? 'background.default' : 'action.disabledBackground',
+          position: 'relative',
           // Estilo condicional para resaltar el feature en ejecución
           border: isRunning ? '2px solid' : 'none',
           borderColor: isRunning ? 'primary.main' : 'transparent',
@@ -226,7 +241,7 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
             top: 0,
             bottom: 0,
             width: '30px',
-            cursor: 'grab',
+            cursor: item.active ? 'grab' : 'not-allowed',
             backgroundColor: item.color || DEFAULT_FEATURE_COLOR,
             borderTopLeftRadius: (theme) => theme.shape.borderRadius,
             borderBottomLeftRadius: (theme) => theme.shape.borderRadius,
@@ -239,23 +254,23 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
           <DragIndicatorIcon fontSize="small" />
         </Box>
         {/* Contenido del feature */}
-        <Box sx={{ flexGrow: 1, ml: 1, cursor: 'pointer' }}>
+        <Box sx={{ flexGrow: 1, ml: 1, cursor: item.active ? 'pointer' : 'default' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-            <Typography sx={{ fontSize: `${fontSize}px` }}>
+          <Typography sx={{ fontSize: `${fontSize}px`, textDecoration: item.active ? 'none' : 'line-through', color: item.active ? 'text.primary' : 'text.disabled' }}>
               {`${item.order}. ${item.feature_file}`}
             </Typography>
             {/* Mostrar los tags del feature si existen, ahora al lado del nombre */}
             {item.display_tags && item.display_tags.length > 0 && (
               item.display_tags.map((tag) => (
                 <Chip
-                  clickable
+                  clickable={item.active}
                   key={tag}
                   label={tag}
                   icon={<LocalOfferIcon fontSize="small" />}
                   size="small"
                   color={item.tags?.includes(tag) ? 'primary' : 'default'}
-                  variant={item.tags?.includes(tag) ? 'filled' : 'outlined'}
-                  onClick={() => onTagClick(item.id, tag)}
+                  variant={item.tags?.includes(tag) && item.active ? 'filled' : 'outlined'}
+                  onClick={() => item.active && onTagClick(item.id, tag)}
                   sx={{ fontSize: '0.7rem', height: '22px', borderRadius: '4px' }} // Hacemos el chip más rectangular
                 />
               ))
@@ -299,15 +314,17 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
           )}
         </Box>
         {/* Los botones ahora están fuera del handle y sus clics funcionarán. */}
-        <IconButton key={`${item.id}-up`} edge="end" onClick={onMoveUp} size="small" disabled={isFirst}>
+        <IconButton key={`${item.id}-up`} edge="end" onClick={onMoveUp} size="small" disabled={isFirst || !item.active}>
           <ArrowUpwardIcon />
         </IconButton>
-        <IconButton key={`${item.id}-down`} edge="end" onClick={onMoveDown} size="small" disabled={isLast}>
+        <IconButton key={`${item.id}-down`} edge="end" onClick={onMoveDown} size="small" disabled={isLast || !item.active}>
           <ArrowDownwardIcon />
         </IconButton>
-        <IconButton edge="end" onClick={() => onDelete(item)} size="small" sx={{ ml: 1 }}>
-          <DeleteIcon fontSize="small" />
+      <Tooltip title={item.active ? "Desactivar feature" : "Activar feature"}>
+        <IconButton edge="end" onClick={() => onToggleActivity(item)} size="small" sx={{ ml: 1 }}>
+          {item.active ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
         </IconButton>
+      </Tooltip>
       </Paper>
       <Menu
         open={contextMenu !== null}
@@ -320,8 +337,9 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
         }
       >
         <MenuItem onClick={handleOpenInEditor}>Abrir en editor</MenuItem>
+        <MenuItem onClick={handleToggle}>{item.active ? 'Desactivar' : 'Activar'}</MenuItem>
         <MenuItem onClick={handleDelete}>Eliminar</MenuItem>
-      </Menu>
+      </Menu> 
     </>
   );
 };
@@ -434,6 +452,9 @@ interface ExecutionOrderProps {
   runningFeatureId: string | null;
   onRunTests: () => void;
   onSaveModules: (modulesToSave?: Module[]) => void;
+  collapsedSections: Set<string>;
+  onToggleSectionCollapse: (sectionId: string) => void;
+  navigateToModule: (moduleName: string) => void;
   onStopTests: () => void;
 }
 
@@ -448,6 +469,9 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
   runningFeatureId,
   onRunTests,
   onSaveModules,
+  collapsedSections,
+  onToggleSectionCollapse,
+  navigateToModule,
   onStopTests,
 }) => {
   // Necesitamos acceder al elemento activo para deshabilitar el SortableContext si no es un módulo.
@@ -458,73 +482,19 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
     id: 'execution-order-droppable-area',
   });
 
-  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set()); 
-
-  useEffect(() => {
-    const initiallyCollapsed = new Set<string>();
-    modules.forEach(module => {
-        if (module.is_collapsed) {
-          // Si el módulo debe estar colapsado por defecto, colapsamos todas sus secciones
-          initiallyCollapsed.add(`${module.module_name}::setup`);
-          initiallyCollapsed.add(`${module.module_name}::features`);
-          initiallyCollapsed.add(`${module.module_name}::teardown`);
-        }
-    });
-    setCollapsedSections(initiallyCollapsed);
-  }, [modules]);
-
   const displayedModules = (modules || []).filter(m => m.active);
 
   const handleToggleSectionCollapse = async (moduleName: string, section: 'setup' | 'features' | 'teardown') => {
     const sectionId = `${moduleName}::${section}`;
-    const isCurrentlyCollapsed = collapsedSections.has(sectionId);
-    const newCollapsedState = !isCurrentlyCollapsed;
-
-    // Actualización optimista de la UI
-    setCollapsedSections((prev: Set<string>) => {
-      const newSet = new Set(prev);
-      if (newCollapsedState) {
-        newSet.add(sectionId);
-      } else {
-        newSet.delete(sectionId);
-      }
-      return newSet;
-    });
-
-    // Persistir el cambio en el backend
-    try {
-      await fetch('/api/ui-settings/module-collapse', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ module_name: moduleName, is_collapsed: newCollapsedState }),
-      });
-    } catch (error) {
-      console.error('Error al guardar el estado de colapso:', error);
-      // Opcional: revertir el cambio en la UI si la llamada a la API falla.
-    }
+    onToggleSectionCollapse(sectionId);
   };
 
   const handleToggleModuleCollapse = (moduleName: string) => {
-    const isCollapsed = collapsedSections.has(`${moduleName}::features`);
-    const newCollapsedState = !isCollapsed;
-
-    setCollapsedSections(prev => {
-      const newSet = new Set(prev);
-      const sections = ['setup', 'features', 'teardown'];
-      sections.forEach(section => {
-        const sectionId = `${moduleName}::${section}`;
-        if (newCollapsedState) {
-          newSet.add(sectionId);
-        } else {
-          newSet.delete(sectionId);
-        }
-      });
-      return newSet;
+    const sections: ('setup' | 'features' | 'teardown')[] = ['setup', 'features', 'teardown'];
+    sections.forEach(section => {
+      const sectionId = `${moduleName}::${section}`;
+      onToggleSectionCollapse(sectionId);
     });
-
-    // Aquí podrías añadir la llamada a la API si quieres persistir este estado "maestro"
-    // Por ahora, solo controla la UI.
-    // fetch(`/api/ui-settings/module-collapse`, { ... });
   };
 
 
@@ -553,11 +523,22 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
   };
 
   const handleOpenHookDialog = (targetModuleName: string, hookType: 'setup' | 'teardown') => {
-    // Filtra los módulos que no tienen setup/teardown y no son el módulo actual
+    const targetModule = modules.find(m => m.module_name === targetModuleName);
+    if (!targetModule) return;
+
+    // Obtiene los nombres de todos los módulos que ya están siendo usados como hooks (setup o teardown) para este módulo padre.
+    const existingHookNames = new Set([
+      ...(targetModule.setup || []).map(h => typeof h === 'string' ? h : (h as Module).module_name),
+      ...(targetModule.teardown || []).map(h => typeof h === 'string' ? h : (h as Module).module_name)
+    ]);
+
+    // Filtra los módulos que pueden ser añadidos como hooks:
+    // 1. No puede ser el propio módulo padre.
+    // 2. No puede ser un módulo que ya se esté usando como hook (setup o teardown) en este padre.
+    // 3. No puede ser un módulo que ya tenga sus propios hooks (para evitar anidamiento complejo).
     const filteredModules = modules.filter(m => 
       m.module_name !== targetModuleName &&
-      (!m.setup || m.setup.length === 0) &&
-      (!m.teardown || m.teardown.length === 0)
+      !existingHookNames.has(m.module_name)
     );
     setAvailableHookModules(filteredModules);
     setHookDialogData({ targetModuleName, hookType });
@@ -679,29 +660,55 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
     }
   };
 
-  const handleDeleteFeature = async (moduleName: string, feature: FeatureItem) => {
+  const handleDeleteFeature = async (moduleName: string, featureToDelete: FeatureItem) => {
+    // Actualización optimista
+    const originalModules = modules;
+    setModules(prev => prev.map(m => 
+      m.module_name === moduleName 
+        ? { ...m, features: m.features.filter(f => f.id !== featureToDelete.id) }
+        : m
+    ));
+
     try {
-      const response = await fetch(`/api/modules/${encodeURIComponent(moduleName)}/features`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      const response = await fetch(`/api/modules/${encodeURIComponent(moduleName)}/features/delete`, {
+        method: 'POST', // Usamos POST para poder enviar un body
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          feature_file: feature.feature_file,
-          feature_dir: feature.feature_dir,
+          feature_file: featureToDelete.feature_file,
+          feature_dir: featureToDelete.feature_dir,
+        }),
+      });
+      if (!response.ok) setModules(originalModules);
+    } catch (error) {
+      console.error('Error al eliminar el feature:', error);
+      setModules(originalModules);
+    }
+  };
+
+  const handleToggleFeatureActivity = async (moduleName: string, featureToToggle: FeatureItem) => {
+    // Actualización optimista
+    const originalModules = modules;
+    setModules(prev => prev.map(m => 
+      m.module_name === moduleName 
+        ? { ...m, features: m.features.map(f => f.id === featureToToggle.id ? { ...f, active: !f.active } : f) }
+        : m
+    ));
+
+    try {
+      const response = await fetch(`/api/modules/${encodeURIComponent(moduleName)}/features/activity`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          feature_file: featureToToggle.feature_file,
+          feature_dir: featureToToggle.feature_dir,
+          active: !featureToToggle.active,
         }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to delete feature');
-      }
-
-      const updatedModules = await response.json();
-      setModules(updatedModules);
+      if (!response.ok) setModules(originalModules);
     } catch (error) {
-      console.error('Error al eliminar el feature:', error);
-      // Opcional: mostrar un mensaje de error al usuario
+      console.error('Error al cambiar la actividad del feature:', error);
+      setModules(originalModules);
     }
   };
 
@@ -737,14 +744,14 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
     // Llama a la API para persistir el cambio
     try {
       // Prepara los datos para enviar, excluyendo los campos de solo visualización.
-      const featuresToSave = updatedFeaturesWithOrder.map(({ display_tags, scenarios, ...rest }) => rest);
+      const featuresToSave = updatedFeaturesWithOrder.map(({ display_tags, scenarios, color, ...rest }) => rest);
 
       const response = await fetch(`/api/modules/${encodeURIComponent(moduleName)}/features/reorder`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         // Envía la lista sin los campos de visualización. El backend reconstruirá el orden.
         // El backend ya no necesita los 'order' si la lista viene ordenada, pero enviarlos no causa problemas.
-        body: JSON.stringify(featuresToSave),
+        body: JSON.stringify({ features: featuresToSave }),
       });
 
       if (!response.ok) {
@@ -941,7 +948,8 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
                     {(module.setup || []).map((hook, index) => (
                       <HookItem 
                         key={typeof hook === 'string' ? hook : (hook as Module).module_name + index} 
-                        hook={hook} 
+                        hook={hook}
+                        onNavigate={navigateToModule}
                         onDelete={() => handleDeleteHook(module.module_name, 'setup', index)} />
                     ))}
                   </CollapsibleSection>
@@ -962,6 +970,7 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
                           const fullPath = [item.feature_dir, item.feature_file].filter(Boolean).join('/');
                           onFeatureSelect(fullPath);
                         }}
+                        onToggleActivity={() => handleToggleFeatureActivity(module.module_name, feature)}
                         onDelete={() => handleDeleteFeature(module.module_name, feature)}
                         onMoveUp={() => handleMoveFeature(module.module_name, feature, 'up')}
                         onMoveDown={() => handleMoveFeature(module.module_name, feature, 'down')}
@@ -988,7 +997,8 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
                       {(module.teardown || []).map((hook, index) => (
                         <HookItem 
                           key={typeof hook === 'string' ? hook : (hook as Module).module_name + index} 
-                          hook={hook} 
+                          hook={hook}
+                          onNavigate={navigateToModule}
                           onDelete={() => handleDeleteHook(module.module_name, 'teardown', index)} />
                       ))}
                     </CollapsibleSection>

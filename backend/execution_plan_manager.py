@@ -32,8 +32,7 @@ class ExecutionPlanManager:
         except (FileNotFoundError, json.JSONDecodeError):
             # Devuelve una estructura por defecto si el archivo no existe o está corrupto.
             return {
-                "module_colors": {},
-                "collapsed_modules": {}
+                "module_colors": {}
             }
 
     def _save(self):
@@ -46,7 +45,9 @@ class ExecutionPlanManager:
         
         # Prepara los datos para run_list.json (sin campos de UI)
         for module in data_to_save:
-            module.pop('color', None) # Elimina el color antes de guardar en run_list.json
+            module.pop('color', None)
+            module.pop('is_collapsed', None)
+            module.pop('view_states', None)
             for feature in module.get('features', []):
                 feature.pop('display_tags', None)
                 feature.pop('scenarios', None)
@@ -83,8 +84,8 @@ class ExecutionPlanManager:
             # Inyecta el color desde la configuración de UI
             module['color'] = self.ui_settings.get('module_colors', {}).get(module['module_name'])
             # Inyecta el estado de colapso (default: false/expandido)
-            module['is_collapsed'] = self.ui_settings.get('collapsed_modules', {}).get(module['module_name'], False)
-
+            module['view_states'] = self.ui_settings.get('view_states', {})
+            
             if 'features' in module:
                 module['features'].sort(key=lambda f: f.get('order', 0))
                 # Enriquece los datos del feature si se proporciona una función de parsing.
@@ -193,12 +194,15 @@ class ExecutionPlanManager:
         self._save_ui_settings()
         return self.get_sequence()
 
-    def update_module_collapse_state(self, module_name, is_collapsed):
-        """Actualiza el estado de colapso para un módulo específico."""
-        # Asegura que el diccionario exista antes de asignar.
-        self.ui_settings.setdefault('collapsed_modules', {})[module_name] = is_collapsed
+    def update_view_collapse_state(self, view, section_id, is_collapsed):
+        """Actualiza el estado de colapso para una sección específica en una vista específica."""
+        self.ui_settings.setdefault('view_states', {})
+        self.ui_settings['view_states'].setdefault(view, {})
+        
+        self.ui_settings['view_states'][view][section_id] = is_collapsed
+        
         self._save_ui_settings()
-        return {"status": "success", "module": module_name, "is_collapsed": is_collapsed}
+        return {"status": "success", "view": view, "section_id": section_id, "is_collapsed": is_collapsed}
 
     def update_feature_tags(self, module_name, feature_file, feature_dir, tags):
         """Actualiza los tags de ejecución para un feature específico dentro de un módulo."""
@@ -318,6 +322,33 @@ class ExecutionPlanManager:
         if len(target_module['features']) == initial_feature_count:
             raise ValueError(f"El feature '{feature_file}' no fue encontrado en el módulo '{module_name}'.")
 
+        # Re-asigna el orden secuencial a los features restantes.
+        target_module['features'].sort(key=lambda f: f.get('order', 0))
+        for i, feature in enumerate(target_module['features']):
+            feature['order'] = i + 1
+
+        self._save()
+        return self.get_sequence()
+
+    def toggle_feature_activity(self, module_name, feature_file, feature_dir, active):
+        """Activa o desactiva un feature específico dentro de un módulo."""
+        target_module = None
+        for m in self.data['execution_sequence']:
+            if m.get('module_name', '').lower() == module_name.lower():
+                target_module = m
+                break
+        if not target_module:
+            raise ValueError(f"Módulo '{module_name}' no encontrado.")
+
+        target_feature = None
+        for f in target_module.get('features', []):
+            if f['feature_file'] == feature_file and f.get('feature_dir', '') == feature_dir:
+                target_feature = f
+                break
+        if not target_feature:
+            raise ValueError(f"Feature '{os.path.join(feature_dir, feature_file)}' no encontrado en el módulo '{module_name}'.")
+
+        target_feature['active'] = active
         self._save()
         return self.get_sequence()
 
@@ -331,6 +362,12 @@ class ExecutionPlanManager:
 
         if not target_module:
             raise ValueError(f"El módulo '{module_name}' no fue encontrado.")
+
+        # Limpieza: Asegurarse de que los campos de solo UI no se guarden.
+        for feature in reordered_features:
+            feature.pop('display_tags', None)
+            feature.pop('scenarios', None)
+            feature.pop('color', None)
 
         # Re-asigna el orden secuencial a la nueva lista de features.
         for i, feature in enumerate(reordered_features):
