@@ -19,9 +19,9 @@ const ConsoleView: React.FC<ConsoleViewProps> = ({ logs }) => {
         height: '100%',
         p: 2, 
         overflowY: 'auto', 
-        backgroundColor: 'black', 
-        color: 'lightgray', 
-        fontFamily: '"Lucida Console", Consolas, "Courier New", monospace',
+        backgroundColor: (theme) => theme.palette.mode === 'dark' ? 'black' : '#f5f5f5',
+        color: (theme) => theme.palette.text.secondary,
+        fontFamily: 'Consolas, "Courier New", monospace',
         fontSize: '0.3rem'
       }}
     >

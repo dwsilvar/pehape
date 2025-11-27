@@ -195,6 +195,7 @@ const MainLayout: React.FC = () => {
   const runningFeatureIdRef = useRef(runningFeatureId);
 
   const availableThemes = {
+    'vs-light': 'VS Light',
     'monokai': 'Monokai',
     'vs-dark': 'VS Dark',
     'solarized-dark': 'Solarized Dark',

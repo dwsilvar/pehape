@@ -26,6 +26,7 @@ import {
   FormControlLabel,
   Radio,
   Checkbox,
+  ListSubheader,
 } from '@mui/material';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
@@ -52,47 +53,67 @@ const DEFAULT_FEATURE_COLOR = '#4db6ac';
 
 const DEFAULT_MODULE_COLOR = '#7e57c2'; 
 
+interface HookInfo {
+  module_name: string;
+  tags?: string[];
+}
+
 interface HookItemProps {
-  hook: Module | string;
+  hook: Module | string | HookInfo;
   onDelete: () => void;
   onNavigate: (moduleName: string) => void;
 }
 
 const HookItem: React.FC<HookItemProps> = ({ hook, onDelete, onNavigate }) => {
-    const isObject = typeof hook === 'object' && hook !== null;
-    const moduleName = isObject ? (hook as Module).module_name : hook;
-    const isActive = isObject ? (hook as Module).active : false;
+    const isObject = typeof hook === 'object' && hook !== null && 'module_name' in hook;
+    const moduleName = isObject ? hook.module_name : hook as string;
+    const moduleColor = isObject && 'color' in hook ? (hook as Module).color : null;
+    const tags = isObject && 'tags' in hook ? (hook as HookInfo).tags : [];
 
     return (
       <Box sx={{ 
         mb: 1, 
-        mr: 1, // Margen derecho para separar los hooks entre sí
-        p: 1,
-        display: 'inline-flex', // Para que el contenedor se ajuste al contenido
+        mr: 1,
+        display: 'inline-flex',
         alignItems: 'center', 
-        backgroundColor: 'action.selected', // Un color de fondo ligeramente más claro
-        borderRadius: 1, // Bordes redondeados
+        backgroundColor: moduleColor || 'action.selected',
+        borderRadius: '4px',
+        overflow: 'hidden', // Para que el color de fondo no se salga de los bordes redondeados
       }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box 
+          onClick={() => onNavigate(moduleName)}
+          sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 1, 
+            py: 0.5, 
+            px: 1,
+            cursor: 'pointer',
+            '&:hover': {
+              textDecoration: 'underline',
+            },
+          }}>
           <Typography
             variant="body2"
-            onClick={() => onNavigate(moduleName)} // Se asegura que el clic llame a la función de navegación
-            sx={{
-              mr: 1, // Margen para separar el texto del botón
-              color: isActive ? 'primary.main' : 'text.secondary',
-              cursor: 'pointer',
-              '&:hover': {
-                textDecoration: 'underline',
-              },
-            }}
+            sx={{ color: moduleColor ? 'white' : 'text.primary' }}
           >
               {moduleName}
           </Typography>
+          {tags && tags.length > 0 && (
+            <Box sx={{ display: 'flex', gap: 0.5, ml: 1 }}>
+              {tags.map(tag => (
+                <Chip
+                  key={tag} label={tag} size="small"
+                  sx={{ color: 'white', backgroundColor: 'rgba(255,255,255,0.3)' }}
+                />
+              ))}
+            </Box>
+          )}
         </Box>
         <IconButton onClick={onDelete} size="small" edge="end">
             <DeleteIcon fontSize="small" />
         </IconButton>
-    </Box>
+      </Box>
     );
 };
 
@@ -508,6 +529,8 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
   const [hookDialogData, setHookDialogData] = React.useState<{ targetModuleName: string; hookType: 'setup' | 'teardown' } | null>(null);
   const [availableHookModules, setAvailableHookModules] = React.useState<Module[]>([]);
   const [selectedHookModule, setSelectedHookModule] = React.useState<string>('');
+  const [expandedHookModule, setExpandedHookModule] = React.useState<string | null>(null);
+  const [selectedTags, setSelectedTags] = React.useState<Set<string>>(new Set());
 
 
   const handleOpenDialog = () => { 
@@ -532,15 +555,22 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
       ...(targetModule.teardown || []).map(h => typeof h === 'string' ? h : (h as Module).module_name)
     ]);
 
-    // Filtra los módulos que pueden ser añadidos como hooks:
-    // 1. No puede ser el propio módulo padre.
-    // 2. No puede ser un módulo que ya se esté usando como hook (setup o teardown) en este padre.
-    // 3. No puede ser un módulo que ya tenga sus propios hooks (para evitar anidamiento complejo).
-    const filteredModules = modules.filter(m => 
-      m.module_name !== targetModuleName &&
-      !existingHookNames.has(m.module_name)
+    // Obtiene los módulos completos que pueden ser añadidos como hooks.
+    // 1. Filtra los módulos que no son el propio módulo padre y que no están ya en uso como hooks.
+    const availableModuleNames = modules
+      .map(m => m.module_name)
+      .filter(name => 
+        name !== targetModuleName &&
+        !existingHookNames.has(name)
+      );
+
+    // 2. Obtiene los objetos Module completos para los nombres filtrados,
+    //    asegurando que tenemos toda la información (incluyendo features y tags).
+    const availableFullModules = modules.filter(m => 
+      availableModuleNames.includes(m.module_name)
     );
-    setAvailableHookModules(filteredModules);
+
+    setAvailableHookModules(availableFullModules);
     setHookDialogData({ targetModuleName, hookType });
     setSelectedHookModule(''); // Limpia selección anterior
     setHookDialogOpen(true);
@@ -550,6 +580,8 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
     setHookDialogOpen(false);
     setHookDialogData(null);
     setSelectedHookModule('');
+    setSelectedTags(new Set()); // Limpia los tags seleccionados
+    setExpandedHookModule(null); // Limpia el módulo expandido
   };
 
   const handleConfirmAddModule = async () => {
@@ -592,7 +624,11 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
     // Actualiza el estado localmente
     const updatedModules = modules.map(m => {
       if (m.module_name === targetModuleName) {
-        const newHooks = [...(m[hookType] || []), selectedHookModule];
+        const hookToAdd: HookInfo | string = selectedTags.size > 0
+          ? { module_name: selectedHookModule, tags: Array.from(selectedTags) }
+          : selectedHookModule;
+
+        const newHooks = [...(m[hookType] || []), hookToAdd];
         return { ...m, [hookType]: newHooks };
       }
       return m;
@@ -609,7 +645,7 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
     const updatedModules = modules.map(m => {
       if (m.module_name === targetModuleName) {
         const currentHooks = m[hookType] || [];
-        // Filtra el hook por su índice
+        // Filtra el hook por su índice para eliminarlo
         const newHooks = currentHooks.filter((_, index) => index !== hookIndex);
         return { ...m, [hookType]: newHooks };
       }
@@ -618,6 +654,18 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
 
     setModules(updatedModules);
     onSaveModules(updatedModules);
+  };
+
+  const handleTagFilterToggle = (tagToToggle: string) => {
+    setSelectedTags(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(tagToToggle)) {
+        newSet.delete(tagToToggle);
+      } else {
+        newSet.add(tagToToggle);
+      }
+      return newSet;
+    });
   };
 
   // -------------------------------------------------------------
@@ -947,7 +995,9 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
                   >
                     {(module.setup || []).map((hook, index) => (
                       <HookItem 
-                        key={typeof hook === 'string' ? hook : (hook as Module).module_name + index} 
+                        key={
+                          (typeof hook === 'object' && hook !== null && 'module_name' in hook ? hook.module_name : hook as string) + index
+                        }
                         hook={hook}
                         onNavigate={navigateToModule}
                         onDelete={() => handleDeleteHook(module.module_name, 'setup', index)} />
@@ -996,7 +1046,9 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
                     >
                       {(module.teardown || []).map((hook, index) => (
                         <HookItem 
-                          key={typeof hook === 'string' ? hook : (hook as Module).module_name + index} 
+                          key={
+                            (typeof hook === 'object' && hook !== null && 'module_name' in hook ? hook.module_name : hook as string) + index
+                          }
                           hook={hook}
                           onNavigate={navigateToModule}
                           onDelete={() => handleDeleteHook(module.module_name, 'teardown', index)} />
@@ -1053,22 +1105,70 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
             Solo se pueden agregar módulos que no tengan sus propios hooks de setup y teardown.
           </DialogContentText>
         </DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ height: '400px' }}>
           {availableHookModules.length > 0 ? (
             <List>
               <RadioGroup
                 value={selectedHookModule}
-                onChange={(e) => setSelectedHookModule(e.target.value)}
+                onChange={(e) => { // Este onChange solo se activará por el click en el ListItemButton
+                  setSelectedHookModule(e.target.value);
+                  setSelectedTags(new Set()); // Limpia los tags al seleccionar un nuevo módulo
+                }}
               >
-                {availableHookModules.map(module => (
-                  <ListItemButton key={module.module_name} dense onClick={() => setSelectedHookModule(module.module_name)}>
-                    <FormControlLabel 
-                      value={module.module_name} 
-                      control={<Radio />} 
-                      label={module.module_name}
-                    />
-                  </ListItemButton>
-                ))}
+                {availableHookModules.map(module => {
+                  const allTags = Array.from(new Set(module.features.flatMap(f => f.display_tags || [])));
+                  const isExpanded = expandedHookModule === module.module_name;
+                  
+                  const moduleTagsSet = new Set(allTags);
+                  const matchesFilter = selectedTags.size === 0 || Array.from(selectedTags).every(tag => moduleTagsSet.has(tag));
+
+                  return (
+                    <React.Fragment key={module.module_name}>
+                      <ListItem 
+                        disablePadding
+                        sx={{ 
+                          opacity: matchesFilter ? 1 : 0.5,
+                          transition: 'opacity 0.2s ease-in-out',
+                        }}
+                        disabled={!matchesFilter}
+                      >
+                        <ListItemButton
+                          dense
+                          onClick={() => {
+                            setSelectedHookModule(module.module_name);
+                            setSelectedTags(new Set());
+                            setExpandedHookModule(isExpanded ? null : module.module_name);
+                          }}
+                        >
+                          <Radio value={module.module_name} />
+                          <ListItemText primary={module.module_name} />
+                        </ListItemButton>
+                      </ListItem>
+                      <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                        <List component="div" disablePadding dense>
+                          <ListItem sx={{ pl: 4 }}>
+                            {allTags.length > 0 ? (
+                              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                {allTags.map(tag => (
+                                  <Chip 
+                                    key={tag} 
+                                    label={tag} 
+                                    size="small" 
+                                    clickable 
+                                    onClick={() => handleTagFilterToggle(tag)}
+                                    color={selectedTags.has(tag) ? 'primary' : 'default'}
+                                  />
+                                ))}
+                              </Box>
+                            ) : (
+                              <Typography variant="caption" color="text.secondary">Este módulo no tiene tags.</Typography>
+                            )}
+                          </ListItem>
+                        </List>
+                      </Collapse>
+                    </React.Fragment>
+                  );
+                })}
               </RadioGroup>
             </List>
           ) : (
