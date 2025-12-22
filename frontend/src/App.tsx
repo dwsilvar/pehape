@@ -1,5 +1,7 @@
 import React, { useState, useCallback } from 'react';
-import { AppBar, Toolbar, Typography, Slider, Box, Grid, Button, Menu, MenuItem, Dialog, DialogTitle, DialogContent, DialogActions, Tabs, Tab } from '@mui/material';
+import { AppBar, Toolbar, Typography, Slider, Box, Button, Menu, MenuItem, Dialog, DialogTitle, DialogContent, DialogActions, Tabs, Tab } from '@mui/material';
+import Grid from '@mui/material/Unstable_Grid2';
+import { DraggableTreeItemPreview } from './components/FileExplorer';
 import { styled } from '@mui/material/styles';
 import { DndContext, DragEndEvent, DragStartEvent, DragOverEvent, useSensor, useSensors, PointerSensor, TouchSensor, DragOverlay } from '@dnd-kit/core';
 import FileExplorer from './components/FileExplorer';
@@ -21,6 +23,7 @@ const App: React.FC = () => {
   const [isDirty, setIsDirty] = useState(false); // Para rastrear cambios sin guardar
   const [activeTab, setActiveTab] = useState(0);
   const { modules, setModules, isLoading } = useExecutionOrder();
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
 
   // Estados levantados desde ExecutionOrder para persistencia
   const [scenarioStatuses, setScenarioStatuses] = useState<ScenarioStatusMap>({});
@@ -174,6 +177,35 @@ const App: React.FC = () => {
     setActiveTab(newValue);
   };
 
+  const onToggleSectionCollapse = (sectionId: string) => {
+    setCollapsedSections(prev => {
+      const next = new Set(prev);
+      if (next.has(sectionId)) next.delete(sectionId);
+      else next.add(sectionId);
+      return next;
+    });
+  };
+
+  const onSaveModules = async (modulesToSave?: typeof modules) => {
+    if (modulesToSave) setModules(modulesToSave);
+    try {
+      await fetch('/api/modules', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(modulesToSave || modules) });
+    } catch (e) {
+      console.error('Failed to save modules', e);
+    }
+  };
+
+  const navigateToModule = (moduleName: string) => {
+    setActiveTab(1);
+    // expand features for the module
+    const baseId = `${moduleName}::features`;
+    setCollapsedSections(prev => {
+      const next = new Set(prev);
+      next.delete(baseId);
+      return next;
+    });
+  };
+
   return (
     <AppContainer>
       <AppBar position="static" elevation={0} sx={{ borderBottom: '1px solid #ddd' }}>
@@ -243,6 +275,7 @@ const App: React.FC = () => {
                     onSave={handleSave}
                     fontSize={editorFontSize}
                     filename={selectedFile || undefined}
+                    theme="vs-dark"
                   />
                 </Box>
               </Box>
@@ -260,13 +293,17 @@ const App: React.FC = () => {
                   runningFeatureId={runningFeatureId}
                   onRunTests={handleRunTests}
                   onStopTests={handleStopTests}
+                  onSaveModules={onSaveModules}
+                  collapsedSections={collapsedSections}
+                  onToggleSectionCollapse={onToggleSectionCollapse}
+                  navigateToModule={navigateToModule}
                 />
               </Box>
             )}
           </Grid>
         </Grid>
         <DragOverlay>
-          {activeDragId && draggedItemPath ? <FileExplorer.DraggableTreeItemPreview path={draggedItemPath} /> : null}
+          {activeDragId && draggedItemPath ? <DraggableTreeItemPreview path={draggedItemPath} /> : null}
         </DragOverlay>
       </DndContext>
     </AppContainer>
