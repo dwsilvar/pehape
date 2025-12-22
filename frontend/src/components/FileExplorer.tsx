@@ -223,7 +223,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, fontSize }) =
     }
   };
 
-  const handleExpandedChange = (event: React.SyntheticEvent, ids: string[]) => {
+  const handleExpandedChange = (event: React.SyntheticEvent | null, ids: string[]) => {
     setExpanded(ids);
   };
 

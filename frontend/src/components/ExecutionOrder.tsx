@@ -1130,10 +1130,10 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
                           opacity: matchesFilter ? 1 : 0.5,
                           transition: 'opacity 0.2s ease-in-out',
                         }}
-                        disabled={!matchesFilter}
                       >
                         <ListItemButton
                           dense
+                          disabled={!matchesFilter}
                           onClick={() => {
                             setSelectedHookModule(module.module_name);
                             setSelectedTags(new Set());
