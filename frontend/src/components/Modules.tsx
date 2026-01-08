@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { 
+import {
   Box,
   CircularProgress,
   Typography,
@@ -18,7 +18,7 @@ import {
   Tooltip,
   Chip,
   ToggleButton,
-  Collapse, 
+  Collapse,
 } from '@mui/material';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
@@ -29,54 +29,54 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow'; 
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SyncIcon from '@mui/icons-material/Sync';
-import StopIcon from '@mui/icons-material/Stop'; 
-import LocalOfferIcon from '@mui/icons-material/LocalOffer'; 
+import StopIcon from '@mui/icons-material/Stop';
+import LocalOfferIcon from '@mui/icons-material/LocalOffer';
 import { useSortable, SortableContext, verticalListSortingStrategy, } from '@dnd-kit/sortable';
 import { arrayMove } from '@dnd-kit/sortable';
 import { useDroppable, useDndContext, Active } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { Module, FeatureItem, ScenarioStatusMap } from '../types'; 
+import { Module, FeatureItem, ScenarioStatusMap } from '../types';
 
-const DEFAULT_FEATURE_COLOR = '#4db6ac'; 
+const DEFAULT_FEATURE_COLOR = '#4db6ac';
 
-const DEFAULT_MODULE_COLOR = '#7e57c2'; 
+const DEFAULT_MODULE_COLOR = '#7e57c2';
 
 const HookItem: React.FC<{ hook: Module | string, onNavigate: (moduleName: string) => void }> = ({ hook, onNavigate }) => {
-    const isObject = typeof hook === 'object' && hook !== null;
-    const moduleName = isObject ? (hook as Module).module_name : hook;
-    const isActive = isObject ? (hook as Module).active : false;
+  const isObject = typeof hook === 'object' && hook !== null;
+  const moduleName = isObject ? (hook as Module).module_name : hook;
+  const isActive = isObject ? (hook as Module).active : false;
 
-    return (
-        <Box sx={{ mb: 1, p: 1, pl: 2, display: 'flex', alignItems: 'center' }}>
-        <Typography
-          variant="body2"
-          onClick={() => onNavigate(moduleName)}
-          sx={{
-            flexGrow: 1,
-            color: isActive ? 'primary.main' : 'text.secondary',
-            cursor: 'pointer',
-            '&:hover': {
-              textDecoration: 'underline',
-            },
-          }}
-        >
-            {moduleName}
-        </Typography>
+  return (
+    <Box sx={{ mb: 1, p: 1, pl: 2, display: 'flex', alignItems: 'center' }}>
+      <Typography
+        variant="body2"
+        onClick={() => onNavigate(moduleName)}
+        sx={{
+          flexGrow: 1,
+          color: isActive ? 'primary.main' : 'text.secondary',
+          cursor: 'pointer',
+          '&:hover': {
+            textDecoration: 'underline',
+          },
+        }}
+      >
+        {moduleName}
+      </Typography>
     </Box>
-    );
+  );
 };
 
 const CollapsibleSection: React.FC<{ title: string, count: number, children: React.ReactNode, onAddModule?: () => void, isOpen: boolean, onToggle: () => void }> = ({ title, count, children, onAddModule, isOpen, onToggle }) => {
   return (
     <Box sx={{ mb: 1 }}>
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
-        <Button 
-          onClick={onToggle} 
-          startIcon={isOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />} 
+        <Button
+          onClick={onToggle}
+          startIcon={isOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
           sx={{ textTransform: 'none', color: 'text.primary' }}
         >
           {title} ({count})
@@ -100,25 +100,25 @@ const CollapsibleSection: React.FC<{ title: string, count: number, children: Rea
 
 interface ExecutionItemProps {
   item: FeatureItem;
-  onMoveUp?: () => void;
-  onMoveDown?: () => void;
+  moduleName: string;
+  onMoveFeature: (moduleName: string, item: FeatureItem, direction: 'up' | 'down') => void;
   fontSize: number;
-  onDoubleClick: (item: FeatureItem) => void;
-  onToggleActivity: (item: FeatureItem) => void;
-  onDelete: (item: FeatureItem) => void; // Para eliminación real
-  onTagClick: (featureId: string, tag: string) => void;
+  onFeatureSelect: (path: string) => void;
+  onToggleActivity: (moduleName: string, item: FeatureItem) => void;
+  onDelete: (moduleName: string, item: FeatureItem) => void;
+  onTagClick: (moduleName: string, featureId: string, tag: string) => void;
   scenarioStatuses: ScenarioStatusMap;
-  isRunning: boolean; 
-  isFirst: boolean; 
-  isLast: boolean; 
+  isRunning: boolean;
+  isFirst: boolean;
+  isLast: boolean;
 }
 
 const ExecutionItem: React.FC<ExecutionItemProps> = ({
   item,
-  onMoveUp,
-  onMoveDown,
+  moduleName,
+  onMoveFeature,
   fontSize,
-  onDoubleClick,
+  onFeatureSelect,
   onToggleActivity,
   onDelete,
   onTagClick,
@@ -134,7 +134,7 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
     transform,
     transition,
     isDragging,
-  } = useSortable({ 
+  } = useSortable({
     id: item.id,
     data: { type: 'feature' } // Identificamos este elemento como una 'feature'
   });
@@ -149,9 +149,9 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
     setContextMenu(
       contextMenu === null
         ? {
-            mouseX: event.clientX + 2,
-            mouseY: event.clientY - 6,
-          }
+          mouseX: event.clientX + 2,
+          mouseY: event.clientY - 6,
+        }
         : null,
     );
   };
@@ -161,17 +161,18 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
   };
 
   const handleOpenInEditor = () => {
-    onDoubleClick(item); // Reutiliza la lógica existente para abrir el editor
+    const fullPath = [item.feature_dir, item.feature_file].filter(Boolean).join('/');
+    onFeatureSelect(fullPath);
     handleClose();
   };
 
   const handleToggle = () => {
-    onToggleActivity(item);
+    onToggleActivity(moduleName, item);
     handleClose();
   };
 
   const handleDelete = () => {
-    onDelete(item);
+    onDelete(moduleName, item);
     handleClose();
   };
   const style = {
@@ -186,7 +187,7 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
         ref={setNodeRef}
         style={style}
         elevation={4} // Sombra para destacar que es un elemento individual
-        onDoubleClick={() => onDoubleClick(item)}
+        onDoubleClick={handleOpenInEditor}
         onContextMenu={handleContextMenu}
         sx={{
           mb: 1,
@@ -271,14 +272,14 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
           )}
         </Box>
         {/* Los botones ahora están fuera del handle y sus clics funcionarán. */}
-        <IconButton key={`${item.id}-up`} edge="end" onClick={onMoveUp} size="small" disabled={isFirst}>
+        <IconButton key={`${item.id}-up`} edge="end" onClick={() => onMoveFeature(moduleName, item, 'up')} size="small" disabled={isFirst}>
           <ArrowUpwardIcon />
         </IconButton>
-        <IconButton key={`${item.id}-down`} edge="end" onClick={onMoveDown} size="small" disabled={isLast}>
+        <IconButton key={`${item.id}-down`} edge="end" onClick={() => onMoveFeature(moduleName, item, 'down')} size="small" disabled={isLast}>
           <ArrowDownwardIcon />
         </IconButton>
         <Tooltip title="Eliminar feature">
-          <IconButton edge="end" onClick={() => onDelete(item)} size="small" sx={{ ml: 1 }}>
+          <IconButton edge="end" onClick={handleDelete} size="small" sx={{ ml: 1 }}>
             <DeleteIcon fontSize="small" />
           </IconButton>
         </Tooltip>
@@ -298,15 +299,20 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
         <MenuItem onClick={handleDelete}>Eliminar</MenuItem>
       </Menu>
     </>
+    // ... (rest of render logic for ExecutionItem)
   );
 };
+const MemoizedExecutionItem = React.memo(ExecutionItem);
 
 const SortableModule = React.forwardRef<HTMLDivElement, {
   module: Module;
-  controls: React.ReactNode;
+  isCollapsed: boolean;
+  onToggleCollapse: (moduleName: string) => void;
+  onColorChange: (moduleName: string, color: string) => void;
+  onDeleteModule: (moduleName: string) => void;
   children: React.ReactNode;
 }>((props, ref) => {
-  const { module, controls, children } = props;
+  const { module, isCollapsed, onToggleCollapse, onColorChange, onDeleteModule, children } = props;
   const {
     attributes,
     listeners,
@@ -315,8 +321,8 @@ const SortableModule = React.forwardRef<HTMLDivElement, {
     transition,
     isDragging,
   } = useSortable({
-    id: module.module_name, 
-    data: { type: 'module' } 
+    id: module.module_name,
+    data: { type: 'module' }
   });
 
   const style = {
@@ -328,7 +334,7 @@ const SortableModule = React.forwardRef<HTMLDivElement, {
   };
 
   const droppableId = `module-drop-area-${module.module_name}`;
-  
+
   const { setNodeRef: setDroppableNodeRef, isOver } = useDroppable({
     id: droppableId,
     data: {
@@ -336,15 +342,33 @@ const SortableModule = React.forwardRef<HTMLDivElement, {
     },
   });
 
-  // Combina las refs de dnd-kit con la ref que pasamos desde fuera (forwardRef)
-  const combinedRef = (node: HTMLDivElement | null) => {
-    setNodeRef(node); // Para useSortable
-    setDroppableNodeRef(node); // Para useDroppable
-    if (typeof ref === 'function') ref(node); // Para el resaltado
+  const { active, over: globalOver } = useDndContext();
+
+  // Highlighting logic:
+  // Highlight if:
+  // 1. We are dragging a file (file-explorer-feature) AND
+  // 2. The pointer is over this module's drop zone (isOver) OR
+  // 3. The pointer is over any Sortable item belonging to this module (containerId match)
+  const isDraggingFile = active?.data.current?.type === 'file-explorer-feature';
+  const isOverChild = globalOver?.data?.current?.sortable?.containerId === module.module_name;
+  const showHighlight = isDraggingFile && (isOver || isOverChild);
+
+  // External ref handling (for highlighting)
+  React.useImperativeHandle(ref, () => {
+    // Return a dummy object or specific logic if needed,
+    // but simpler to just attach ref to the Paper if that's what we want to scroll to/highlight
+    return null as any;
+  });
+  // NOTE: For simplicity in this fix, we are decoupling the refs. 
+  // The outer Box is the Sortable item (draggable handles work here).
+  // The inner Paper is the Drop Zone.
+
+  const handleColorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    onColorChange(module.module_name, e.target.value);
   };
 
   return (
-    <Box ref={combinedRef} style={style} sx={{ position: 'relative' }}> {/* La ref combinada se aplica aquí */}
+    <Box ref={setNodeRef} style={style} sx={{ position: 'relative' }}>
       <Box
         {...attributes}
         {...listeners}
@@ -353,12 +377,12 @@ const SortableModule = React.forwardRef<HTMLDivElement, {
           left: 0,
           top: 0,
           bottom: 0,
-          width: '30px', 
+          width: '30px',
           cursor: 'grab',
           borderTopLeftRadius: (theme) => theme.shape.borderRadius,
           borderBottomLeftRadius: (theme) => theme.shape.borderRadius,
           backgroundColor: module.color || DEFAULT_MODULE_COLOR,
-          zIndex: 1, 
+          zIndex: 1,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -368,14 +392,19 @@ const SortableModule = React.forwardRef<HTMLDivElement, {
         <DragIndicatorIcon fontSize="small" />
       </Box>
       <Paper
+        ref={(node) => {
+          setDroppableNodeRef(node);
+          if (typeof ref === 'function') ref(node); // Attach external ref to Paper for scrolling/highlight
+          else if (ref) (ref as React.MutableRefObject<HTMLDivElement | null>).current = node;
+        }}
         elevation={2}
         sx={{
           mb: 2,
           p: 2,
           pl: 4,
-          backgroundColor: module.color ? `${module.color}20` : 'background.paper', 
-          outline: isOver ? '2px dashed' : 'none',
-          outlineColor: isOver ? 'primary.main' : 'transparent',
+          backgroundColor: module.color ? `${module.color}20` : 'background.paper',
+          outline: showHighlight ? '2px dashed' : 'none',
+          outlineColor: showHighlight ? 'primary.main' : 'transparent',
           transition: 'outline-color 0.2s ease-in-out, background-color 0.2s ease-in-out',
         }}
       >
@@ -393,13 +422,45 @@ const SortableModule = React.forwardRef<HTMLDivElement, {
                 : module.module_name}
             </Typography>
           </Box>
-          {controls}
+          <Box display="flex" alignItems="center">
+            <Tooltip title={isCollapsed ? "Mostrar contenido" : "Ocultar contenido"}>
+              <IconButton onClick={() => onToggleCollapse(module.module_name)} size="small">
+                {isCollapsed ? <ExpandMoreIcon /> : <ExpandLessIcon />}
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Cambiar color del módulo">
+              <IconButton size="small" component="label" sx={{ mr: 1 }}>
+                <Box
+                  sx={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: '50%',
+                    backgroundColor: module.color || DEFAULT_MODULE_COLOR,
+                    border: '1px solid',
+                    borderColor: 'divider',
+                  }}
+                />
+                <input
+                  type="color"
+                  hidden
+                  value={module.color || DEFAULT_MODULE_COLOR}
+                  onChange={handleColorChange}
+                />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Eliminar módulo">
+              <IconButton onClick={() => onDeleteModule(module.module_name)} size="small">
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Box>
         </Box>
         {children}
       </Paper>
     </Box>
   );
 });
+const MemoizedSortableModule = React.memo(SortableModule);
 
 interface ExecutionOrderProps {
   fontSize: number;
@@ -420,10 +481,10 @@ interface ExecutionOrderProps {
   onFocusConsumed: () => void; // Nueva prop para notificar que el foco ha sido consumido.
 }
 
-const Modules: React.FC<ExecutionOrderProps> = ({ 
-  fontSize, 
-  onFeatureSelect, 
-  modules, 
+const Modules: React.FC<ExecutionOrderProps> = ({
+  fontSize,
+  onFeatureSelect,
+  modules,
   setModules,
   scenarioStatuses,
   setScenarioStatuses,
@@ -441,6 +502,7 @@ const Modules: React.FC<ExecutionOrderProps> = ({
   // Necesitamos acceder al elemento activo para deshabilitar el SortableContext si no es un módulo.
   // Esto es un patrón avanzado para permitir que droppables externos funcionen dentro de un SortableContext.
   const { active } = useDndContext();
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const { setNodeRef: setGlobalDroppableRef } = useDroppable({
     id: 'execution-order-droppable-area',
@@ -479,7 +541,7 @@ const Modules: React.FC<ExecutionOrderProps> = ({
         }
       }, 100); // 100ms de retardo
     }
-  // La dependencia de focusedModule es la clave. Las demás son funciones estables.
+    // La dependencia de focusedModule es la clave. Las demás son funciones estables.
   }, [focusedModule, onToggleSectionCollapse, onFocusConsumed]);
 
   const displayedModules = modules || [];
@@ -499,7 +561,7 @@ const Modules: React.FC<ExecutionOrderProps> = ({
   const [newModuleName, setNewModuleName] = React.useState('');
   const [newModuleOrder, setNewModuleOrder] = React.useState('');
 
-  const handleOpenDialog = () => { 
+  const handleOpenDialog = () => {
     setDialogOpen(true);
   };
 
@@ -587,8 +649,8 @@ const Modules: React.FC<ExecutionOrderProps> = ({
   const handleToggleFeatureActivity = async (moduleName: string, featureToToggle: FeatureItem) => {
     // Actualización optimista
     const originalModules = modules;
-    setModules(prev => prev.map(m => 
-      m.module_name === moduleName 
+    setModules(prev => prev.map(m =>
+      m.module_name === moduleName
         ? { ...m, features: m.features.map(f => f.id === featureToToggle.id ? { ...f, active: !f.active } : f) }
         : m
     ));
@@ -713,11 +775,11 @@ const Modules: React.FC<ExecutionOrderProps> = ({
       prev.map(m =>
         m.module_name === moduleName
           ? {
-              ...m,
-              features: m.features.map(f =>
-                f.id === featureId ? { ...f, tags: newTags } : f
-              ),
-            }
+            ...m,
+            features: m.features.map(f =>
+              f.id === featureId ? { ...f, tags: newTags } : f
+            ),
+          }
           : m
       )
     );
@@ -727,10 +789,10 @@ const Modules: React.FC<ExecutionOrderProps> = ({
       const response = await fetch(`/api/modules/${encodeURIComponent(moduleName)}/features/tags`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           feature_file: feature.feature_file,
           feature_dir: feature.feature_dir,
-          tags: newTags 
+          tags: newTags
         }),
       });
 
@@ -769,6 +831,7 @@ const Modules: React.FC<ExecutionOrderProps> = ({
   };
 
   const handleRefreshFeatures = async () => {
+    setIsRefreshing(true);
     try {
       const response = await fetch('/api/execution-order/refresh', {
         method: 'POST',
@@ -785,6 +848,8 @@ const Modules: React.FC<ExecutionOrderProps> = ({
     } catch (error) {
       console.error('Error al refrescar los features:', error);
       // Opcional: mostrar una notificación de error
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -805,91 +870,73 @@ const Modules: React.FC<ExecutionOrderProps> = ({
         </Tooltip>
       </Box>
       <Box sx={{ flex: 1, overflow: 'auto', px: 2 }}>
-          {Array.isArray(displayedModules) && displayedModules.length > 0 ? (
-          <SortableContext 
-            items={displayedModules.map(m => m.module_name)}
-            strategy={verticalListSortingStrategy}
-            disabled={active != null && active.data.current?.type !== 'module'}
-          >
-            {displayedModules.map((module, index) => ( 
-              <SortableModule
-                ref={(el: HTMLDivElement | null) => {
-                  moduleRefs.current[module.module_name] = el;
-                }}
-                key={module.module_name} 
-                module={module}
-                controls={
-                  <>
-                    <Tooltip title={collapsedSections.has(`${module.module_name}::features`) ? "Mostrar contenido" : "Ocultar contenido"}>
-                      <IconButton onClick={() => handleToggleModuleCollapse(module.module_name)} size="small">
-                        {collapsedSections.has(`${module.module_name}::features`) ? <ExpandMoreIcon /> : <ExpandLessIcon />}
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Cambiar color del módulo">
-                      <IconButton size="small" component="label" sx={{ mr: 1 }}>
-                        <Box
-                          sx={{
-                            width: 20,
-                            height: 20,
-                            borderRadius: '50%',
-                            backgroundColor: module.color || DEFAULT_MODULE_COLOR,
-                            border: '1px solid',
-                            borderColor: 'divider',
-                          }}
-                        />
-                        <input
-                          type="color"
-                          hidden
-                          value={module.color || DEFAULT_MODULE_COLOR}
-                          onChange={(e) => handleModuleColorChange(module.module_name, e.target.value)}
-                        />
-                      </IconButton>
-                    </Tooltip>
-                    <IconButton onClick={() => handleDeleteModule(module.module_name)} size="small">
-                      <DeleteIcon />
-                    </IconButton>
-                  </>
-                }
-              >
-                <CollapsibleSection title="Features" count={module.features.length} isOpen={!collapsedSections.has(`${module.module_name}::features`)} onToggle={() => handleToggleSectionCollapse(module.module_name, 'features')}>
-                  {!collapsedSections.has(`${module.module_name}::features`) && (
-                  <SortableContext
-                    id={module.module_name}
-                    items={module.features.map((f: FeatureItem) => f.id)}
-                    strategy={verticalListSortingStrategy}
-                  >
-                    {[...(module.features || [])]
-                      .sort((a, b) => a.order - b.order)
-                      .map((feature: FeatureItem, index: number) => (
-                      <ExecutionItem
-                        key={feature.id} item={feature} fontSize={fontSize}
-                        onDoubleClick={(item) => {
-                          const fullPath = [item.feature_dir, item.feature_file].filter(Boolean).join('/');
-                          onFeatureSelect(fullPath);
-                        }}
-                        onToggleActivity={() => handleToggleFeatureActivity(module.module_name, feature)}
-                        onDelete={() => handleDeleteFeature(module.module_name, feature)}
-                        onMoveUp={() => handleMoveFeature(module.module_name, feature, 'up')}
-                        onMoveDown={() => handleMoveFeature(module.module_name, feature, 'down')}
-                        onTagClick={(featureId, tag) => handleTagToggle(module.module_name, featureId, tag)}
-                        scenarioStatuses={scenarioStatuses}
-                        isRunning={feature.id === runningFeatureId}
-                        isFirst={index === 0}
-                        isLast={index === module.features.length - 1}
-                      />
-                    ))}
-                  </SortableContext>
-                  )}
-                </CollapsibleSection>
-              </SortableModule>
-            ))}
-          </SortableContext>
+        {isRefreshing ? (
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 2 }}>
+            <CircularProgress size={40} thickness={4} />
+            <Typography variant="caption" color="text.secondary">Refreshing modules...</Typography>
+          </Box>
+        ) : (
+          Array.isArray(displayedModules) && displayedModules.length > 0 ? (
+            <SortableContext
+              items={displayedModules.map(m => m.module_name)}
+              strategy={verticalListSortingStrategy}
+              disabled={active != null && active.data.current?.type !== 'module'}
+            >
+              {displayedModules.map((module, index) => (
+                <MemoizedSortableModule
+                  ref={(el: HTMLDivElement | null) => {
+                    moduleRefs.current[module.module_name] = el;
+                  }}
+                  key={module.module_name}
+                  module={module}
+                  isCollapsed={collapsedSections.has(`${module.module_name}::features`)}
+                  onToggleCollapse={handleToggleModuleCollapse}
+                  onColorChange={handleModuleColorChange}
+                  onDeleteModule={handleDeleteModule}
+                >
+                  <CollapsibleSection title="Features" count={module.features.length} isOpen={!collapsedSections.has(`${module.module_name}::features`)} onToggle={() => handleToggleSectionCollapse(module.module_name, 'features')}>
+                    {!collapsedSections.has(`${module.module_name}::features`) && (
+                      <SortableContext
+                        id={module.module_name}
+                        items={module.features.map((f: FeatureItem) => f.id)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        {[...(module.features || [])]
+                          .sort((a, b) => a.order - b.order)
+                          .map((feature: FeatureItem, index: number) => (
+                            <MemoizedExecutionItem
+                              key={feature.id}
+                              item={feature}
+                              moduleName={module.module_name}
+                              fontSize={fontSize}
+                              onFeatureSelect={onFeatureSelect}
+                              onToggleActivity={handleToggleFeatureActivity}
+                              onDelete={handleDeleteFeature}
+                              onMoveFeature={handleMoveFeature}
+                              onTagClick={handleTagToggle}
+                              scenarioStatuses={scenarioStatuses}
+                              isRunning={feature.id === runningFeatureId}
+                              isFirst={index === 0}
+                              isLast={index === module.features.length - 1}
+                            />
+                          ))}
+                      </SortableContext>
+                    )}
+                  </CollapsibleSection>
+                </MemoizedSortableModule>
+              ))}
+            </SortableContext>
           ) : (
-            <Typography sx={{ textAlign: 'center', mt: 4, color: 'text.secondary' }}>
-              No hay módulos en el plan de ejecución. Comience agregando un módulo o arrastrando un feature a esta área.
-            </Typography>
+            <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" height="100%" sx={{ opacity: 0.6 }}>
+              <Typography variant="h6" color="textSecondary" gutterBottom>
+                No hay módulos definidos
+              </Typography>
+              <Typography variant="body2" color="textSecondary">
+                Crea un módulo nuevo o sincroniza para empezar.
+              </Typography>
+            </Box>
           )
-        }
+        )}
       </Box>
 
       <Dialog open={dialogOpen} onClose={handleCloseDialog}>
@@ -924,7 +971,7 @@ const Modules: React.FC<ExecutionOrderProps> = ({
           <Button onClick={handleConfirmAddModule}>Confirmar</Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </Box >
   );
 };
 

@@ -1,23 +1,74 @@
 import React, { useState } from 'react';
-import { Box, Typography, Menu, MenuItem, Dialog, DialogTitle, DialogContent, TextField, DialogActions, Button, DialogContentText, Divider } from '@mui/material';
+import { Box, Typography, Menu, MenuItem, Dialog, DialogTitle, DialogContent, TextField, DialogActions, Button, DialogContentText, Divider, useTheme, CircularProgress } from '@mui/material';
 import { SimpleTreeView } from '@mui/x-tree-view/SimpleTreeView';
-import { TreeItem } from '@mui/x-tree-view/TreeItem';
+import { TreeItem, treeItemClasses } from '@mui/x-tree-view/TreeItem';
+import { styled, alpha } from '@mui/material/styles';
 import FolderIcon from '@mui/icons-material/Folder';
 import DescriptionIcon from '@mui/icons-material/Description';
-import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 
 import { useDraggable } from '@dnd-kit/core';
 import { useFileTree } from '../hooks/useFileTree';
 import { FileData } from '../types';
 
 interface FileExplorerProps {
-  onFileSelect: (path: string) => void; // Cambiado para aceptar solo el path
+  onFileSelect: (path: string) => void;
   fontSize: number;
 }
 
+// --- styled-components definiendo la estética VS Code ---
+
+const StyledTreeItem = styled(TreeItem)(({ theme }) => ({
+  // Estilo del contenido (la fila del archivo/carpeta)
+  [`& .${treeItemClasses.content}`]: {
+    borderRadius: 0,
+    padding: '0px 0px 0px 8px', // Padding derecho explícito, left manejado por MUI
+    minHeight: 22, // Altura ultra-compacta
+    '&:hover': {
+      backgroundColor: alpha(theme.palette.action.active, 0.04),
+    },
+    [`&.${treeItemClasses.selected}`]: {
+      backgroundColor: alpha(theme.palette.primary.main, 0.12),
+      '&:hover': {
+        backgroundColor: alpha(theme.palette.primary.main, 0.16),
+      },
+      [`& .${treeItemClasses.label}`]: {
+        fontWeight: 500,
+      },
+    },
+  },
+
+  // Contenedor del icono (flecha + carpeta)
+  [`& .${treeItemClasses.iconContainer}`]: {
+    marginRight: 4,
+    width: 'auto',
+    display: 'flex',
+    justifyContent: 'center',
+    color: theme.palette.text.secondary,
+  },
+
+  // Etiqueta de texto
+  [`& .${treeItemClasses.label}`]: {
+    fontSize: '13px', // Tamaño fijo legible
+    fontFamily: 'Consolas, "Courier New", monospace',
+    lineHeight: 1.5,
+    paddingLeft: 4,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+
+  // Grupo de hijos (la lista anidada)
+  [`& .${treeItemClasses.groupTransition}`]: {
+    marginLeft: 12, // Indentación visual
+    paddingLeft: 0,
+    borderLeft: `1px solid ${theme.palette.divider}`, // Línea vertical sutil
+  },
+}));
+
+// --------------------------------------------------------
+
 /**
- * Componente que envuelve un TreeItem de MUI para hacerlo arrastrable.
- * Solo los elementos de tipo 'file' serán arrastrables.
+ * Elemento arrastrable que usa nuestro StyledTreeItem
  */
 const DraggableTreeItem: React.FC<{
   node: FileData;
@@ -25,84 +76,99 @@ const DraggableTreeItem: React.FC<{
   onContextMenu: (event: React.MouseEvent, node: FileData) => void;
 }> = ({ node, fontSize, onContextMenu }) => {
   const isFile = node.type === 'file';
-  
-  // Configura el elemento como arrastrable solo si es un archivo .feature
+  const theme = useTheme();
+
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: `file-explorer-${node.path}`, // ID único para el elemento arrastrable
+    id: `file-explorer-${node.path}`,
     data: {
-      type: 'file-explorer-feature', // Tipo para identificarlo en onDragEnd
-      path: node.path,               // El path que necesita el backend
+      type: 'file-explorer-feature',
+      path: node.path,
     },
-    disabled: !isFile, // Deshabilita el arrastre para directorios
+    disabled: !isFile,
   });
 
   const style = {
     opacity: isDragging ? 0.5 : 1,
   };
 
+  // Si es un archivo, aplicamos los listeners al contenedor del label.
+  // Si es carpeta, no adjuntamos nada (no es draggable por ahora).
+  const dragProps = isFile ? { ref: setNodeRef, ...listeners, ...attributes } : {};
+
   return (
-    <TreeItem
+    <StyledTreeItem
       style={style}
       key={node.path}
       itemId={node.path}
       label={
-        <Box sx={{ display: 'flex', alignItems: 'center' }} onContextMenu={(e) => onContextMenu(e, node)}>
+        <Box
+          {...dragProps}
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            py: 0,
+            cursor: isFile ? 'grab' : 'default',
+            // Asegurar que ocupe todo el espacio para facilitar el arrastre
+            width: '100%'
+          }}
+          onContextMenu={(e) => onContextMenu(e, node)}
+        >
           {isFile ? (
-            <Box
-              ref={setNodeRef}
-              {...listeners}
-              {...attributes}
-              sx={{
-                  cursor: 'grab',
-                  display: 'flex',
-                  alignItems: 'center',
-                  ml: '0px', // Margen izquierdo para alinear con el icono de carpeta
-                  mr: '1px', // Margen derecho reducido para acercar al icono de archivo
-                  color: 'action.active'
-              }}
-            >
-              <DragIndicatorIcon fontSize="small" />
-            </Box>
+            <DescriptionIcon sx={{ mr: 1, fontSize: 16, color: 'info.main' }} />
           ) : (
-            <Box sx={{ width: '0px', mr: '0px' }} /> // Espaciador para alinear carpetas y archivos
+            <FolderIcon sx={{ mr: 1, fontSize: 16, color: '#FFCA28' }} />
           )}
-          {isFile ? <DescriptionIcon sx={{ mr: 1, color: 'grey.700' }} /> : <FolderIcon sx={{ mr: 1 }} />}
-          <Typography variant="body2" sx={{ fontSize: `${fontSize}px` }}>{node.name}</Typography>
+
+          <Typography
+            variant="body2"
+            sx={{
+              fontSize: 'inherit',
+              fontFamily: 'inherit',
+              flexGrow: 1,
+              userSelect: 'none' // Evitar selección de texto al arrastrar
+            }}
+          >
+            {node.name}
+          </Typography>
         </Box>
       }
     >
-      {/* Renderiza los hijos si es un directorio */}
       {Array.isArray(node.children) ? renderTree(node.children, fontSize, onContextMenu) : null}
-    </TreeItem>
+    </StyledTreeItem>
   );
 };
 
-// Función de renderizado movida fuera del componente principal para poder ser llamada recursivamente
 const renderTree = (nodes: FileData[], fontSize: number, onContextMenu: (event: React.MouseEvent, node: FileData) => void) => {
-  if (!nodes) {
-    return null;
-  }
+  if (!nodes) return null;
   return nodes.map((node) => <DraggableTreeItem key={node.path} node={node} fontSize={fontSize} onContextMenu={onContextMenu} />);
 };
 
 /**
- * Componente de previsualización para el DragOverlay.
- * Muestra solo el ícono y el nombre del archivo.
+ * Preview para el drag and drop
  */
 export const DraggableTreeItemPreview: React.FC<{ path: string }> = ({ path }) => {
   const fileName = path.split('/').pop() || path;
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-      <DragIndicatorIcon fontSize="small" sx={{ mr: 1, cursor: 'grabbing' }} />
-      <DescriptionIcon sx={{ mr: 1, color: 'grey.700' }} />
-      <Typography variant="body2">{fileName}</Typography>
+    <Box sx={{
+      display: 'flex',
+      alignItems: 'center',
+      py: 0.5,
+      px: 1,
+      bgcolor: 'background.paper',
+      border: '1px solid',
+      borderColor: 'divider',
+      borderRadius: 1,
+      boxShadow: 2
+    }}>
+      <DescriptionIcon sx={{ mr: 1, color: 'info.main', fontSize: 16 }} />
+      <Typography variant="body2" sx={{ fontSize: '13px', fontFamily: 'Consolas, monospace' }}>{fileName}</Typography>
     </Box>
   );
 };
 
-const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, fontSize }) => {
-  // La lógica de datos ahora está encapsulada en el hook.
-  const { files, expanded, setExpanded, refreshFileTree } = useFileTree();
+const FileExplorerComponent: React.FC<FileExplorerProps> = ({ onFileSelect, fontSize }) => {
+  const { files, expanded, setExpanded, refreshFileTree, isLoading } = useFileTree();
+  const theme = useTheme();
 
   const [contextMenu, setContextMenu] = useState<{
     mouseX: number;
@@ -116,124 +182,63 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, fontSize }) =
     basePath: string;
   } | null>(null);
 
-  const [deleteDialog, setDeleteDialog] = useState<{
-    open: boolean;
-    node: FileData | null;
-  }>({ open: false, node: null });
-
   const [newItemName, setNewItemName] = useState('');
+  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; node: FileData | null }>({ open: false, node: null });
 
+  // Manejo de Context Menu (sin cambios mayores)
   const handleContextMenu = (event: React.MouseEvent, node: FileData) => {
     event.preventDefault();
-    setContextMenu({
-      mouseX: event.clientX - 2,
-      mouseY: event.clientY - 4,
-      node: node,
-    });
+    setContextMenu({ mouseX: event.clientX - 2, mouseY: event.clientY - 4, node });
   };
+  const handleCloseContextMenu = () => setContextMenu(null);
 
-  const handleCloseContextMenu = () => {
-    setContextMenu(null);
-  };
-
+  // Manejo de Diálogos (sin cambios mayores)
   const handleOpenNewItemDialog = (type: 'file' | 'folder') => {
     if (!contextMenu) return;
-
-    // Si se hace clic derecho en un archivo, la base es su directorio padre.
-    // Si se hace clic en una carpeta, la base es esa misma carpeta.
     const basePath = contextMenu.node.type === 'directory'
       ? contextMenu.node.path
       : contextMenu.node.path.substring(0, contextMenu.node.path.lastIndexOf('/'));
-
-    setDialog({
-      open: true,
-      type,
-      basePath,
-    });
+    setDialog({ open: true, type, basePath });
     handleCloseContextMenu();
   };
-
-  const handleCloseDialog = () => {
-    setDialog(null);
-    setNewItemName('');
-  };
+  const handleCloseDialog = () => { setDialog(null); setNewItemName(''); };
 
   const handleOpenDeleteDialog = () => {
     if (!contextMenu) return;
     setDeleteDialog({ open: true, node: contextMenu.node });
     handleCloseContextMenu();
   };
+  const handleCloseDeleteDialog = () => setDeleteDialog({ open: false, node: null });
 
-  const handleCloseDeleteDialog = () => {
-    setDeleteDialog({ open: false, node: null });
-  };
-
+  // Funciones de API (Create/Delete)
   const handleConfirmNewItem = async () => {
     if (!newItemName || !dialog) return;
-
     const fullPath = dialog.basePath ? `${dialog.basePath}/${newItemName}` : newItemName;
     const endpoint = dialog.type === 'folder' ? '/api/directories' : '/api/files';
-
     try {
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path: fullPath }),
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `Failed to create ${dialog.type}`);
-      }
-
-      // Si la creación es exitosa, refrescamos el árbol de archivos
+      if (!response.ok) throw new Error(`Failed to create ${dialog.type}`);
       await refreshFileTree();
-
-    } catch (error) {
-      console.error(`Error creating ${dialog.type}:`, error);
-      // Aquí podrías mostrar una notificación de error al usuario
-    } finally {
-      handleCloseDialog();
-    }
+    } catch (e) { console.error(e); } finally { handleCloseDialog(); }
   };
 
   const handleConfirmDelete = async () => {
     if (!deleteDialog.node) return;
-
-    const path = deleteDialog.node.path;
-    const type = deleteDialog.node.type;
-    const endpoint = `/api/resource/${encodeURIComponent(path)}`;
-
     try {
-      const response = await fetch(endpoint, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `Failed to delete ${type}`);
-      }
-
+      const response = await fetch(`/api/resource/${encodeURIComponent(deleteDialog.node.path)}`, { method: 'DELETE' });
+      if (!response.ok) throw new Error(`Failed to delete`);
       await refreshFileTree();
-
-    } catch (error) {
-      console.error(`Error deleting ${type}:`, error);
-    } finally {
-      handleCloseDeleteDialog();
-    }
+    } catch (e) { console.error(e); } finally { handleCloseDeleteDialog(); }
   };
 
-  const handleExpandedChange = (event: React.SyntheticEvent | null, ids: string[]) => {
-    setExpanded(ids);
-  };
+  const handleExpandedChange = (event: React.SyntheticEvent | null, ids: string[]) => setExpanded(ids);
 
-  // Lógica simplificada: onItemClick ahora solo pasa el itemId (path) al padre.
-  // Se elimina la necesidad de useCallback aquí, ya que la lógica es directa.
-  const handleItemClick = (
-    event: React.MouseEvent, // El evento es proporcionado por MUI, aunque no lo usemos.
-    itemId: string // El path del archivo clickeado.
-  ) => {
-    // Función recursiva para encontrar el nodo por su path en el árbol de archivos.
+  const handleItemClick = (event: React.MouseEvent, itemId: string) => {
+    // Buscar nodo y notificar selección
     const findNode = (nodes: FileData[], path: string): FileData | null => {
       for (const node of nodes) {
         if (node.path === path) return node;
@@ -244,99 +249,89 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, fontSize }) =
       }
       return null;
     };
-
     const selectedNode = findNode(files, itemId);
-
-    // Solo llama a onFileSelect si el nodo encontrado es un archivo.
-    if (selectedNode && selectedNode.type === 'file') {
-      onFileSelect(itemId);
-    }
+    if (selectedNode && selectedNode.type === 'file') onFileSelect(itemId);
   };
 
   return (
-    <Box>
-      <Typography variant="subtitle1" gutterBottom>
-        Feature Browser
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <Typography
+        variant="caption"
+        sx={{
+          px: 2,
+          py: 1,
+          fontWeight: 'bold',
+          color: 'text.secondary',
+          textTransform: 'uppercase',
+          letterSpacing: 1,
+          display: 'block'
+        }}
+      >
+        Explorer
       </Typography>
-      <SimpleTreeView
-        expandedItems={expanded}
-        onExpandedItemsChange={handleExpandedChange}
-        onItemClick={handleItemClick}
-        >
-        {renderTree(files, fontSize, handleContextMenu)}
-      </SimpleTreeView>
 
+      <Box sx={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+        {/* Usamos una animación de carga si estamos cargando */}
+        {isLoading ? (
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 2 }}>
+            {/* Simulating a GIF loader with CircularProgress for now, as no GIF asset was found. */}
+            <CircularProgress size={40} thickness={4} />
+            <Typography variant="caption" color="text.secondary">Loading features...</Typography>
+          </Box>
+        ) : (
+          <SimpleTreeView
+            expandedItems={expanded}
+            onExpandedItemsChange={handleExpandedChange}
+            onItemClick={handleItemClick}
+            // @ts-ignore - Propiedad clave para controlar la indentación base
+            itemChildrenIndentation="12px"
+          >
+            {renderTree(files, fontSize, handleContextMenu)}
+          </SimpleTreeView>
+        )}
+      </Box>
+
+      {/* Menús y Diálogos (copiados logicamente igual) */}
       <Menu
         open={contextMenu !== null}
         onClose={handleCloseContextMenu}
         anchorReference="anchorPosition"
-        anchorPosition={
-          contextMenu !== null
-            ? { top: contextMenu.mouseY, left: contextMenu.mouseX }
-            : undefined
-        }
+        anchorPosition={contextMenu ? { top: contextMenu.mouseY, left: contextMenu.mouseX } : undefined}
       >
-        <MenuItem onClick={() => handleOpenNewItemDialog('folder')}>Nueva Carpeta</MenuItem>
-        <MenuItem onClick={() => handleOpenNewItemDialog('file')}>Nuevo Archivo Feature</MenuItem>
+        <MenuItem onClick={() => handleOpenNewItemDialog('folder')}>New Folder</MenuItem>
+        <MenuItem onClick={() => handleOpenNewItemDialog('file')}>New Feature File</MenuItem>
         <Divider />
-        <MenuItem onClick={handleOpenDeleteDialog} sx={{ color: 'error.main' }}>Eliminar</MenuItem>
+        <MenuItem onClick={handleOpenDeleteDialog} sx={{ color: 'error.main' }}>Delete</MenuItem>
       </Menu>
 
       <Dialog open={dialog?.open || false} onClose={handleCloseDialog}>
-        <DialogTitle>
-          {dialog?.type === 'folder' ? 'Crear Nueva Carpeta' : 'Crear Nuevo Archivo Feature'}
-        </DialogTitle>
+        <DialogTitle>Create {dialog?.type === 'folder' ? 'Folder' : 'File'}</DialogTitle>
         <DialogContent>
           <TextField
-            autoFocus
-            margin="dense"
-            id="name"
-            label="Nombre"
-            type="text"
-            fullWidth
-            variant="standard"
-            value={newItemName}
-            onChange={(e) => setNewItemName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                handleConfirmNewItem();
-              }
-            }}
-            helperText={
-              dialog?.type === 'file'
-                ? "No es necesario añadir .feature"
-                : `Se creará dentro de: ${dialog?.basePath || 'raíz'}`
-            }
+            autoFocus margin="dense" label="Name" fullWidth variant="outlined" size="small"
+            value={newItemName} onChange={(e) => setNewItemName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleConfirmNewItem()}
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDialog}>Cancelar</Button>
-          <Button onClick={handleConfirmNewItem} disabled={!newItemName}>
-            Confirmar
-          </Button>
+          <Button onClick={handleCloseDialog}>Cancel</Button>
+          <Button onClick={handleConfirmNewItem} variant="contained" disabled={!newItemName}>Create</Button>
         </DialogActions>
       </Dialog>
 
       <Dialog open={deleteDialog.open} onClose={handleCloseDeleteDialog}>
-        <DialogTitle>Confirmar Eliminación</DialogTitle>
+        <DialogTitle>Delete Confirmation</DialogTitle>
         <DialogContent>
-          <DialogContentText>
-            ¿Estás seguro de que quieres eliminar 
-            <strong>{` "${deleteDialog.node?.name}"`}</strong>
-            ? Esta acción no se puede deshacer.
-          </DialogContentText>
+          <DialogContentText>Are you sure you want to delete <b>{deleteDialog.node?.name}</b>?</DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDeleteDialog}>Cancelar</Button>
-          <Button onClick={handleConfirmDelete} color="error">
-            Eliminar
-          </Button>
+          <Button onClick={handleCloseDeleteDialog}>Cancel</Button>
+          <Button onClick={handleConfirmDelete} color="error" variant="contained">Delete</Button>
         </DialogActions>
       </Dialog>
     </Box>
   );
 };
 
-
+const FileExplorer = React.memo(FileExplorerComponent);
 export default FileExplorer;

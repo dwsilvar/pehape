@@ -4,9 +4,12 @@ import { FileData } from '../types';
 export const useFileTree = () => {
   const [files, setFiles] = useState<FileData[]>([]);
   const [expanded, setExpanded] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Encapsulamos la lógica de fetch en una función que podemos reutilizar.
   const fetchFileTree = useCallback(async () => {
+    setIsLoading(true);
+    setIsLoading(true);
     try {
       const response = await fetch('/api/features');
       if (!response.ok) {
@@ -29,6 +32,8 @@ export const useFileTree = () => {
     } catch (error) {
       console.error("Failed to fetch file tree:", error);
       setFiles([]); // En caso de error, mostrar un árbol vacío.
+    } finally {
+      setIsLoading(false);
     }
   }, []); // No tiene dependencias, por lo que no se recreará.
 
@@ -37,5 +42,5 @@ export const useFileTree = () => {
   }, [fetchFileTree]);
 
   // Exponemos la función 'fetchFileTree' con el alias 'refreshFileTree'.
-  return { files, expanded, setExpanded, refreshFileTree: fetchFileTree };
+  return { files, expanded, setExpanded, refreshFileTree: fetchFileTree, isLoading };
 };

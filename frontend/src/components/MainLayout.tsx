@@ -1,6 +1,10 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { Box, Paper, Tabs, Tab, MenuItem, AppBar, Toolbar, Button, Menu, ThemeProvider, CssBaseline, Badge } from '@mui/material';
-import { DndContext, closestCenter, DragOverlay, Active } from '@dnd-kit/core';
+import { Box, Paper, Tabs, Tab, MenuItem, AppBar, Toolbar, Button, Menu, ThemeProvider, CssBaseline, Badge, IconButton, Tooltip, Divider, Typography, CircularProgress } from '@mui/material';
+import CodeIcon from '@mui/icons-material/Code';
+import AccountTreeIcon from '@mui/icons-material/AccountTree';
+import TerminalIcon from '@mui/icons-material/Terminal';
+import CloseIcon from '@mui/icons-material/Close';
+import { DndContext, closestCenter, DragOverlay, Active, useSensor, useSensors, PointerSensor, TouchSensor, pointerWithin, rectIntersection } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
 import FileExplorer, { DraggableTreeItemPreview } from './FileExplorer';
 import { FeatureEditor } from './FeatureEditor';
@@ -46,15 +50,21 @@ const MainLayout: React.FC = () => {
     return localStorage.getItem('editorTheme') || 'monokai';
   });
   const [isModifiedByDrag, setIsModifiedByDrag] = useState(false);
-  const { modules, setModules, isLoading, refetch } = useExecutionOrder();
+  const { modules, setModules, isLoading: isModulesLoading, refetch } = useExecutionOrder();
   const [tabValue, setTabValue] = useState(0);
   const modulesRef = useRef(modules);
   const [focusedModule, setFocusedModule] = useState<string | null>(null);
-  
+
+  // --- UI PERSPECTIVE STATE ---
+  const [activePerspective, setActivePerspective] = useState<'editor' | 'orchestrator'>('editor');
+  const [isConsoleOpen, setIsConsoleOpen] = useState(true);
+  const [orchestratorTab, setOrchestratorTab] = useState(0); // 0: ExecutionOrder, 1: Modules
+
   // --- LIFTED STATE FOR COLLAPSE/EXPAND ---
   const [executionOrderCollapsed, setExecutionOrderCollapsed] = useState<Set<string>>(new Set());
   const [modulesViewCollapsed, setModulesViewCollapsed] = useState<Set<string>>(new Set());
   const [fileExplorerWidth, setFileExplorerWidth] = useState(250);
+  const [consoleHeight, setConsoleHeight] = useState(200); // Height for dockable console
 
   // --- Lógica para redimensionar el File Explorer ---
   const layoutRef = useRef<HTMLDivElement>(null);
@@ -119,7 +129,7 @@ const MainLayout: React.FC = () => {
     setter: React.Dispatch<React.SetStateAction<Set<string>>>
   ) => async (sectionId: string) => {
     let newCollapsedState = false;
-    
+
     setter(prev => {
       const newSet = new Set(prev);
       const isCurrentlyCollapsed = newSet.has(sectionId);
@@ -189,10 +199,33 @@ const MainLayout: React.FC = () => {
   const [scenarioStatuses, setScenarioStatuses] = useState<ScenarioStatusMap>({});
   const [isExecuting, setIsExecuting] = useState(false);
   const [runningFeatureId, setRunningFeatureId] = useState<string | null>(null);
-  
+
   // Estado para gestionar el elemento que se está arrastrando y mostrar el overlay
   const [activeDragItem, setActiveDragItem] = useState<Active | null>(null);
   const runningFeatureIdRef = useRef(runningFeatureId);
+
+  // Buffer for logs to prevent high-frequency state updates
+  const bufferedLogsRef = useRef<string[]>([]);
+
+  // Deferred rendering state
+  const [isReady, setIsReady] = useState(false);
+  useEffect(() => {
+    // Defer heavy component rendering to allow initial paint to finish fast
+    const timer = setTimeout(() => setIsReady(true), 100);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Flush logs buffer periodically
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (bufferedLogsRef.current.length > 0) {
+        const logsToFlush = [...bufferedLogsRef.current];
+        bufferedLogsRef.current = [];
+        setLogs(prev => [...prev, ...logsToFlush]);
+      }
+    }, 100); // Flush every 100ms
+    return () => clearInterval(interval);
+  }, []);
 
   const availableThemes = {
     'vs-light': 'VS Light',
@@ -232,6 +265,26 @@ const MainLayout: React.FC = () => {
     setThemeName(theme);
     handleViewMenuClose();
   };
+
+  // Configurar sensores para distinguir entre click y drag
+  // Memoize options objects to prevent unnecessary DndContext updates
+  const pointerSensorOptions = useMemo(() => ({
+    activationConstraint: {
+      distance: 4,
+    },
+  }), []);
+
+  const touchSensorOptions = useMemo(() => ({
+    activationConstraint: {
+      delay: 150,
+      tolerance: 5,
+    },
+  }), []);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, pointerSensorOptions),
+    useSensor(TouchSensor, touchSensorOptions)
+  );
   // Lógica reescrita: ahora solo acepta el path del archivo.
   const handleFileSelect = useCallback(async (path: string) => {
     const name = path.split('/').pop() || path;
@@ -317,7 +370,7 @@ const MainLayout: React.FC = () => {
       setLogs(prev => [...prev, result.message]);
 
       const eventSource = new EventSource('/api/stream-logs');
-      
+
       eventSource.onmessage = (event) => {
         const data = JSON.parse(event.data);
 
@@ -354,7 +407,10 @@ const MainLayout: React.FC = () => {
           setIsExecuting(false);
           eventSource.close();
         } else {
-          setLogs(prev => [...prev, data.log]);
+          // Push to buffer instead of immediate state update
+          if (data.log) {
+            bufferedLogsRef.current.push(data.log);
+          }
         }
       };
 
@@ -390,9 +446,9 @@ const MainLayout: React.FC = () => {
     <Box sx={{ display: 'flex', alignItems: 'center' }}>
       Console
       {isExecuting && (
-        <Badge 
-          color="primary" 
-          variant="dot" 
+        <Badge
+          color="primary"
+          variant="dot"
           sx={{ ml: 1.5 }}
         />
       )}
@@ -403,9 +459,9 @@ const MainLayout: React.FC = () => {
     <ThemeProvider theme={muiTheme}>
       <CssBaseline /> {/* Aplica estilos base como el color de fondo del body */}
       {/* Ajustamos el Box principal para dejar espacio para la barra de estado */}
-      <Box sx={{ 
-        display: 'flex', flexDirection: 'column', 
-        height: '100vh', pb: '24px' /* Padding-bottom para no solapar con la barra */ 
+      <Box sx={{
+        display: 'flex', flexDirection: 'column',
+        height: '100vh', pb: '24px' /* Padding-bottom para no solapar con la barra */
       }}>
         {/* Barra de Menú Superior */}
         <AppBar position="static" elevation={1} color="default">
@@ -427,261 +483,357 @@ const MainLayout: React.FC = () => {
           ))}
         </Menu>
 
-        <DndContext 
+        <DndContext
+          sensors={sensors}
           collisionDetection={(args) => {
-            // LOG: Para ver qué elementos están siendo considerados para colisión
-            // console.log('Collision Detection Args:', args);
-            // Obtenemos el tipo del elemento que se está arrastrando.
             const activeType = args.active.data.current?.type as string;
-
-            // Si estamos arrastrando un feature desde el explorador, no filtramos los destinos.
-            // Esto permite que colisione con los 'module-drop-area'.
             if (activeType === 'file-explorer-feature') {
-              return closestCenter(args);
+              // Switch to rectIntersection for better cross-container detection
+              return rectIntersection(args);
             }
-
-            // Para otros tipos de arrastre (reordenar módulos, etc.), mantenemos el filtro.
             const droppableContainers = args.droppableContainers.filter((container) => {
               return container.data.current?.type === activeType;
             });
             return closestCenter({ ...args, droppableContainers: droppableContainers });
           }}
           onDragStart={(event) => {
-            // Cuando empieza el arrastre, guardamos la información del elemento activo
-            console.log('--- onDragStart ---');
-            console.log('Active Item:', event.active);
             setActiveDragItem(event.active);
           }}
-          onDragCancel={() => {
+          onDragCancel={() => { // Added onDragCancel wrapper
             // Si se cancela el arrastre, limpiamos el estado
             setActiveDragItem(null);
-          }}
+          }} // Closing bracket for onDragCancel
           onDragEnd={async (event) => {
-          // Al finalizar el arrastre, limpiamos el estado
-          setActiveDragItem(null);
+            // Al finalizar el arrastre, limpiamos el estado
+            setActiveDragItem(null);
+            const { active, over } = event;
 
-          const { active, over } = event;
+            if (!over) return;
 
-          // LOG: El log más importante. ¿Qué son 'active' y 'over' al final del arrastre?
-          console.log('--- onDragEnd ---');
-          console.log('Active:', active);
-          console.log('Over:', over);
+            // ... (Drag Logic remains largely the same, ensuring variables activePerspective don't break logic) ...
+            // ... Since I am replacing the block, I need to include the logic or refer to it. 
+            // ... Given the tool limitation, I will copy the logic but verify context availability.
 
-          if (!over) {
-            console.log('Drag ended but not over a droppable area. Aborting.');
-            return;
-          }
+            // CASO 1: Arrastrar un feature desde el FileExplorer a un Módulo
+            const isFileExplorerDrag = active.data.current?.type === 'file-explorer-feature';
 
-          // CASO 1: Arrastrar un feature desde el FileExplorer a un Módulo
-          const isFileExplorerDrag = active.data.current?.type === 'file-explorer-feature';
-          const isOverModuleDropArea = over.id.toString().startsWith('module-drop-area-');
-          console.log(`Checking conditions: isFileExplorerDrag=${isFileExplorerDrag}, isOverModuleDropArea=${isOverModuleDropArea}`);
-          if (isFileExplorerDrag && isOverModuleDropArea) {
-            const moduleName = over.data.current?.moduleName;
-            const featurePath = active.data.current?.path;
+            // Logica mejorada de detección de target
+            let targetModuleName = null;
 
-            if (moduleName && featurePath) {
-              console.log(`Attempting to add feature '${featurePath}' to module '${moduleName}'`);
-              try {
-                const response = await fetch(`/api/modules/${encodeURIComponent(moduleName)}/features`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ path: featurePath }),
-                });
+            if (isFileExplorerDrag) {
+              const overId = over.id.toString();
 
-                if (!response.ok) {
-                  const errorData = await response.json();
-                  throw new Error(errorData.error || 'Failed to add feature');
+              // 1. Direct drop on module container (created by useDroppable in Modules.tsx)
+              if (overId.startsWith('module-drop-area-')) {
+                targetModuleName = over.data.current?.moduleName;
+              }
+              // 2. Drop on an existing feature inside a module (handled by useSortable -> implicit droppable)
+              else {
+                // Buscar si el ID sobre el que se soltó corresponde a algún feature de algún módulo
+                // Esto permite soltar "entre" features o sobre features existentes
+                for (const mod of modules) {
+                  // Check if 'overId' matches a feature ID in this module
+                  const isOverFeature = mod.features.some(f => f.id === overId);
+                  // Also check if 'overId' matches the SortableContext ID (which is the module name)
+                  const isOverSortableContext = overId === mod.module_name;
+
+                  if (isOverFeature || isOverSortableContext) {
+                    targetModuleName = mod.module_name;
+                    break;
+                  }
                 }
-                const updatedModules = await response.json();
-                setModules(() => updatedModules); // Usar la forma de función para consistencia
-              } catch (error) {
-                console.error('Error al agregar el feature:', error);
-                // Aquí podrías mostrar una notificación de error al usuario
+              }
+
+              if (targetModuleName) {
+                const featurePath = active.data.current?.path;
+                if (featurePath) {
+                  try {
+                    const response = await fetch(`/api/modules/${encodeURIComponent(targetModuleName)}/features`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ path: featurePath }),
+                    });
+                    if (!response.ok) {
+                      const errorData = await response.json();
+                      throw new Error(errorData.error || 'Failed to add feature');
+                    }
+                    const updatedModules = await response.json();
+                    setModules(() => updatedModules);
+                  } catch (error) { console.error('Error adding feature:', error); }
+                }
+                return;
               }
             }
-            return; // Finaliza el manejador aquí
-          }
 
-          // CASO 2: Reordenar Módulos
-          const isModuleDrag = active.data.current?.type === 'module';
-          if (isModuleDrag) {
-            if (active.id !== over.id) {
-              const oldIndex = modules.findIndex((m) => m.module_name === active.id);
-              const newIndex = modules.findIndex((m) => m.module_name === over.id);
-              // Usar la forma de función de actualización para garantizar la consistencia del tipo
-              // y evitar problemas con closures de estado.
-              setModules((currentModules: Module[]) => arrayMove(currentModules, oldIndex, newIndex));
-              setIsModifiedByDrag(true);
+            // CASO 2: Reordenar Módulos
+            const isModuleDrag = active.data.current?.type === 'module';
+            if (isModuleDrag) {
+              if (active.id !== over.id) {
+                const oldIndex = modules.findIndex((m) => m.module_name === active.id);
+                const newIndex = modules.findIndex((m) => m.module_name === over.id);
+                setModules((currentModules: Module[]) => arrayMove(currentModules, oldIndex, newIndex));
+                setIsModifiedByDrag(true);
+              }
+              return;
             }
-            return; // Finaliza el manejador aquí
-          }
 
-          // CASO 3: Reordenar Features dentro del mismo módulo
-          const isFeatureDrag = active.data.current?.type === 'feature';
-          if (isFeatureDrag) {
-            // La propiedad 'sortable' solo existe en elementos dentro de un SortableContext
-            const activeContainer = active.data.current?.sortable.containerId;
-            const overContainer = over.data.current?.sortable.containerId;
+            // CASO 3: Reordenar Features dentro del mismo módulo
+            const isFeatureDrag = active.data.current?.type === 'feature';
+            if (isFeatureDrag) {
+              const activeContainer = active.data.current?.sortable.containerId;
+              const overContainer = over.data.current?.sortable.containerId;
 
-            if (activeContainer === overContainer) {
-              const moduleName = activeContainer; // El nombre del módulo
-              const module = modules.find(m => m.module_name === moduleName);
-              if (!module) return;
-
-              const oldIndex = module.features.findIndex(f => f.id === active.id);
-              const newIndex = module.features.findIndex(f => f.id === over.id);
-
-              if (oldIndex !== newIndex) {
-                const reorderedFeatures = arrayMove(module.features, oldIndex, newIndex);
-
-                // Re-asigna el orden secuencial para la actualización optimista
-                const updatedFeaturesWithOrder = reorderedFeatures.map((feature, index) => ({
-                  ...feature,
-                  order: index + 1,
-                }));
-
-                // Guardamos el estado original para poder revertir en caso de error.
-                const originalModules = modules;
-                
-                // Actualización optimista: actualiza la UI inmediatamente
-                setModules(current => 
-                  current.map(m =>
-                    m.module_name === moduleName ? { ...m, features: updatedFeaturesWithOrder } : m
-                  )
-                );
-
-                // Llama a la API para persistir el cambio
-                try {
-                  const featuresToSave = updatedFeaturesWithOrder.map(({ display_tags, scenarios, color, ...rest }) => rest);
-                  const response = await fetch(`/api/modules/${encodeURIComponent(moduleName)}/features/reorder`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ features: featuresToSave }),
-                  });
-                  if (!response.ok) {
-                    // Si la API falla, revertimos al estado original.
+              if (activeContainer === overContainer) {
+                const moduleName = activeContainer;
+                const module = modules.find(m => m.module_name === moduleName);
+                if (!module) return;
+                const oldIndex = module.features.findIndex(f => f.id === active.id);
+                const newIndex = module.features.findIndex(f => f.id === over.id);
+                if (oldIndex !== newIndex) {
+                  const reorderedFeatures = arrayMove(module.features, oldIndex, newIndex);
+                  const updatedFeaturesWithOrder = reorderedFeatures.map((feature, index) => ({ ...feature, order: index + 1 }));
+                  const originalModules = modules;
+                  setModules(current => current.map(m => m.module_name === moduleName ? { ...m, features: updatedFeaturesWithOrder } : m));
+                  try {
+                    const featuresToSave = updatedFeaturesWithOrder.map(({ display_tags, scenarios, color, ...rest }) => rest);
+                    const response = await fetch(`/api/modules/${encodeURIComponent(moduleName)}/features/reorder`, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ features: featuresToSave }),
+                    });
+                    if (!response.ok) setModules(originalModules);
+                  } catch (e) {
+                    console.error('Error reordering:', e);
                     setModules(originalModules);
                   }
-                } catch (error) {
-                  console.error('Error al reordenar los features por drag:', error);
-                  // En caso de error de red, también revertimos.
-                  setModules(originalModules);
                 }
               }
+              return;
             }
-            return; // Finaliza el manejador aquí
-          }
-        }}>
-          <Box ref={layoutRef} sx={{ display: 'flex', flexGrow: 1, alignItems: 'stretch', overflow: 'hidden' }}>
-            {/* File Explorer */}
-            <Paper
-              elevation={2}
-              sx={{ width: fileExplorerWidth, minWidth: '150px', overflow: 'auto' }}
-            >
-              <FileExplorer onFileSelect={handleFileSelect} fontSize={fontSize} />
+          }}
+        >
+          <Box sx={{ display: 'flex', flexDirection: 'row', height: '100vh', overflow: 'hidden', bgcolor: 'background.default' }}>
+
+            {/* 1. ACTIVITY BAR (Side Menu) */}
+            <Paper elevation={3} sx={{
+              width: '50px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              pt: 2,
+              gap: 2,
+              zIndex: 1200,
+              bgcolor: 'background.paper',
+              borderRight: 1,
+              borderColor: 'divider'
+            }}>
+              <Tooltip title="Editor (Code)" placement="right">
+                <IconButton
+                  onClick={() => setActivePerspective('editor')}
+                  color={activePerspective === 'editor' ? 'primary' : 'default'}
+                >
+                  <CodeIcon fontSize="large" />
+                </IconButton>
+              </Tooltip>
+
+              <Tooltip title="Orchestrator (Flow)" placement="right">
+                <IconButton
+                  onClick={() => setActivePerspective('orchestrator')}
+                  color={activePerspective === 'orchestrator' ? 'primary' : 'default'}
+                >
+                  <AccountTreeIcon fontSize="large" />
+                </IconButton>
+              </Tooltip>
+
+              <Divider flexItem />
+
+              {activePerspective !== 'editor' && (
+                <Tooltip title="Toggle Console" placement="right">
+                  <IconButton
+                    onClick={() => setIsConsoleOpen(!isConsoleOpen)}
+                    color={isConsoleOpen ? 'secondary' : 'default'}
+                  >
+                    <Badge badgeContent={isExecuting ? '!' : 0} color="warning" variant="dot" invisible={!isExecuting}>
+                      <TerminalIcon fontSize="large" />
+                    </Badge>
+                  </IconButton>
+                </Tooltip>
+              )}
             </Paper>
-            {/* Manija para redimensionar */}
-            <Box
-              onMouseDown={handleMouseDown}
-              sx={{
-                width: '5px',
-                cursor: 'col-resize',
-                backgroundColor: 'divider',
-                '&:hover': { backgroundColor: 'primary.main' },
-                flexShrink: 0,
-              }}
-            />
-            {/* Right Panel with Tabs */}
-            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-              <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-                <Box sx={{ flexGrow: 1 }}>
-                  <Tabs value={tabValue} onChange={handleTabChange} aria-label="main tabs" sx={{ '& .MuiTab-root': { textTransform: 'none' } }}>
-                    <Tab
-                      label={isDirty ? `${selectedFile?.name || 'Editor'} *` : (selectedFile?.name || 'Feature Editor')}
-                      id="main-tab-0"
-                      aria-controls="main-tabpanel-0"
-                    />
-                    <Tab label="Modulos" id="main-tab-1" aria-controls="main-tabpanel-1" />
-                    <Tab label="Execution Order" id="main-tab-2" aria-controls="main-tabpanel-2" />
-                    <Tab label={<ConsoleTabLabel />} id="main-tab-3" aria-controls="main-tabpanel-3" />
-                  </Tabs>
-                </Box>
+
+            {/* 2. SIDEBAR (File Explorer) - Only visible in Editor Mode */}
+            {activePerspective === 'editor' && (
+              <>
+                <Paper
+                  elevation={1}
+                  sx={{ width: fileExplorerWidth, minWidth: '150px', overflow: 'auto', display: 'flex', flexDirection: 'column' }}
+                >
+                  <Box sx={{ p: 1, borderBottom: 1, borderColor: 'divider', fontWeight: 'bold' }}>Explorer</Box>
+                  {isReady ? (
+                    <FileExplorer onFileSelect={handleFileSelect} fontSize={fontSize} />
+                  ) : (
+                    <Typography variant="body2" sx={{ p: 2, color: 'text.secondary' }}>Loading explorer...</Typography>
+                  )}
+                </Paper>
+                {/* Resizer Handle */}
+                <Box
+                  onMouseDown={handleMouseDown}
+                  sx={{
+                    width: '4px',
+                    cursor: 'col-resize',
+                    bgcolor: 'divider',
+                    '&:hover': { bgcolor: 'primary.main' }
+                  }}
+                />
+              </>
+            )}
+
+            {/* 3. MAIN WORKSPACE */}
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+
+              {/* CONTENT AREA */}
+              <Box sx={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+                {activePerspective === 'editor' ? (
+                  // --- EDITOR VIEW (Tabs: Code | Modules) ---
+                  <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                    <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+                      <Tabs
+                        value={tabValue}
+                        onChange={handleTabChange}
+                        aria-label="editor tabs"
+                        sx={{ minHeight: '48px', '& .MuiTab-root': { textTransform: 'none' } }}
+                      >
+                        <Tab
+                          label={isDirty ? `${selectedFile?.name || 'Editor'} *` : (selectedFile?.name || 'Feature Editor')}
+                          id="editor-tab-0"
+                        />
+                        <Tab label="Review Modules" id="editor-tab-1" />
+                      </Tabs>
+                    </Box>
+
+                    {/* TabPanel 0: Feature Editor */}
+                    <TabPanel value={tabValue} index={0}>
+                      <FeatureEditor
+                        selectedFile={selectedFile}
+                        editorContent={editorContent}
+                        onEditorChange={handleEditorChange}
+                        theme={themeName}
+                        onSave={handleSaveFile}
+                        isDirty={isDirty}
+                        isResizing={isResizingRef.current}
+                      />
+                    </TabPanel>
+
+                    {/* TabPanel 1: Modules Component */}
+                    <TabPanel value={tabValue} index={1}>
+                      {isReady && !isModulesLoading ? (
+                        <ModulesComponent
+                          fontSize={fontSize}
+                          onFeatureSelect={handleFileSelect}
+                          modules={modules}
+                          setModules={setModules}
+                          scenarioStatuses={scenarioStatuses}
+                          setScenarioStatuses={setScenarioStatuses}
+                          isExecuting={isExecuting}
+                          runningFeatureId={runningFeatureId}
+                          onRunTests={handleRunTests}
+                          onSaveModules={handleSave}
+                          collapsedSections={modulesViewCollapsed}
+                          onToggleSectionCollapse={handleToggleModulesViewCollapse}
+                          focusedModule={focusedModule}
+                          onStopTests={handleStopTests}
+                          navigateToModule={navigateToModule}
+                          onFocusConsumed={clearFocusedModule}
+                        />
+                      ) : (
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 2 }}>
+                          <CircularProgress size={40} thickness={4} />
+                          <Typography variant="caption" color="text.secondary">Loading modules...</Typography>
+                        </Box>
+                      )}
+                    </TabPanel>
+                  </Box>
+                ) : (
+                  // --- ORCHESTRATOR VIEW (Execution Flow Only) ---
+                  <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', p: 0, bgcolor: '#f5f5f5', overflow: 'hidden' }}>
+                    <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
+                      {isReady && !isModulesLoading ? (
+                        <ExecutionOrder
+                          fontSize={fontSize}
+                          onFeatureSelect={handleFileSelect}
+                          modules={modules}
+                          setModules={setModules}
+                          scenarioStatuses={scenarioStatuses}
+                          setScenarioStatuses={setScenarioStatuses}
+                          isExecuting={isExecuting}
+                          runningFeatureId={runningFeatureId}
+                          onRunTests={handleRunTests}
+                          onSaveModules={handleSave}
+                          collapsedSections={executionOrderCollapsed}
+                          onToggleSectionCollapse={handleToggleExecutionOrderCollapse}
+                          navigateToModule={navigateToModule}
+                          onStopTests={handleStopTests}
+                        />
+                      ) : (
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 2 }}>
+                          <CircularProgress size={40} thickness={4} />
+                          <Typography variant="caption" color="text.secondary">Loading execution plan...</Typography>
+                        </Box>
+                      )}
+                    </Box>
+                  </Box>
+                )}
               </Box>
-              <TabPanel value={tabValue} index={0}>
-                <FeatureEditor
-                  selectedFile={selectedFile}
-                  editorContent={editorContent}
-                  onEditorChange={handleEditorChange}
-                  theme={themeName}
-                  onSave={handleSaveFile}
-                  isDirty={isDirty}
-                  isResizing={isResizingRef.current}
-                />
-              </TabPanel>
-              <TabPanel value={tabValue} index={1}>
-                <ModulesComponent
-                  fontSize={fontSize}
-                  onFeatureSelect={handleFileSelect}
-                  modules={modules}
-                  setModules={setModules}
-                  scenarioStatuses={scenarioStatuses}
-                  setScenarioStatuses={setScenarioStatuses}
-                  isExecuting={isExecuting}
-                  runningFeatureId={runningFeatureId}
-                  onRunTests={handleRunTests}
-                  onSaveModules={handleSave}
-                  collapsedSections={modulesViewCollapsed}
-                  onToggleSectionCollapse={handleToggleModulesViewCollapse}
-                  focusedModule={focusedModule}
-                  onStopTests={handleStopTests}
-                  navigateToModule={navigateToModule}
-                  onFocusConsumed={clearFocusedModule}
-                />
-              </TabPanel>
-              <TabPanel value={tabValue} index={2}>
-                <ExecutionOrder
-                  fontSize={fontSize}
-                  onFeatureSelect={handleFileSelect}
-                  modules={modules}
-                  setModules={setModules}
-                  scenarioStatuses={scenarioStatuses}
-                  setScenarioStatuses={setScenarioStatuses}
-                  isExecuting={isExecuting}
-                  runningFeatureId={runningFeatureId}
-                  onRunTests={handleRunTests}
-                  onSaveModules={handleSave}
-                  collapsedSections={executionOrderCollapsed}
-                  onToggleSectionCollapse={handleToggleExecutionOrderCollapse}
-                  navigateToModule={navigateToModule}
-                  onStopTests={handleStopTests}
-                />
-              </TabPanel>
-              <TabPanel value={tabValue} index={3}>
-                <ConsoleView logs={logs} />
-              </TabPanel>
+
+              {/* 4. CONSOLE DOCK */}
+              {/* Hide console entirely in editor mode as per user request */}
+              {isConsoleOpen && activePerspective !== 'editor' && (
+                <Paper
+                  elevation={8}
+                  sx={{
+                    height: '250px',
+                    borderTop: 1,
+                    borderColor: 'divider',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    zIndex: 1100
+                  }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', p: 1, bgcolor: 'action.hover', borderBottom: 1, borderColor: 'divider' }}>
+                    <Typography variant="overline" sx={{ flexGrow: 1, fontWeight: 'bold' }}>Console / Output</Typography>
+                    <IconButton size="small" onClick={() => setIsConsoleOpen(false)}>
+                      <CloseIcon fontSize="small" />
+                    </IconButton>
+                  </Box>
+                  <Box sx={{ flex: 1, overflow: 'auto', p: 0 }}>
+                    <ConsoleView logs={logs} />
+                  </Box>
+                </Paper>
+              )}
+
             </Box>
+
           </Box>
           {/* Aquí renderizamos el "fantasma" del elemento que se está arrastrando */}
-          <DragOverlay>
+          <DragOverlay dropAnimation={null}>
             {activeDragItem && activeDragItem.data.current?.type === 'file-explorer-feature' && (
               // Renderizamos una versión simplificada del TreeItem para el overlay
               <Paper elevation={4} sx={{ p: 1, display: 'flex', alignItems: 'center', backgroundColor: 'primary.light' }}>
-                <DraggableTreeItemPreview 
-                  path={activeDragItem.data.current.path} 
+                <DraggableTreeItemPreview
+                  path={activeDragItem.data.current.path}
                 />
               </Paper>
             )}
           </DragOverlay>
         </DndContext>
         {/* Renderizar la barra de estado en la parte inferior */}
-        <StatusBar 
-          message={status?.text || ''} 
-          isLoading={isLoading} 
-          statusType={status?.type || 'info'} 
+        <StatusBar
+          message={status?.text || ''}
+          isLoading={isModulesLoading}
+          statusType={status?.type || 'info'}
         />
       </Box>
-    </ThemeProvider>
+    </ThemeProvider >
   );
 };
 

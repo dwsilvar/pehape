@@ -5,7 +5,7 @@ interface ConsoleViewProps {
   logs: string[];
 }
 
-const ConsoleView: React.FC<ConsoleViewProps> = ({ logs }) => {
+const ConsoleView: React.FC<ConsoleViewProps> = React.memo(({ logs }) => {
   const logsEndRef = useRef<null | HTMLDivElement>(null);
 
   useEffect(() => {
@@ -13,24 +13,27 @@ const ConsoleView: React.FC<ConsoleViewProps> = ({ logs }) => {
   }, [logs]);
 
   return (
-    <Paper 
-      elevation={0} 
-      sx={{ 
+    <Paper
+      elevation={0}
+      sx={{
         height: '100%',
-        p: 2, 
-        overflowY: 'auto', 
-        backgroundColor: (theme) => theme.palette.mode === 'dark' ? 'black' : '#f5f5f5',
-        color: (theme) => theme.palette.text.secondary,
-        fontFamily: 'Consolas, "Courier New", monospace',
-        fontSize: '0.3rem'
+        p: 2,
+        overflowY: 'auto',
+        backgroundColor: '#1e1e1e', // Fondo oscuro de consola
+        color: '#4af626', // Texto verde tipo terminal retro
+        fontFamily: '"Consolas", "Monaco", "Courier New", monospace',
+        fontSize: '0.9rem',
+        WebkitFontSmoothing: 'antialiased', // Mejora el renderizado en fondo oscuro
+        MozOsxFontSmoothing: 'grayscale',
+        borderTop: '1px solid #333'
       }}
     >
       {logs.map((log, index) => (
-        <Typography key={index} component="div" sx={{ whiteSpace: 'pre-wrap' }}>{log}</Typography>
+        <Typography key={index} component="div" sx={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontWeight: 300, letterSpacing: '0.05em' }}>{log}</Typography>
       ))}
       <div ref={logsEndRef} />
     </Paper>
   );
-};
+});
 
 export default ConsoleView;

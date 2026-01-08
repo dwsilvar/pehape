@@ -3,20 +3,20 @@ import { Module } from '../types';
 import type React from 'react';
 
 const processModules = (modules: Module[]): Module[] => {
-    const moduleMap = modules.reduce((acc, module) => {
-        acc[module.module_name] = module;
-        return acc;
-    }, {} as { [key: string]: Module });
+  const moduleMap = modules.reduce((acc, module) => {
+    acc[module.module_name] = module;
+    return acc;
+  }, {} as { [key: string]: Module });
 
-    return modules.map(module => ({
-        ...module,
-        setup: ((module.setup as any[]) || []).map(hook => 
-            typeof hook === 'string' ? moduleMap[hook] : hook
-        ).filter(Boolean),
-        teardown: ((module.teardown as any[]) || []).map(hook => 
-            typeof hook === 'string' ? moduleMap[hook] : hook
-        ).filter(Boolean),
-    }));
+  return modules.map(module => ({
+    ...module,
+    setup: ((module.setup as any[]) || []).map(hook =>
+      typeof hook === 'string' ? moduleMap[hook] : hook
+    ).filter(Boolean),
+    teardown: ((module.teardown as any[]) || []).map(hook =>
+      typeof hook === 'string' ? moduleMap[hook] : hook
+    ).filter(Boolean),
+  }));
 };
 
 
@@ -32,7 +32,7 @@ export const useExecutionOrder = () => {
         throw new Error('Failed to fetch execution order');
       }
       const data: Module[] = await response.json();
-      setModules(processModules(data));
+      setModules(data);
     } catch (error) {
       console.error("Error fetching execution order:", error);
       setModules([]);

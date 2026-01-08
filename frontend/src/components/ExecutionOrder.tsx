@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
+import {
   Box,
   CircularProgress,
   Typography,
@@ -37,21 +37,21 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow'; 
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SyncIcon from '@mui/icons-material/Sync';
-import StopIcon from '@mui/icons-material/Stop'; 
-import LocalOfferIcon from '@mui/icons-material/LocalOffer'; 
+import StopIcon from '@mui/icons-material/Stop';
+import LocalOfferIcon from '@mui/icons-material/LocalOffer';
 import { useSortable, SortableContext, verticalListSortingStrategy, } from '@dnd-kit/sortable';
 import { arrayMove } from '@dnd-kit/sortable';
 import { useDroppable, useDndContext, Active } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { Module, FeatureItem, ScenarioStatusMap } from '../types'; 
+import { Module, FeatureItem, ScenarioStatusMap } from '../types';
 
-const DEFAULT_FEATURE_COLOR = '#4db6ac'; 
+const DEFAULT_FEATURE_COLOR = '#4db6ac';
 
-const DEFAULT_MODULE_COLOR = '#7e57c2'; 
+const DEFAULT_MODULE_COLOR = '#7e57c2';
 
 interface HookInfo {
   module_name: string;
@@ -65,65 +65,65 @@ interface HookItemProps {
 }
 
 const HookItem: React.FC<HookItemProps> = ({ hook, onDelete, onNavigate }) => {
-    const isObject = typeof hook === 'object' && hook !== null && 'module_name' in hook;
-    const moduleName = isObject ? hook.module_name : hook as string;
-    const moduleColor = isObject && 'color' in hook ? (hook as Module).color : null;
-    const tags = isObject && 'tags' in hook ? (hook as HookInfo).tags : [];
+  const isObject = typeof hook === 'object' && hook !== null && 'module_name' in hook;
+  const moduleName = isObject ? hook.module_name : hook as string;
+  const moduleColor = isObject && 'color' in hook ? (hook as Module).color : null;
+  const tags = isObject && 'tags' in hook ? (hook as HookInfo).tags : [];
 
-    return (
-      <Box sx={{ 
-        mb: 1, 
-        mr: 1,
-        display: 'inline-flex',
-        alignItems: 'center', 
-        backgroundColor: moduleColor || 'action.selected',
-        borderRadius: '4px',
-        overflow: 'hidden', // Para que el color de fondo no se salga de los bordes redondeados
-      }}>
-        <Box 
-          onClick={() => onNavigate(moduleName)}
-          sx={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: 1, 
-            py: 0.5, 
-            px: 1,
-            cursor: 'pointer',
-            '&:hover': {
-              textDecoration: 'underline',
-            },
-          }}>
-          <Typography
-            variant="body2"
-            sx={{ color: moduleColor ? 'white' : 'text.primary' }}
-          >
-              {moduleName}
-          </Typography>
-          {tags && tags.length > 0 && (
-            <Box sx={{ display: 'flex', gap: 0.5, ml: 1 }}>
-              {tags.map(tag => (
-                <Chip
-                  key={tag} label={tag} size="small"
-                  sx={{ color: 'white', backgroundColor: 'rgba(255,255,255,0.3)' }}
-                />
-              ))}
-            </Box>
-          )}
-        </Box>
-        <IconButton onClick={onDelete} size="small" edge="end">
-            <DeleteIcon fontSize="small" />
-        </IconButton>
+  return (
+    <Box sx={{
+      mb: 1,
+      mr: 1,
+      display: 'inline-flex',
+      alignItems: 'center',
+      backgroundColor: moduleColor || 'action.selected',
+      borderRadius: '4px',
+      overflow: 'hidden', // Para que el color de fondo no se salga de los bordes redondeados
+    }}>
+      <Box
+        onClick={() => onNavigate(moduleName)}
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1,
+          py: 0.5,
+          px: 1,
+          cursor: 'pointer',
+          '&:hover': {
+            textDecoration: 'underline',
+          },
+        }}>
+        <Typography
+          variant="body2"
+          sx={{ color: moduleColor ? 'white' : 'text.primary' }}
+        >
+          {moduleName}
+        </Typography>
+        {tags && tags.length > 0 && (
+          <Box sx={{ display: 'flex', gap: 0.5, ml: 1 }}>
+            {tags.map(tag => (
+              <Chip
+                key={tag} label={tag} size="small"
+                sx={{ color: 'white', backgroundColor: 'rgba(255,255,255,0.3)' }}
+              />
+            ))}
+          </Box>
+        )}
       </Box>
-    );
+      <IconButton onClick={onDelete} size="small" edge="end">
+        <DeleteIcon fontSize="small" />
+      </IconButton>
+    </Box>
+  );
 };
 
 const CollapsibleSection: React.FC<{ title: string, count: number, children: React.ReactNode, onAddModule?: () => void, isOpen: boolean, onToggle: () => void }> = ({ title, count, children, onAddModule, isOpen, onToggle }) => {
   return (
     <Box sx={{ mb: 1 }}>
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
-        <Button 
-          onClick={onToggle} 
-          startIcon={isOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />} 
+        <Button
+          onClick={onToggle}
+          startIcon={isOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
           sx={{ textTransform: 'none', color: 'text.primary' }}
         >
           {title} ({count})
@@ -155,9 +155,9 @@ interface ExecutionItemProps {
   onDelete: (item: FeatureItem) => void; // Para eliminación real
   onTagClick: (featureId: string, tag: string) => void;
   scenarioStatuses: ScenarioStatusMap;
-  isRunning: boolean; 
-  isFirst: boolean; 
-  isLast: boolean; 
+  isRunning: boolean;
+  isFirst: boolean;
+  isLast: boolean;
 }
 
 const ExecutionItem: React.FC<ExecutionItemProps> = ({
@@ -198,9 +198,9 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
     setContextMenu(
       contextMenu === null
         ? {
-            mouseX: event.clientX + 2,
-            mouseY: event.clientY - 6,
-          }
+          mouseX: event.clientX + 2,
+          mouseY: event.clientY - 6,
+        }
         : null,
     );
   };
@@ -277,7 +277,7 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
         {/* Contenido del feature */}
         <Box sx={{ flexGrow: 1, ml: 1, cursor: item.active ? 'pointer' : 'default' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-          <Typography sx={{ fontSize: `${fontSize}px`, textDecoration: item.active ? 'none' : 'line-through', color: item.active ? 'text.primary' : 'text.disabled' }}>
+            <Typography sx={{ fontSize: `${fontSize}px`, textDecoration: item.active ? 'none' : 'line-through', color: item.active ? 'text.primary' : 'text.disabled' }}>
               {`${item.order}. ${item.feature_file}`}
             </Typography>
             {/* Mostrar los tags del feature si existen, ahora al lado del nombre */}
@@ -341,11 +341,11 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
         <IconButton key={`${item.id}-down`} edge="end" onClick={onMoveDown} size="small" disabled={isLast || !item.active}>
           <ArrowDownwardIcon />
         </IconButton>
-      <Tooltip title={item.active ? "Desactivar feature" : "Activar feature"}>
-        <IconButton edge="end" onClick={() => onToggleActivity(item)} size="small" sx={{ ml: 1 }}>
-          {item.active ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
-        </IconButton>
-      </Tooltip>
+        <Tooltip title={item.active ? "Desactivar feature" : "Activar feature"}>
+          <IconButton edge="end" onClick={() => onToggleActivity(item)} size="small" sx={{ ml: 1 }}>
+            {item.active ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+          </IconButton>
+        </Tooltip>
       </Paper>
       <Menu
         open={contextMenu !== null}
@@ -360,10 +360,11 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
         <MenuItem onClick={handleOpenInEditor}>Abrir en editor</MenuItem>
         <MenuItem onClick={handleToggle}>{item.active ? 'Desactivar' : 'Activar'}</MenuItem>
         <MenuItem onClick={handleDelete}>Eliminar</MenuItem>
-      </Menu> 
+      </Menu>
     </>
   );
 };
+const MemoizedExecutionItem = React.memo(ExecutionItem);
 
 const SortableModule: React.FC<{
   module: Module;
@@ -378,8 +379,8 @@ const SortableModule: React.FC<{
     transition,
     isDragging,
   } = useSortable({
-    id: module.module_name, 
-    data: { type: 'module' } 
+    id: module.module_name,
+    data: { type: 'module' }
   });
 
   const style = {
@@ -391,7 +392,7 @@ const SortableModule: React.FC<{
   };
 
   const droppableId = `module-drop-area-${module.module_name}`;
-  
+
   const { setNodeRef: setDroppableNodeRef, isOver } = useDroppable({
     id: droppableId,
     data: {
@@ -399,13 +400,15 @@ const SortableModule: React.FC<{
     },
   });
 
-  const combinedRef = (node: HTMLElement | null) => {
-    setNodeRef(node);
-    setDroppableNodeRef(node);
-  };
+  const { active, over: globalOver } = useDndContext();
+
+  // Highlighting logic:
+  const isDraggingFile = active?.data.current?.type === 'file-explorer-feature';
+  const isOverChild = globalOver?.data?.current?.sortable?.containerId === module.module_name;
+  const showHighlight = isDraggingFile && (isOver || isOverChild);
 
   return (
-    <Box ref={combinedRef} style={style} sx={{ position: 'relative' }}>
+    <Box ref={setNodeRef} style={style} sx={{ position: 'relative' }}>
       <Box
         {...attributes}
         {...listeners}
@@ -414,12 +417,12 @@ const SortableModule: React.FC<{
           left: 0,
           top: 0,
           bottom: 0,
-          width: '30px', 
+          width: '30px',
           cursor: 'grab',
           borderTopLeftRadius: (theme) => theme.shape.borderRadius,
           borderBottomLeftRadius: (theme) => theme.shape.borderRadius,
           backgroundColor: module.color || DEFAULT_MODULE_COLOR,
-          zIndex: 1, 
+          zIndex: 1,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -429,14 +432,15 @@ const SortableModule: React.FC<{
         <DragIndicatorIcon fontSize="small" />
       </Box>
       <Paper
+        ref={setDroppableNodeRef} // Explicitly attach droppable ref here
         elevation={2}
         sx={{
           mb: 2,
           p: 2,
           pl: 4,
-          backgroundColor: module.color ? `${module.color}20` : 'background.paper', 
-          outline: isOver ? '2px dashed' : 'none',
-          outlineColor: isOver ? 'primary.main' : 'transparent',
+          backgroundColor: module.color ? `${module.color}20` : 'background.paper',
+          outline: showHighlight ? '2px dashed' : 'none',
+          outlineColor: showHighlight ? 'primary.main' : 'transparent',
           transition: 'outline-color 0.2s ease-in-out, background-color 0.2s ease-in-out',
         }}
       >
@@ -462,6 +466,8 @@ const SortableModule: React.FC<{
   );
 };
 
+const MemoizedSortableModule = React.memo(SortableModule);
+
 interface ExecutionOrderProps {
   fontSize: number;
   onFeatureSelect: (path: string) => void;
@@ -479,10 +485,10 @@ interface ExecutionOrderProps {
   onStopTests: () => void;
 }
 
-const ExecutionOrder: React.FC<ExecutionOrderProps> = ({ 
-  fontSize, 
-  onFeatureSelect, 
-  modules, 
+const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
+  fontSize,
+  onFeatureSelect,
+  modules,
   setModules,
   scenarioStatuses,
   setScenarioStatuses,
@@ -533,7 +539,7 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
   const [selectedTags, setSelectedTags] = React.useState<Set<string>>(new Set());
 
 
-  const handleOpenDialog = () => { 
+  const handleOpenDialog = () => {
     // Filtra los módulos que no están activos para mostrarlos en el diálogo
     const inactiveModules = modules.filter(m => !m.active);
     setAvailableModules(inactiveModules);
@@ -559,14 +565,14 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
     // 1. Filtra los módulos que no son el propio módulo padre y que no están ya en uso como hooks.
     const availableModuleNames = modules
       .map(m => m.module_name)
-      .filter(name => 
+      .filter(name =>
         name !== targetModuleName &&
         !existingHookNames.has(name)
       );
 
     // 2. Obtiene los objetos Module completos para los nombres filtrados,
     //    asegurando que tenemos toda la información (incluyendo features y tags).
-    const availableFullModules = modules.filter(m => 
+    const availableFullModules = modules.filter(m =>
       availableModuleNames.includes(m.module_name)
     );
 
@@ -588,10 +594,10 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
     // Itera sobre los módulos seleccionados y los activa uno por uno.
     // El 'false' en el segundo argumento simula que el estado actual es 'inactivo',
     // forzando a handleToggleModuleActivity a enviar 'active: true' al backend.
-    const activationPromises = Array.from(selectedModules).map(moduleName => 
+    const activationPromises = Array.from(selectedModules).map(moduleName =>
       handleToggleModuleActivity(moduleName, false)
     );
-    
+
     const results = await Promise.all(activationPromises);
 
     // Después de que todas las promesas se resuelvan, tomamos el resultado de la última
@@ -677,7 +683,7 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
     await handleToggleModuleActivity(moduleName, true);
   };
 
-  const handleToggleModuleActivity = async (moduleName:string, currentActivity: boolean) => {
+  const handleToggleModuleActivity = async (moduleName: string, currentActivity: boolean) => {
     try {
       const response = await fetch(`/api/modules/${encodeURIComponent(moduleName)}/activity`, {
         method: 'PUT',
@@ -702,7 +708,7 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
       // Clonamos la respuesta para poder leer el JSON aquí y también devolverlo.
       const clonedResponse = response.clone();
       // Devolvemos la promesa que resuelve con los módulos actualizados para Promise.all
-      return clonedResponse.json(); 
+      return clonedResponse.json();
     } catch (error) {
       console.error('Error al cambiar el estado del módulo:', error);
     }
@@ -711,8 +717,8 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
   const handleDeleteFeature = async (moduleName: string, featureToDelete: FeatureItem) => {
     // Actualización optimista
     const originalModules = modules;
-    setModules(prev => prev.map(m => 
-      m.module_name === moduleName 
+    setModules(prev => prev.map(m =>
+      m.module_name === moduleName
         ? { ...m, features: m.features.filter(f => f.id !== featureToDelete.id) }
         : m
     ));
@@ -736,8 +742,8 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
   const handleToggleFeatureActivity = async (moduleName: string, featureToToggle: FeatureItem) => {
     // Actualización optimista
     const originalModules = modules;
-    setModules(prev => prev.map(m => 
-      m.module_name === moduleName 
+    setModules(prev => prev.map(m =>
+      m.module_name === moduleName
         ? { ...m, features: m.features.map(f => f.id === featureToToggle.id ? { ...f, active: !f.active } : f) }
         : m
     ));
@@ -838,11 +844,11 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
       prev.map(m =>
         m.module_name === moduleName
           ? {
-              ...m,
-              features: m.features.map(f =>
-                f.id === featureId ? { ...f, tags: newTags } : f
-              ),
-            }
+            ...m,
+            features: m.features.map(f =>
+              f.id === featureId ? { ...f, tags: newTags } : f
+            ),
+          }
           : m
       )
     );
@@ -852,10 +858,10 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
       const response = await fetch(`/api/modules/${encodeURIComponent(moduleName)}/features/tags`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           feature_file: feature.feature_file,
           feature_dir: feature.feature_dir,
-          tags: newTags 
+          tags: newTags
         }),
       });
 
@@ -929,10 +935,10 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
           </Button>
         </Tooltip>
         <Tooltip title={isExecuting ? "Detener Ejecución" : "Ejecutar Plan de Pruebas"}>
-          <Button 
-            variant="contained" 
-            color={isExecuting ? "error" : "primary"} 
-            size="small" sx={{ mr: 1 }} 
+          <Button
+            variant="contained"
+            color={isExecuting ? "error" : "primary"}
+            size="small" sx={{ mr: 1 }}
             onClick={isExecuting ? onStopTests : onRunTests}
             disabled={isExecuting && modules.length === 0} // Deshabilita si está ejecutando y no hay módulos
           >
@@ -941,15 +947,15 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
         </Tooltip>
       </Box>
       <Box sx={{ flex: 1, overflow: 'auto', px: 2 }}>
-          {Array.isArray(displayedModules) && displayedModules.length > 0 ? (
-          <SortableContext 
+        {Array.isArray(displayedModules) && displayedModules.length > 0 ? (
+          <SortableContext
             items={displayedModules.map(m => m.module_name)}
             strategy={verticalListSortingStrategy}
             disabled={active != null && active.data.current?.type !== 'module'}
           >
-            {displayedModules.map((module, index) => ( 
-              <SortableModule 
-                key={module.module_name} 
+            {displayedModules.map((module, index) => (
+              <MemoizedSortableModule
+                key={module.module_name}
                 module={module}
                 controls={
                   <>
@@ -985,67 +991,67 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
                 }
               >
                 {module.active && (
-                <>
-                  <CollapsibleSection 
-                    title="Setup" 
-                    count={(module.setup || []).length}
-                    isOpen={!collapsedSections.has(`${module.module_name}::setup`)}
-                    onToggle={() => handleToggleSectionCollapse(module.module_name, 'setup')}
-                    onAddModule={() => handleOpenHookDialog(module.module_name, 'setup')}
-                  >
-                    {(module.setup || []).map((hook, index) => (
-                      <HookItem 
-                        key={
-                          (typeof hook === 'object' && hook !== null && 'module_name' in hook ? hook.module_name : hook as string) + index
-                        }
-                        hook={hook}
-                        onNavigate={navigateToModule}
-                        onDelete={() => handleDeleteHook(module.module_name, 'setup', index)} />
-                    ))}
-                  </CollapsibleSection>
-                </>
+                  <>
+                    <CollapsibleSection
+                      title="Setup"
+                      count={(module.setup || []).length}
+                      isOpen={!collapsedSections.has(`${module.module_name}::setup`)}
+                      onToggle={() => handleToggleSectionCollapse(module.module_name, 'setup')}
+                      onAddModule={() => handleOpenHookDialog(module.module_name, 'setup')}
+                    >
+                      {(module.setup || []).map((hook, index) => (
+                        <HookItem
+                          key={
+                            (typeof hook === 'object' && hook !== null && 'module_name' in hook ? hook.module_name : hook as string) + index
+                          }
+                          hook={hook}
+                          onNavigate={navigateToModule}
+                          onDelete={() => handleDeleteHook(module.module_name, 'setup', index)} />
+                      ))}
+                    </CollapsibleSection>
+                  </>
                 )}
                 <CollapsibleSection title="Features" count={module.features.length} isOpen={!collapsedSections.has(`${module.module_name}::features`)} onToggle={() => handleToggleSectionCollapse(module.module_name, 'features')}>
                   {!collapsedSections.has(`${module.module_name}::features`) && (
-                  <SortableContext
-                    id={module.module_name}
-                    items={module.features.map((f: FeatureItem) => f.id)}
-                    strategy={verticalListSortingStrategy}
-                  >
-                    {[...(module.features || [])].sort((a, b) => a.order - b.order)
-                      .map((feature: FeatureItem, index: number) => (
-                      <ExecutionItem
-                        key={feature.id} item={feature} fontSize={fontSize}
-                        onDoubleClick={(item) => {
-                          const fullPath = [item.feature_dir, item.feature_file].filter(Boolean).join('/');
-                          onFeatureSelect(fullPath);
-                        }}
-                        onToggleActivity={() => handleToggleFeatureActivity(module.module_name, feature)}
-                        onDelete={() => handleDeleteFeature(module.module_name, feature)}
-                        onMoveUp={() => handleMoveFeature(module.module_name, feature, 'up')}
-                        onMoveDown={() => handleMoveFeature(module.module_name, feature, 'down')}
-                        onTagClick={(featureId, tag) => handleTagToggle(module.module_name, featureId, tag)}
-                        scenarioStatuses={scenarioStatuses}
-                        isRunning={feature.id === runningFeatureId}
-                        isFirst={index === 0}
-                        isLast={index === module.features.length - 1}
-                      />
-                    ))}
-                  </SortableContext>
+                    <SortableContext
+                      id={module.module_name}
+                      items={module.features.map((f: FeatureItem) => f.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      {[...(module.features || [])].sort((a, b) => a.order - b.order)
+                        .map((feature: FeatureItem, index: number) => (
+                          <MemoizedExecutionItem
+                            key={feature.id} item={feature} fontSize={fontSize}
+                            onDoubleClick={(item) => {
+                              const fullPath = [item.feature_dir, item.feature_file].filter(Boolean).join('/');
+                              onFeatureSelect(fullPath);
+                            }}
+                            onToggleActivity={() => handleToggleFeatureActivity(module.module_name, feature)}
+                            onDelete={() => handleDeleteFeature(module.module_name, feature)}
+                            onMoveUp={() => handleMoveFeature(module.module_name, feature, 'up')}
+                            onMoveDown={() => handleMoveFeature(module.module_name, feature, 'down')}
+                            onTagClick={(featureId, tag) => handleTagToggle(module.module_name, featureId, tag)}
+                            scenarioStatuses={scenarioStatuses}
+                            isRunning={feature.id === runningFeatureId}
+                            isFirst={index === 0}
+                            isLast={index === module.features.length - 1}
+                          />
+                        ))}
+                    </SortableContext>
                   )}
                 </CollapsibleSection>
 
                 {module.active && (
                   <>
-                    <CollapsibleSection 
-                      title="Teardown" 
+                    <CollapsibleSection
+                      title="Teardown"
                       count={(module.teardown || []).length}
                       isOpen={!collapsedSections.has(`${module.module_name}::teardown`)}
                       onToggle={() => handleToggleSectionCollapse(module.module_name, 'teardown')}
                       onAddModule={() => handleOpenHookDialog(module.module_name, 'teardown')}
                     >
                       {(module.teardown || []).map((hook, index) => (
-                        <HookItem 
+                        <HookItem
                           key={
                             (typeof hook === 'object' && hook !== null && 'module_name' in hook ? hook.module_name : hook as string) + index
                           }
@@ -1056,14 +1062,14 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
                     </CollapsibleSection>
                   </>
                 )}
-              </SortableModule>
+              </MemoizedSortableModule>
             ))}
           </SortableContext>
-          ) : (
-            <Typography sx={{ textAlign: 'center', mt: 4, color: 'text.secondary' }}>
-              No hay módulos en el plan de ejecución. Comience agregando un módulo o arrastrando un feature a esta área.
-            </Typography>
-          )
+        ) : (
+          <Typography sx={{ textAlign: 'center', mt: 4, color: 'text.secondary' }}>
+            No hay módulos en el plan de ejecución. Comience agregando un módulo o arrastrando un feature a esta área.
+          </Typography>
+        )
         }
       </Box>
 
@@ -1118,15 +1124,15 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
                 {availableHookModules.map(module => {
                   const allTags = Array.from(new Set(module.features.flatMap(f => f.display_tags || [])));
                   const isExpanded = expandedHookModule === module.module_name;
-                  
+
                   const moduleTagsSet = new Set(allTags);
                   const matchesFilter = selectedTags.size === 0 || Array.from(selectedTags).every(tag => moduleTagsSet.has(tag));
 
                   return (
                     <React.Fragment key={module.module_name}>
-                      <ListItem 
+                      <ListItem
                         disablePadding
-                        sx={{ 
+                        sx={{
                           opacity: matchesFilter ? 1 : 0.5,
                           transition: 'opacity 0.2s ease-in-out',
                         }}
@@ -1150,11 +1156,11 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
                             {allTags.length > 0 ? (
                               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                                 {allTags.map(tag => (
-                                  <Chip 
-                                    key={tag} 
-                                    label={tag} 
-                                    size="small" 
-                                    clickable 
+                                  <Chip
+                                    key={tag}
+                                    label={tag}
+                                    size="small"
+                                    clickable
                                     onClick={() => handleTagFilterToggle(tag)}
                                     color={selectedTags.has(tag) ? 'primary' : 'default'}
                                   />
