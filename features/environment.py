@@ -5,8 +5,9 @@ automatically at certain points in the test lifecycle.
 """
 import allure
 from allure_commons.types import AttachmentType
-from executor.ui_executor import executor
-from executor.tasks_worker.file_tasks import FileTasks
+from executor.task_executor import TaskExecutor
+# Import tasks module to ensure tasks are registered
+import executor.tasks.log_tasks
 import logging
 import time
 import json
@@ -16,8 +17,8 @@ logger = logging.getLogger(__name__)
 
 def before_all(context):
     """Executes once before all tests."""
-    # Instantiate the task processor once for the entire lifecycle.
-    context.file_tasks = FileTasks()
+    # Instantiate the task executor once for the entire lifecycle.
+    context.task_executor = TaskExecutor()
 
 def before_scenario(context, scenario):
     """
@@ -33,19 +34,24 @@ def before_scenario(context, scenario):
     }
     print(json.dumps(status_report), flush=True)
 
+    # Execute setup tasks
+    if hasattr(context, 'task_executor'):
+        context.task_executor.run_tasks(context, None, 'before_scenario')
+
 def before_step(context, step):
     """
     Executes BEFORE each step.
     """
-    # Delegates task processing to the FileTasks class.
-    context.file_tasks.run_tasks_from_context(context, step, 'before')
+    # Delegates task processing to the TaskExecutor class.
+    # Note: 'before' maps to 'before_step' logic in tasks that expect it.
+    context.task_executor.run_tasks(context, step, 'before')
 
 def after_step(context, step):
     """
     Executes after each step.
     """
-    # Delegates task processing to the FileTasks class.
-    context.file_tasks.run_tasks_from_context(context, step, 'after')
+    # Delegates task processing to the TaskExecutor class.
+    context.task_executor.run_tasks(context, step, 'after')
 
     # Avoids taking a screenshot if the step itself is already for taking a screenshot, to prevent duplication.
     if "take a screenshot as evidence" in step.name:
@@ -63,6 +69,10 @@ def after_scenario(context, scenario):
     Este hook se ejecuta después de cada escenario.
     Imprime un JSON estructurado a stdout con el estado del escenario.
     """
+    # Execute teardown tasks
+    if hasattr(context, 'task_executor'):
+        context.task_executor.run_tasks(context, None, 'after_scenario')
+
     feature_id = context.config.userdata.get("feature_id", "unknown_feature")
     status_report = {
         "type": "scenario_status",
