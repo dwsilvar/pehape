@@ -43,6 +43,8 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SyncIcon from '@mui/icons-material/Sync';
 import StopIcon from '@mui/icons-material/Stop';
 import LocalOfferIcon from '@mui/icons-material/LocalOffer';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import { useSortable, SortableContext, verticalListSortingStrategy, } from '@dnd-kit/sortable';
 import { arrayMove } from '@dnd-kit/sortable';
 import { useDroppable, useDndContext, Active } from '@dnd-kit/core';
@@ -483,6 +485,9 @@ interface ExecutionOrderProps {
   onToggleSectionCollapse: (sectionId: string) => void;
   navigateToModule: (moduleName: string) => void;
   onStopTests: () => void;
+  onScheduleTests: (date: Date) => void;
+  scheduledExecutionTime: Date | null;
+  onCancelSchedule: () => void;
 }
 
 const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
@@ -500,6 +505,10 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
   onToggleSectionCollapse,
   navigateToModule,
   onStopTests,
+
+  onScheduleTests,
+  scheduledExecutionTime,
+  onCancelSchedule,
 }) => {
   // Necesitamos acceder al elemento activo para deshabilitar el SortableContext si no es un módulo.
   // Esto es un patrón avanzado para permitir que droppables externos funcionen dentro de un SortableContext.
@@ -537,6 +546,34 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
   const [selectedHookModule, setSelectedHookModule] = React.useState<string>('');
   const [expandedHookModule, setExpandedHookModule] = React.useState<string | null>(null);
   const [selectedTags, setSelectedTags] = React.useState<Set<string>>(new Set());
+
+  // --- State para el diálogo de agendar ejecución ---
+  const [scheduleDialogOpen, setScheduleDialogOpen] = React.useState(false);
+  const [scheduledTime, setScheduledTime] = React.useState('');
+
+  const handleOpenScheduleDialog = () => {
+    setScheduleDialogOpen(true);
+    // Set default time to 5 minutes from now for convenience
+    const now = new Date();
+    // Adjust to local ISO string (handling timezone offset manually is tricky, 
+    // but input type="datetime-local" expects YYYY-MM-DDThh:mm)
+    const offsetMs = now.getTimezoneOffset() * 60 * 1000;
+    const localISOTime = (new Date(now.getTime() - offsetMs + 5 * 60 * 1000)).toISOString().slice(0, 16);
+    setScheduledTime(localISOTime);
+  };
+
+  const handleCloseScheduleDialog = () => {
+    setScheduleDialogOpen(false);
+  };
+
+  const handleConfirmSchedule = () => {
+    if (scheduledTime) {
+      onScheduleTests(new Date(scheduledTime));
+      handleCloseScheduleDialog();
+    }
+  };
+
+
 
 
   const handleOpenDialog = () => {
@@ -941,11 +978,33 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
             color={isExecuting ? "error" : "primary"}
             size="small" sx={{ mr: 1 }}
             onClick={isExecuting ? onStopTests : onRunTests}
-            disabled={isExecuting && modules.length === 0} // Deshabilita si está ejecutando y no hay módulos
+            disabled={(isExecuting && modules.length === 0) || !!scheduledExecutionTime} // Deshabilita si está ejecutando o programado
           >
             {isExecuting ? <StopIcon /> : <PlayArrowIcon />}
           </Button>
         </Tooltip>
+        <Tooltip title={scheduledExecutionTime ? "Ya existe una ejecución programada" : "Programar Ejecución"}>
+          <Button
+            variant="outlined"
+            color="primary"
+            size="small"
+            onClick={handleOpenScheduleDialog}
+            disabled={isExecuting || modules.length === 0 || !!scheduledExecutionTime}
+          >
+            <AccessTimeIcon />
+          </Button>
+        </Tooltip>
+
+        {scheduledExecutionTime && (
+          <Chip
+            icon={<AccessTimeIcon />}
+            label={`Programado: ${scheduledExecutionTime.toLocaleString()}`}
+            onDelete={onCancelSchedule}
+            color="warning"
+            variant="outlined"
+            sx={{ ml: 1 }}
+          />
+        )}
       </Box>
       <Box sx={{ flex: 1, overflow: 'auto', px: 2 }}>
         {Array.isArray(displayedModules) && displayedModules.length > 0 ? (
@@ -1074,6 +1133,32 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
         }
       </Box>
 
+      <Dialog open={scheduleDialogOpen} onClose={handleCloseScheduleDialog}>
+        <DialogTitle>Programar Ejecución</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Selecciona la fecha y hora para iniciar la ejecución de pruebas automáticamente.
+          </DialogContentText>
+          <TextField
+            id="schedule-datetime"
+            label="Fecha y Hora"
+            type="datetime-local"
+            value={scheduledTime}
+            onChange={(e) => setScheduledTime(e.target.value)}
+            InputLabelProps={{
+              shrink: true,
+            }}
+            fullWidth
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseScheduleDialog}>Cancelar</Button>
+          <Button onClick={handleConfirmSchedule} variant="contained" color="primary">
+            Programar
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Dialog open={dialogOpen} onClose={handleCloseDialog}>
         <DialogTitle>Agregar Módulos al Plan de Ejecución</DialogTitle>
         <DialogContent>
@@ -1189,7 +1274,7 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
           <Button onClick={handleConfirmAddHook} disabled={!selectedHookModule}>Agregar</Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </Box >
   );
 };
 

@@ -168,9 +168,15 @@ active_test_state = {
     "inactivity_timer": None  # Para el temporizador del watchdog
 }
 
-# Tiempo en segundos antes de considerar que un proceso está congelado si no hay salida.
+# Tiempo en segundos antes de বিষiderar que un proceso está congelado si no hay salida.
 # 5 minutos por defecto.
 INACTIVITY_TIMEOUT_SECONDS = 5 * 60
+
+# Estado global para la ejecución programada
+scheduled_test_state = {
+    "timer": None,
+    "time": None
+}
 # -------------------------------------------------
 
 @app.route('/api/features', methods=['GET'])
@@ -890,72 +896,196 @@ def stop_tests():
 
 
 
+
+from datetime import datetime
+import time
+
+def _start_test_process():
+    """
+    Función interna para iniciar el proceso de pruebas.
+    Retorna el proceso o lanza una excepción.
+    """
+    global active_test_state
+    
+    # Verificación de estado
+    if active_test_state["process"] and active_test_state["process"].poll() is None:
+        raise Exception("Ya hay una ejecución de pruebas en curso.")
+
+    # Limpiar la cola de logs de ejecuciones anteriores
+    while not log_queue.empty():
+        log_queue.get()
+
+    # La ruta a la raíz del proyecto, subiendo un nivel desde la carpeta 'backend'
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    script_path = os.path.join(project_root, 'behave_master.py')
+
+    if not os.path.exists(script_path):
+        raise FileNotFoundError("El script behave_master.py no fue encontrado.")
+
+    # Ejecutar el script de Python en un nuevo proceso
+    preexec_fn = None if os.name == 'nt' else os.setsid
+    creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == 'nt' else 0
+
+    # Forzar la codificación UTF-8 para el subproceso.
+    env = os.environ.copy()
+    env['PYTHONIOENCODING'] = 'utf-8'
+
+    process = subprocess.Popen(
+        [sys.executable, script_path],
+        cwd=project_root,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding='utf-8',
+        errors='replace',
+        bufsize=1, # Line-buffered
+        preexec_fn=preexec_fn,
+        creationflags=creationflags,
+        env=env
+    )
+
+    active_test_state["process"] = process
+    print(f"Ejecución de pruebas iniciada con PID: {process.pid}")
+
+    # Iniciar el watchdog por primera vez.
+    _reset_inactivity_timer()
+
+    # Iniciar un hilo para leer la salida del proceso sin bloquear
+    def process_handler_thread():
+        _stream_process_output(process)
+        _cleanup_test_state() # Limpia el estado cuando el proceso ha terminado.
+    
+    thread = threading.Thread(target=process_handler_thread)
+    thread.start()
+    
+    return process
+
 @app.route('/api/run-tests', methods=['POST'])
 def run_tests():
     """
-    Endpoint para iniciar la ejecución de las pruebas con behave_master.py.
-    Ejecuta el script en un proceso separado para no bloquear el servidor.
+    Endpoint para iniciar la ejecución de las pruebas inmediatamente.
     """
     try:
-        global active_test_state
-        if active_test_state["process"] and active_test_state["process"].poll() is None:
-            return jsonify({"message": "Ya hay una ejecución de pruebas en curso."}), 409 # Conflict
-
-        # Limpiar la cola de logs de ejecuciones anteriores
-        while not log_queue.empty():
-            log_queue.get()
-
-        # La ruta a la raíz del proyecto, subiendo un nivel desde la carpeta 'backend'
-        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        script_path = os.path.join(project_root, 'behave_master.py')
-
-        if not os.path.exists(script_path):
-            return jsonify({"error": "El script behave_master.py no fue encontrado."}), 404
-
-        # Ejecutar el script de Python en un nuevo proceso
-        # Se ejecuta desde la raíz del proyecto para que las rutas relativas dentro del script funcionen
-        # Se crea un nuevo grupo de procesos para poder terminar el proceso principal y todos sus hijos.
-        preexec_fn = None if os.name == 'nt' else os.setsid
-        creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == 'nt' else 0
-
-        # Forzar la codificación UTF-8 para el subproceso.
-        # Esto resuelve los UnicodeEncodeError en Windows al imprimir en stdout/stderr.
-        env = os.environ.copy()
-        env['PYTHONIOENCODING'] = 'utf-8'
-
-        process = subprocess.Popen(
-            [sys.executable, script_path],
-            cwd=project_root,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            encoding='utf-8',
-            errors='replace', # Añade manejo de errores de decodificación
-            bufsize=1, # Line-buffered
-            # --- Parámetros para la creación del grupo de procesos ---
-            preexec_fn=preexec_fn, # En Unix, crea una nueva sesión
-            creationflags=creationflags, # En Windows, crea un nuevo grupo de procesos
-            env=env # Pasa el entorno modificado al subproceso
-            # ---------------------------------------------------------
-        )
-
-        active_test_state["process"] = process
-        print(f"Ejecución de pruebas iniciada con PID: {process.pid}")
-
-        # Iniciar el watchdog por primera vez.
-        _reset_inactivity_timer()
-
-        # Iniciar un hilo para leer la salida del proceso sin bloquear
-        # y manejar la limpieza cuando termine.
-        def process_handler_thread():
-            _stream_process_output(process)
-            _cleanup_test_state() # Limpia el estado cuando el proceso ha terminado.
-        thread = threading.Thread(target=process_handler_thread)
-        thread.start()
-
-        return jsonify({"message": "La ejecución de pruebas ha comenzado."}), 202 # 202 Accepted
+        _start_test_process()
+        return jsonify({"message": "La ejecución de pruebas ha comenzado."}), 202
+    except FileNotFoundError as e:
+        return jsonify({"error": str(e)}), 404
     except Exception as e:
+        if "Ya hay una ejecución" in str(e):
+             return jsonify({"message": str(e)}), 409
         return jsonify({"error": f"Error al intentar iniciar la ejecución: {str(e)}"}), 500
+
+@app.route('/api/schedule-tests', methods=['POST'])
+def schedule_tests():
+    """
+    Endpoint para programar la ejecución de pruebas en una fecha/hora específica.
+    Body: { "execution_time": "YYYY-MM-DDTHH:MM:SS" }
+    """
+    try:
+        data = request.json
+        execution_time_str = data.get('execution_time')
+        
+        if not execution_time_str:
+             return jsonify({"error": "Se requiere parameter 'execution_time'"}), 400
+             
+        # Parsear con/sin timezone (asumiendo local time si no trae)
+        # Frontend enviará ISO string. 
+        # Para simplificar, convertimos todo a timestamps de sistema.
+        
+        try:
+            target_time = datetime.fromisoformat(execution_time_str)
+        except ValueError:
+            return jsonify({"error": "Formato de fecha inválido. Use ISO 8601"}), 400
+
+        now = datetime.now().astimezone() if target_time.tzinfo else datetime.now()
+        
+        delay = (target_time - now).total_seconds()
+        
+        if delay <= 0:
+             return jsonify({"error": "La hora programada debe ser en el futuro."}), 400
+             
+        print(f"Programando ejecución en {delay} segundos (Target: {target_time})")
+        
+        # Cancelar cualquier temporizador existente antes de poner uno nuevo
+        if scheduled_test_state["timer"]:
+            scheduled_test_state["timer"].cancel()
+            print("Temporizador anterior cancelado.")
+
+        def scheduled_execution():
+            print(f"Ejecutando pruebas programadas para {target_time}")
+            scheduled_test_state["timer"] = None
+            scheduled_test_state["time"] = None
+            try:
+                # Ponemos un mensaje en el log para que el frontend sepa que arrancó
+                log_queue.put(f"--- INICIO DE EJECUCIÓN PROGRAMADA ({target_time}) ---")
+                _start_test_process()
+            except Exception as e:
+                print(f"Error en ejecución programada: {e}")
+                log_queue.put(f"Error al iniciar ejecución programada: {e}")
+
+        # Usar threading.Timer para la ejecución diferida
+        timer = threading.Timer(delay, scheduled_execution)
+        timer.start()
+        
+        scheduled_test_state["timer"] = timer
+        scheduled_test_state["time"] = target_time.isoformat()
+
+        return jsonify({
+            "message": f"Ejecución programada exitosamente para {execution_time_str}",
+            "delay_seconds": delay
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/schedule-status', methods=['GET'])
+def get_schedule_status():
+    """
+    Endpoint para obtener el estado de la ejecución programada.
+    """
+    try:
+        is_scheduled = scheduled_test_state["timer"] is not None
+        execution_time = scheduled_test_state["time"]
+        return jsonify({
+            "scheduled": is_scheduled,
+            "execution_time": execution_time
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/cancel-schedule', methods=['POST'])
+def cancel_schedule():
+    """
+    Endpoint para cancelar una ejecución programada.
+    """
+    try:
+        if scheduled_test_state["timer"]:
+            scheduled_test_state["timer"].cancel()
+            scheduled_test_state["timer"] = None
+            scheduled_test_state["time"] = None
+            return jsonify({"message": "Ejecución programada cancelada exitosamente."}), 200
+        else:
+            return jsonify({"message": "No hay ejecuciones programadas para cancelar."}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/execution-status', methods=['GET'])
+def get_execution_status():
+    """
+    Endpoint para obtener el estado actual de la ejecución de pruebas (si hay un proceso activo).
+    """
+    try:
+        is_running = active_test_state["process"] is not None and active_test_state["process"].poll() is None
+        pid = active_test_state["process"].pid if is_running else None
+        return jsonify({
+            "running": is_running,
+            "pid": pid
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

@@ -6,3 +6,8 @@ reports/*
 __pycache__
 
 frontend/node_modules/
+*.feature
+*.png
+*.jpg
+*.jpeg
+

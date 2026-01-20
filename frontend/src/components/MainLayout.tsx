@@ -58,7 +58,14 @@ const MainLayout: React.FC = () => {
   const [focusedModule, setFocusedModule] = useState<string | null>(null);
 
   // --- UI PERSPECTIVE STATE (Now shared via Context) ---
-  const { activeView: activePerspective, setActiveView, isConsoleOpen, toggleConsole } = useLayout();
+  const {
+    activeView: activePerspective, setActiveView, isConsoleOpen, toggleConsole,
+    logs, setLogs,
+    scenarioStatuses, setScenarioStatuses,
+    isExecuting, setIsExecuting,
+    runningFeatureId, setRunningFeatureId,
+    scheduledExecutionTime, setScheduledExecutionTime
+  } = useLayout();
   // const [activePerspective, setActivePerspective] = useState<'editor' | 'orchestrator'>('editor'); // REMOVED local state
   // const [isConsoleOpen, setIsConsoleOpen] = useState(true); // REMOVED local state
   const [orchestratorTab, setOrchestratorTab] = useState(0); // 0: ExecutionOrder, 1: Modules
@@ -198,10 +205,7 @@ const MainLayout: React.FC = () => {
 
   // Estados levantados desde ExecutionOrder para persistencia entre pestañas
   // y para ser gestionados por el layout principal.
-  const [logs, setLogs] = useState<string[]>([]);
-  const [scenarioStatuses, setScenarioStatuses] = useState<ScenarioStatusMap>({});
-  const [isExecuting, setIsExecuting] = useState(false);
-  const [runningFeatureId, setRunningFeatureId] = useState<string | null>(null);
+  // AHORA gestionados por LayoutContext para percistencia entre rutas.
 
   // Estado para gestionar el elemento que se está arrastrando y mostrar el overlay
   const [activeDragItem, setActiveDragItem] = useState<Active | null>(null);
@@ -381,11 +385,67 @@ const MainLayout: React.FC = () => {
   }, []);
 
   // --- Lógica de ejecución de pruebas, ahora en el layout principal ---
+  // Refactorizar la lógica de conexión a logs en una función reutilizable
+  const connectToLogStream = useCallback(() => {
+    setLogs(prev => [...prev, 'Conectando al flujo de logs...']);
+    const eventSource = new EventSource('/api/stream-logs');
+
+    eventSource.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+
+      if (data.type === 'scenario_status') {
+        const featureIdForUpdate = data.feature_id;
+        if (featureIdForUpdate) {
+          if (data.status === 'running') {
+            setRunningFeatureId(featureIdForUpdate);
+          }
+          const uniqueScenarioId = `${featureIdForUpdate}::${data.name}`;
+          setScenarioStatuses(prev => ({ ...prev, [uniqueScenarioId]: data.status }));
+        }
+        return;
+      }
+
+      if (data.type === 'report_ready' && data.reportUrl) {
+        setLogs(prev => [...prev, '--- Reporte disponible. ---']);
+        window.open(data.reportUrl, '_blank');
+        return;
+      }
+
+      if (data.log === '---EXECUTION_FINISHED---') {
+        setLogs(prev => [...prev, '--- Ejecución finalizada. ---']);
+        setIsExecuting(false);
+        eventSource.close();
+        setRunningFeatureId(null);
+      } else if (data.log === '---EXECUTION_STOPPED_BY_USER---') {
+        setLogs(prev => [...prev, '--- Ejecución detenida por el usuario. ---']);
+        setRunningFeatureId(null);
+        setIsExecuting(false);
+        eventSource.close();
+      } else if (data.log === '---EXECUTION_KILLED_BY_WATCHDOG---') {
+        setLogs(prev => [...prev, '--- Ejecución terminada por el Watchdog (Tiempo de espera agotado) ---']);
+        setRunningFeatureId(null);
+        setIsExecuting(false);
+        eventSource.close();
+      } else {
+        if (data.log) {
+          bufferedLogsRef.current.push(data.log);
+        }
+      }
+    };
+
+    eventSource.onerror = () => {
+      console.log("EventSource connection closed or error.");
+      eventSource.close();
+    };
+
+    return eventSource;
+  }, []);
+
   const handleRunTests = async () => {
     if (isExecuting) return;
 
     setIsExecuting(true);
-    setLogs(['Iniciando conexión con el servidor...']);
+    setLogs(['Iniciando ejecución...']);
     setScenarioStatuses({});
     setRunningFeatureId(null);
 
@@ -398,56 +458,9 @@ const MainLayout: React.FC = () => {
       const result = await response.json();
       setLogs(prev => [...prev, result.message]);
 
-      const eventSource = new EventSource('/api/stream-logs');
+      // Conectar al stream
+      connectToLogStream();
 
-      eventSource.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-
-        if (data.type === 'scenario_status') {
-          // Lógica simplificada gracias a que el backend ahora envía el feature_id.
-          // Ya no necesitamos buscar ni adivinar.
-          const featureIdForUpdate = data.feature_id;
-
-          if (featureIdForUpdate) {
-            // Si el escenario está empezando a correr, actualizamos el feature activo.
-            if (data.status === 'running') {
-              setRunningFeatureId(featureIdForUpdate);
-            }
-            const uniqueScenarioId = `${featureIdForUpdate}::${data.name}`;
-            setScenarioStatuses(prev => ({ ...prev, [uniqueScenarioId]: data.status }));
-          }
-          return;
-        }
-
-        if (data.type === 'report_ready' && data.reportUrl) {
-          setLogs(prev => [...prev, '--- Reporte disponible. ---']);
-          window.open(data.reportUrl, '_blank');
-          return;
-        }
-
-        if (data.log === '---EXECUTION_FINISHED---') {
-          setLogs(prev => [...prev, '--- Ejecución finalizada. ---']);
-          setIsExecuting(false);
-          eventSource.close();
-          setRunningFeatureId(null);
-        } else if (data.log === '---EXECUTION_STOPPED_BY_USER---') {
-          setLogs(prev => [...prev, '--- Ejecución detenida por el usuario. ---']);
-          setRunningFeatureId(null);
-          setIsExecuting(false);
-          eventSource.close();
-        } else {
-          // Push to buffer instead of immediate state update
-          if (data.log) {
-            bufferedLogsRef.current.push(data.log);
-          }
-        }
-      };
-
-      eventSource.onerror = () => {
-        setLogs(prev => [...prev, 'Error en la conexión de streaming. Se ha cerrado.']);
-        setIsExecuting(false);
-        eventSource.close();
-      };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
       setLogs(prev => [...prev, `Error al iniciar la ejecución: ${errorMessage}`]);
@@ -470,6 +483,75 @@ const MainLayout: React.FC = () => {
       setLogs(prev => [...prev, `Error al detener la ejecución: ${errorMessage}`]);
     }
   };
+
+  const handleScheduleTests = async (date: Date) => {
+    try {
+      setLogs(prev => [...prev, `Programando ejecución para: ${date.toLocaleString()}...`]);
+      const response = await fetch('/api/schedule-tests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ execution_time: date.toISOString() }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to schedule tests');
+      }
+      const result = await response.json();
+      setLogs(prev => [...prev, result.message]);
+      setScheduledExecutionTime(date);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+      setLogs(prev => [...prev, `Error al programar ejecución: ${errorMessage}`]);
+    }
+  };
+
+  const handleCancelSchedule = async () => {
+    try {
+      const response = await fetch('/api/cancel-schedule', { method: 'POST' });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to cancel schedule');
+      }
+      setScheduledExecutionTime(null);
+      setLogs(prev => [...prev, 'Ejecución programada cancelada.']);
+    } catch (error) {
+      setLogs(prev => [...prev, 'Error al cancelar la programación.']);
+    }
+  };
+
+  useEffect(() => {
+    const checkStatus = async () => {
+      try {
+        const scheduleResponse = await fetch('/api/schedule-status');
+        if (scheduleResponse.ok) {
+          const data = await scheduleResponse.json();
+          if (data.scheduled && data.execution_time) {
+            setScheduledExecutionTime(new Date(data.execution_time));
+          } else {
+            setScheduledExecutionTime(null);
+          }
+        }
+
+        const executionResponse = await fetch('/api/execution-status');
+        if (executionResponse.ok) {
+          const execData = await executionResponse.json();
+          if (execData.running && !isExecuting) {
+            console.log("Detectada ejecución en segundo plano. Conectando logs...");
+            setIsExecuting(true);
+            setScheduledExecutionTime(null);
+            connectToLogStream();
+          }
+        }
+      } catch (error) {
+        console.error("Error polling statuses", error);
+      }
+    };
+
+    checkStatus();
+    const interval = setInterval(checkStatus, 5000);
+    return () => clearInterval(interval);
+  }, [isExecuting, connectToLogStream]);
 
   const ConsoleTabLabel = () => (
     <Box sx={{ display: 'flex', alignItems: 'center' }}>
@@ -755,6 +837,9 @@ const MainLayout: React.FC = () => {
                           onToggleSectionCollapse={handleToggleExecutionOrderCollapse}
                           navigateToModule={navigateToModule}
                           onStopTests={handleStopTests}
+                          onScheduleTests={handleScheduleTests}
+                          scheduledExecutionTime={scheduledExecutionTime}
+                          onCancelSchedule={handleCancelSchedule}
                         />
                       ) : (
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 2 }}>
