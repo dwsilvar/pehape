@@ -39,6 +39,56 @@ from executor.tasks_core.registry import get_all_tasks
 # En un entorno real, esto podría ser dinámico (auto-discovery)
 import executor.tasks.log_tasks
 
+# --- Herramientas / Tareas Predefinidas ---
+@app.route('/api/tools/check-literal', methods=['POST'])
+def check_literal_in_file():
+    """
+    Herramienta simple para buscar un literal en un archivo.
+    Entrada: { "path": "ruta/al/archivo", "literal": "texto_a_buscar" }
+    """
+    try:
+        data = request.json
+        rel_path = data.get('path')
+        literal = data.get('literal')
+
+        if not rel_path or not literal:
+            return jsonify({"error": "Se requieren 'path' y 'literal'"}), 400
+
+        # Validemos que el path sea seguro y dentro del proyecto
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        full_path = os.path.abspath(os.path.join(project_root, rel_path))
+
+        if not os.path.normcase(full_path).startswith(os.path.normcase(project_root)):
+             return jsonify({"error": f"Acceso denegado: Ruta fuera del proyecto. ({full_path} vs {project_root})"}), 403
+             
+        if not os.path.exists(full_path):
+             return jsonify({"error": f"Archivo no encontrado: {rel_path}"}), 404
+             
+        if not os.path.isfile(full_path):
+             return jsonify({"error": f"La ruta no corresponde a un archivo: {rel_path}"}), 400
+
+        matches = []
+        try:
+            with open(full_path, 'r', encoding='utf-8') as f:
+                for line_num, line in enumerate(f, 1):
+                    if literal in line:
+                        matches.append({
+                            "line": line_num,
+                            "content": line.strip()
+                        })
+        except UnicodeDecodeError:
+             return jsonify({"error": "No se pudo leer el archivo (posible binario o codificación incorrecta)"}), 400
+
+        return jsonify({
+            "found": len(matches) > 0,
+            "count": len(matches),
+            "matches": matches[:100] # Limitar a 100 resultados por seguridad
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+# -----------------------------------------------
+
 @app.route('/api/tasks', methods=['GET'])
 def list_tasks():
     """
@@ -1087,5 +1137,24 @@ def get_execution_status():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve_react_app(path):
+    """
+    Sirve la aplicación React (Single Page Application).
+    Si el archivo existe en frontend/dist, lo sirve.
+    Si no, sirve index.html para que el router de React maneje la ruta.
+    """
+    frontend_dist = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'frontend', 'dist')
+    
+    # Seguridad: Evitar salir del directorio
+    # En producción real, nginx manejaría esto mejor.
+    
+    if path and os.path.exists(os.path.join(frontend_dist, path)):
+        return send_from_directory(frontend_dist, path)
+    
+    return send_from_directory(frontend_dist, 'index.html')
+
 if __name__ == '__main__':
+    # Listen on all interfaces
     app.run(host='0.0.0.0', port=5000, debug=True)
