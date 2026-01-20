@@ -564,11 +564,12 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
     // Obtiene los módulos completos que pueden ser añadidos como hooks.
     // 1. Filtra los módulos que no son el propio módulo padre y que no están ya en uso como hooks.
     const availableModuleNames = modules
-      .map(m => m.module_name)
-      .filter(name =>
-        name !== targetModuleName &&
-        !existingHookNames.has(name)
-      );
+      .filter(m =>
+        m.module_name !== targetModuleName &&
+        !existingHookNames.has(m.module_name) &&
+        m.is_hook === true
+      )
+      .map(m => m.module_name);
 
     // 2. Obtiene los objetos Module completos para los nombres filtrados,
     //    asegurando que tenemos toda la información (incluyendo features y tags).
@@ -1108,7 +1109,7 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
         <DialogTitle>
           Agregar Hook de '{hookDialogData?.hookType}'
           <DialogContentText sx={{ fontSize: '0.9rem', mt: 1 }}>
-            Solo se pueden agregar módulos que no tengan sus propios hooks de setup y teardown.
+            Solo se muestran los módulos marcados como "Hooks". Asegúrese de clasificar el módulo deseado como hook en la vista de Módulos.
           </DialogContentText>
         </DialogTitle>
         <DialogContent sx={{ height: '400px' }}>

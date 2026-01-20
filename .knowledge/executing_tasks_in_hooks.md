@@ -19,8 +19,10 @@ A diferencia de la versión anterior monolítica, ahora cada tarea es una clase 
 1.  Cree un nuevo archivo python en `executor/tasks/`.
 2.  Defina una clase que herede de `BaseTask`.
 3.  Decore la clase con `@register_task("nombre_tarea")`.
-4.  Implemente la lógica en `execute`.
-5.  (Opcional) Sobrescriba `should_run` para controlar cuándo se ejecuta.
+4.  **Importante:** Añada un **Docstring** descriptivo (se mostrará en la documentación web).
+5.  **Importante:** Defina el atributo de clase `scope` (ej. "Before Scenario", "After Step") para categorizarla en la UI.
+6.  Implemente la lógica en `execute`.
+7.  (Opcional) Sobrescriba `should_run` para controlar cuándo se ejecuta.
 
 **Ejemplo:**
 
@@ -31,6 +33,12 @@ from executor.tasks_core.base_task import BaseTask
 
 @register_task("setup_db")
 class SetupDBTask(BaseTask):
+    """
+    Inicializa la base de datos con datos de prueba básicos.
+    Requiere que el entorno esté levantado.
+    """
+    scope = "Before Scenario"
+
     def should_run(self, hook_type, step) -> bool:
         # Solo correr al inicio del escenario
         return hook_type == 'before_scenario'

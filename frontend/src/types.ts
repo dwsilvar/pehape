@@ -39,6 +39,7 @@ export interface Module {
     execution_order?: { [key: string]: boolean };
     modules_view?: { [key: string]: boolean };
   };
+  is_hook?: boolean;
 }
 
 /**

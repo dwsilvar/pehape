@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Box, Paper, Tabs, Tab, MenuItem, AppBar, Toolbar, Button, Menu, ThemeProvider, CssBaseline, Badge, IconButton, Tooltip, Divider, Typography, CircularProgress } from '@mui/material';
+import { useLocation, useNavigate } from 'react-router-dom';
 import CodeIcon from '@mui/icons-material/Code';
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import TerminalIcon from '@mui/icons-material/Terminal';
@@ -15,6 +16,7 @@ import ConsoleView from './ConsoleView'; // Importar la nueva vista de consola
 import { FileData, Module, ScenarioStatusMap } from '../types';
 import { getAppTheme } from '../theme';
 import { useExecutionOrder } from '../hooks/useExecutionOrder';
+import { useLayout } from '../context/LayoutContext';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -55,9 +57,10 @@ const MainLayout: React.FC = () => {
   const modulesRef = useRef(modules);
   const [focusedModule, setFocusedModule] = useState<string | null>(null);
 
-  // --- UI PERSPECTIVE STATE ---
-  const [activePerspective, setActivePerspective] = useState<'editor' | 'orchestrator'>('editor');
-  const [isConsoleOpen, setIsConsoleOpen] = useState(true);
+  // --- UI PERSPECTIVE STATE (Now shared via Context) ---
+  const { activeView: activePerspective, setActiveView, isConsoleOpen, toggleConsole } = useLayout();
+  // const [activePerspective, setActivePerspective] = useState<'editor' | 'orchestrator'>('editor'); // REMOVED local state
+  // const [isConsoleOpen, setIsConsoleOpen] = useState(true); // REMOVED local state
   const [orchestratorTab, setOrchestratorTab] = useState(0); // 0: ExecutionOrder, 1: Modules
 
   // --- LIFTED STATE FOR COLLAPSE/EXPAND ---
@@ -306,6 +309,32 @@ const MainLayout: React.FC = () => {
     }
   }, [setEditorContent, setSelectedFile, setTabValue]);
 
+  // Handle URL query param for opening files
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const fileToOpen = params.get('openFile');
+
+    if (fileToOpen) {
+      // Ensure we are in the editor view
+      if (activePerspective !== 'editor') {
+        setActiveView('editor');
+      }
+
+      // If file is already selected, don't re-fetch unless it's different
+      if (selectedFile?.path !== fileToOpen) {
+        console.log("Auto-opening file from URL:", fileToOpen);
+        handleFileSelect(fileToOpen);
+      }
+
+      // Optional: Clear the param so refreshing doesn't force-reopen or to leave URL clean
+      // But keep it clean for now to see it works
+      // navigate('/', { replace: true }); 
+    }
+  }, [location.search, handleFileSelect, selectedFile, navigate]);
+
   const handleEditorChange = useCallback((value: string | undefined) => {
     if (value !== undefined) {
       setEditorContent(value);
@@ -511,7 +540,7 @@ const MainLayout: React.FC = () => {
             if (!over) return;
 
             // ... (Drag Logic remains largely the same, ensuring variables activePerspective don't break logic) ...
-            // ... Since I am replacing the block, I need to include the logic or refer to it. 
+            // ... Since I am replacing the block, I need to include the logic or refer to it.
             // ... Given the tool limitation, I will copy the logic but verify context availability.
 
             // CASO 1: Arrastrar un feature desde el FileExplorer a un Módulo
@@ -613,53 +642,6 @@ const MainLayout: React.FC = () => {
           }}
         >
           <Box sx={{ display: 'flex', flexDirection: 'row', height: '100vh', overflow: 'hidden', bgcolor: 'background.default' }}>
-
-            {/* 1. ACTIVITY BAR (Side Menu) */}
-            <Paper elevation={3} sx={{
-              width: '50px',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              pt: 2,
-              gap: 2,
-              zIndex: 1200,
-              bgcolor: 'background.paper',
-              borderRight: 1,
-              borderColor: 'divider'
-            }}>
-              <Tooltip title="Editor (Code)" placement="right">
-                <IconButton
-                  onClick={() => setActivePerspective('editor')}
-                  color={activePerspective === 'editor' ? 'primary' : 'default'}
-                >
-                  <CodeIcon fontSize="large" />
-                </IconButton>
-              </Tooltip>
-
-              <Tooltip title="Orchestrator (Flow)" placement="right">
-                <IconButton
-                  onClick={() => setActivePerspective('orchestrator')}
-                  color={activePerspective === 'orchestrator' ? 'primary' : 'default'}
-                >
-                  <AccountTreeIcon fontSize="large" />
-                </IconButton>
-              </Tooltip>
-
-              <Divider flexItem />
-
-              {activePerspective !== 'editor' && (
-                <Tooltip title="Toggle Console" placement="right">
-                  <IconButton
-                    onClick={() => setIsConsoleOpen(!isConsoleOpen)}
-                    color={isConsoleOpen ? 'secondary' : 'default'}
-                  >
-                    <Badge badgeContent={isExecuting ? '!' : 0} color="warning" variant="dot" invisible={!isExecuting}>
-                      <TerminalIcon fontSize="large" />
-                    </Badge>
-                  </IconButton>
-                </Tooltip>
-              )}
-            </Paper>
 
             {/* 2. SIDEBAR (File Explorer) - Only visible in Editor Mode */}
             {activePerspective === 'editor' && (
@@ -801,7 +783,7 @@ const MainLayout: React.FC = () => {
                 >
                   <Box sx={{ display: 'flex', alignItems: 'center', p: 1, bgcolor: 'action.hover', borderBottom: 1, borderColor: 'divider' }}>
                     <Typography variant="overline" sx={{ flexGrow: 1, fontWeight: 'bold' }}>Console / Output</Typography>
-                    <IconButton size="small" onClick={() => setIsConsoleOpen(false)}>
+                    <IconButton size="small" onClick={toggleConsole}>
                       <CloseIcon fontSize="small" />
                     </IconButton>
                   </Box>
@@ -832,7 +814,7 @@ const MainLayout: React.FC = () => {
           isLoading={isModulesLoading}
           statusType={status?.type || 'info'}
         />
-      </Box>
+      </Box >
     </ThemeProvider >
   );
 };

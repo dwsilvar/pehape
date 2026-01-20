@@ -1,8 +1,9 @@
-import { FC } from 'react';
+import { FC, useState } from 'react';
 import { Box, Typography, Button } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import MonacoEditor, { OnMount } from '@monaco-editor/react';
 import { FileData } from '../types';
+import { ImageUploadDialog } from './ImageUploadDialog';
 
 interface FeatureEditorProps {
   selectedFile: FileData | null;
@@ -15,7 +16,61 @@ interface FeatureEditorProps {
 }
 
 export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorContent, onEditorChange, theme, onSave, isDirty, isResizing }) => {
-  const handleEditorDidMount: OnMount = (editor, monaco) => {};
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [selectedText, setSelectedText] = useState('');
+  const [detectedTag, setDetectedTag] = useState<string | null>(null);
+
+  const handleEditorDidMount: OnMount = (editor, monaco) => {
+    editor.addAction({
+      id: 'upload-ocr-image',
+      label: 'Upload OCR Image',
+      contextMenuGroupId: 'navigation',
+      contextMenuOrder: 1.5,
+      run: (ed) => {
+        const model = ed.getModel();
+        const selection = ed.getSelection();
+        if (model && selection && !selection.isEmpty()) {
+          const text = model.getValueInRange(selection);
+
+          // Heuristic to find the nearest tag upwards
+          let tag = null;
+          for (let i = selection.startLineNumber; i >= 1; i--) {
+            const lineContent = model.getLineContent(i).trim();
+            if (lineContent.startsWith('@')) {
+              // Extract the first tag if multiple
+              const tags = lineContent.split(/\s+/);
+              tag = tags[0];
+              break;
+            }
+          }
+
+          setSelectedText(text);
+          setDetectedTag(tag);
+          setUploadDialogOpen(true);
+        }
+      }
+    });
+  };
+
+  const handleUploadImage = async (text: string, tag: string, file: File) => {
+    if (!selectedFile) return;
+
+    const formData = new FormData();
+    formData.append('feature_path', selectedFile.path); // Relative path from features root
+    formData.append('tag', tag);
+    formData.append('text', text);
+    formData.append('file', file);
+
+    const response = await fetch('/api/images/upload', {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to upload image');
+    }
+  };
 
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', position: 'relative' }}>
@@ -66,6 +121,14 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
           language={selectedFile ? 'gherkin' : undefined}
         />
       </Box>
-    </Box>
+      <ImageUploadDialog
+        open={uploadDialogOpen}
+        onClose={() => setUploadDialogOpen(false)}
+        initialText={selectedText}
+        initialTag={detectedTag}
+        featurePath={selectedFile?.path || ''}
+        onUpload={handleUploadImage}
+      />
+    </Box >
   );
 };

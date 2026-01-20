@@ -166,7 +166,35 @@ def get_image_path_from_feature_and_tag(feature_path_full: str, scenario_tags, t
     tag = scenario_tags[0].lstrip('@')
     
     # 3. Construir la Ruta Final
-    # Concatenamos el directorio base + el nombre del tag + la extensión
-    imagen_path = os.path.join(feature_dir_path, tag,f"{text_to_find}.png")
+    # Concatenamos el directorio base de recursos + el nombre del feature + el nombre del tag + la extensión
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    features_root = os.path.join(project_root, 'features')
+    
+    # Obtenemos el path relativo del feature desde la carpeta features
+    # feature_path_full es absoluto o relativo al proyecto? 
+    # Generalmente en runtime de behave context.feature.filename es relativo a la ejecución.
+    
+    # Simplificación robusta: Asumamos que feature_path_full es "features/modulo/feature.feature"
+    # O "c:/proyecto/features/modulo/feature.feature"
+    
+    # Normalizamos a ruta absoluta primero para calcular la relativa a 'features'
+    abs_feature_path = os.path.abspath(feature_path_full)
+    abs_features_root = os.path.abspath(features_root)
+    
+    try:
+        rel_path = os.path.relpath(abs_feature_path, abs_features_root)
+    except ValueError:
+        # Fallback si están en drives diferentes o algo raro
+        rel_path = os.path.basename(abs_feature_path)
+
+    # Quitamos la extensión y obtenemos el directorio base relativo (ej: modulo/mi_feature)
+    rel_dir = os.path.dirname(rel_path)
+    feature_name = os.path.splitext(os.path.basename(rel_path))[0]
+    
+    # La nueva ruta base es resources/images
+    base_images_path = os.path.join(project_root, 'resources', 'images')
+    
+    # La estructura en resources será: resources/images/<modulo>/<feature_name>/<tag>/<texto>.png
+    imagen_path = os.path.join(base_images_path, rel_dir, feature_name, tag, f"{text_to_find}.png")
     logger.info(f"Ruta de la imagen construida: {imagen_path}")
     return imagen_path

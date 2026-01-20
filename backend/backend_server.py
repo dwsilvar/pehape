@@ -1,4 +1,5 @@
 import os
+import pathlib
 import json
 import shutil
 import subprocess
@@ -12,6 +13,15 @@ from behave.model import Feature, Scenario, ScenarioOutline
 from flask_cors import CORS
 
 from execution_plan_manager import ExecutionPlanManager
+
+# Add project root to sys.path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+try:
+    from util.system_utils import get_image_path_from_feature_and_tag
+except ImportError:
+    # Fallback or logging if import fails (though it shouldn't if structure is correct)
+    print("Warning: Could not import util.system_utils")
+
 app = Flask(__name__)
 # Permitir peticiones desde el frontend de Vite (localhost:3000)
 CORS(app, resources={r"/api/*": {"origins": "http://localhost:3000"}})
@@ -22,6 +32,131 @@ FEATURES_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'feature
 
 # Instanciar el manejador del plan de ejecución
 plan_manager = ExecutionPlanManager(FEATURES_DIR)
+
+# Importar el registro de tareas y asegurar que se carguen los módulos de tareas
+from executor.tasks_core.registry import get_all_tasks
+# Importar módulos de tareas conocidos para asegurar su registro
+# En un entorno real, esto podría ser dinámico (auto-discovery)
+import executor.tasks.log_tasks
+
+@app.route('/api/tasks', methods=['GET'])
+def list_tasks():
+    """
+    Endpoint para listar todas las tareas registradas y su documentación.
+    """
+    try:
+        tasks_data = []
+        registered_tasks = get_all_tasks()
+        
+        for task_name, task_class in registered_tasks.items():
+            tasks_data.append({
+                "name": task_name,
+                "class_name": task_class.__name__,
+                "module": task_class.__module__,
+                "scope": getattr(task_class, "scope", "General"),
+                "doc": task_class.__doc__.strip() if task_class.__doc__ else "Sin documentación"
+            })
+            
+        return jsonify(tasks_data)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Path to resources/images
+RESOURCES_IMAGES_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'resources', 'images')
+
+@app.route('/api/ocr-images', methods=['GET'])
+def list_ocr_images():
+    """
+    Lista recursivamente todas las imágenes en resources/images
+    y devuelve su estructura jerárquica plana.
+    Estructura esperada: resources/images/<modulo>/<feature>/<tag>/<texto>.png
+    """
+    images_data = []
+    
+    if not os.path.exists(RESOURCES_IMAGES_DIR):
+        return jsonify([])
+
+    try:
+        for root, dirs, files in os.walk(RESOURCES_IMAGES_DIR):
+            for file in files:
+                if file.lower().endswith(('.png', '.jpg', '.jpeg')):
+                    abs_path = os.path.join(root, file)
+                    rel_path = os.path.relpath(abs_path, RESOURCES_IMAGES_DIR)
+                    path_parts = rel_path.split(os.sep)
+                    
+                    # Intentar inferir estructura si es posible
+                    # <modulo relative path>/<feature>/<tag>/<filename>
+                    # Esto puede variar, así que lo hacemos genérico pero intentamos extraer info útil
+                    
+                    item = {
+                        "relative_path": rel_path.replace("\\", "/"),
+                        "filename": file,
+                        "key_text": os.path.splitext(file)[0],
+                        "full_path_parts": path_parts
+                    }
+                    images_data.append(item)
+                    
+        return jsonify(images_data)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/resources/images/<path:filename>', methods=['GET'])
+def serve_ocr_image(filename):
+    """
+    Sirve las imágenes estáticas.
+    """
+    try:
+        return send_from_directory(RESOURCES_IMAGES_DIR, filename)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/open-in-editor', methods=['POST'])
+def open_in_editor():
+    """
+    Intenta abrir el archivo especificado en el editor predeterminado del sistema (o VS Code).
+    """
+    try:
+        data = request.json
+        # path relativo desde 'features' o absoluto?
+        # Asumamos path relativo a le raíz del proyecto (donde está features, backend, etc)
+        # El frontend enviará algo como "features/modulo/archivo.feature"
+        
+        rel_path = data.get('path')
+        if not rel_path:
+            return jsonify({"error": "Path required"}), 400
+            
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        full_path = os.path.abspath(os.path.join(project_root, rel_path))
+        
+        # Security check: ensure strictly within project root? 
+        # For a local dev tool, loose check is okay, but let's be reasonably safe.
+        if not full_path.startswith(project_root):
+             return jsonify({"error": "Access denied"}), 403
+             
+        if not os.path.exists(full_path):
+             return jsonify({"error": f"File not found: {rel_path}"}), 404
+
+        print(f"Opening file in editor: {full_path}")
+        
+        # Platform specific
+        if os.name == 'nt':
+            # Try opening with 'code' (VS Code) first, looking in PATH
+            # If that fails (not in path), fallback to os.startfile
+            try:
+                # shell=True helps with finding command in PATH
+                subprocess.run(f'code "{full_path}"', shell=True, check=True)
+            except subprocess.CalledProcessError:
+                os.startfile(full_path)
+        elif sys.platform == 'darwin':
+            subprocess.run(['open', full_path])
+        else:
+            subprocess.run(['xdg-open', full_path])
+            
+        return jsonify({"message": "Opened"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 # --- Estado de Ejecución de Pruebas y Watchdog ---
 log_queue = Queue()  # Cola segura para hilos para almacenar logs
@@ -97,6 +232,57 @@ def get_feature_content(filepath):
         else:
             return jsonify({"error": "File not found or access denied"}), 404
     except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+
+@app.route('/api/images/upload', methods=['POST'])
+def upload_image():
+    """
+    Endpoint para subir una imagen de fallback OCR.
+    """
+    try:
+        if 'file' not in request.files:
+            return jsonify({"error": "No file part"}), 400
+        
+        file = request.files['file']
+        feature_path_rel = request.form.get('feature_path')
+        tag = request.form.get('tag')
+        text = request.form.get('text')
+
+        if not file or not feature_path_rel or not tag or not text:
+            return jsonify({"error": "Missing required fields"}), 400
+
+        # Construct absolute path to feature file
+        # feature_path_rel comes as 'features/path/to/file.feature' or similar from frontend
+        # We need to make sure we map it correctly using FEATURES_DIR
+        # Use simple join, frontend typically sends path relative to 'features' if we set it up that way.
+        # But 'selectedFile.path' in frontend is usually relative to features root.
+        
+        # We need the full absolute path to the feature file for the utility function
+        # FEATURES_DIR is .../pehape/features
+        # feature_path_rel should be relative to FEATURES_DIR
+        
+        full_feature_path = os.path.join(FEATURES_DIR, feature_path_rel)
+        
+        # Ensure tag has @
+        if not tag.startswith('@'):
+            tag = f"@{tag}"
+            
+        # Get target image path
+        # Pass tag as a list as expected by the utility
+        target_path = get_image_path_from_feature_and_tag(full_feature_path, [tag], text)
+        
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(target_path), exist_ok=True)
+        
+        # Save file
+        file.save(target_path)
+        
+        return jsonify({"message": f"Image saved successfully at {target_path}", "path": target_path})
+
+    except Exception as e:
+        print(f"Error uploading image: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/features/<path:filepath>', methods=['POST'])
@@ -348,6 +534,24 @@ def toggle_module_activity(module_name):
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
+@app.route('/api/modules/<string:module_name>/is_hook', methods=['PUT'])
+def toggle_module_is_hook(module_name):
+    """
+    Endpoint para marcar/desmarcar un módulo como hook.
+    """
+    try:
+        data = request.json
+        is_hook = data.get('is_hook')
+        if is_hook is None:
+            return jsonify({"error": "Se requiere 'is_hook' en el cuerpo de la solicitud"}), 400
+
+        updated_sequence = plan_manager.toggle_module_is_hook(module_name, bool(is_hook))
+        return jsonify(_add_ids_to_sequence(updated_sequence))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/modules/<string:module_name>/features', methods=['POST'])
 def add_feature_to_module(module_name):
     """
@@ -583,6 +787,82 @@ def serve_allure_report(path):
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     report_dir = os.path.join(project_root, 'reports', 'allure-report')
     return send_from_directory(report_dir, path)
+
+@app.route('/api/reports/usage', methods=['GET'])
+def get_reports_usage():
+    """
+    Endpoint para obtener el uso de disco de los directorios de reportes.
+    """
+    try:
+        project_root = pathlib.Path(__file__).parent.parent
+        results_dir = project_root / 'reports' / 'allure_results'
+        report_dir = project_root / 'reports' / 'allure-report'
+        screenshots_dir = project_root / 'reports' / 'screenshots'
+
+        def get_dir_size(path):
+            total = 0
+            if path.exists():
+                for entry in path.rglob('*'):
+                    if entry.is_file():
+                        total += entry.stat().st_size
+            return total
+
+        results_size = get_dir_size(results_dir)
+        report_size = get_dir_size(report_dir)
+        screenshots_size = get_dir_size(screenshots_dir)
+
+        return jsonify({
+            "results_size": results_size,
+            "report_size": report_size,
+            "screenshots_size": screenshots_size,
+            "total_size": results_size + report_size + screenshots_size
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/reports/clean', methods=['POST'])
+def clean_reports():
+    """
+    Endpoint para limpiar los directorios de reportes.
+    Body: { "target": "results" | "report" | "screenshots" | "all" }
+    """
+    try:
+        data = request.json
+        target = data.get('target')
+        
+        project_root = pathlib.Path(__file__).parent.parent
+        results_dir = project_root / 'reports' / 'allure_results'
+        report_dir = project_root / 'reports' / 'allure-report'
+        screenshots_dir = project_root / 'reports' / 'screenshots'
+
+        cleaned = []
+
+        if target in ['results', 'all']:
+            if results_dir.exists():
+                shutil.rmtree(results_dir)
+                results_dir.mkdir(parents=True, exist_ok=True)
+                cleaned.append("Resultados Raw")
+
+        if target in ['report', 'all']:
+            if report_dir.exists():
+                shutil.rmtree(report_dir)
+                report_dir.mkdir(parents=True, exist_ok=True)
+                cleaned.append("Reporte Generado")
+
+        if target in ['screenshots', 'all']:
+            if screenshots_dir.exists():
+                shutil.rmtree(screenshots_dir)
+                screenshots_dir.mkdir(parents=True, exist_ok=True)
+                cleaned.append("Screenshots")
+
+        if not cleaned:
+            return jsonify({"error": "Target inválido o nada que limpiar"}), 400
+
+        return jsonify({"message": f"Se han limpiado: {', '.join(cleaned)}"}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 @app.route('/api/stop-tests', methods=['POST'])
 def stop_tests():

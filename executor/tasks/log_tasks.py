@@ -15,27 +15,18 @@ class CleanupLogTask(BaseTask):
     """
     Deletes a log file before generation.
     """
+    scope = "Before Scenario / Before Step"
+
     def should_run(self, hook_type, step) -> bool:
         # Original condition: "Generar Reporte" in s.name
         return hook_type == 'before' and "Generar Reporte" in step.name
-
-    def execute(self, context, step, **kwargs):
-        # Default path, could be configurable via context/userdata in the future
-        log_file_path = "C:\\temp\\activity.log"
-        
-        logger.info(f"CleanupLogTask: Attempting to clean up file '{log_file_path}'...")
-        if os.path.exists(log_file_path):
-            try:
-                os.remove(log_file_path)
-                logger.info(f"CleanupLogTask: File '{log_file_path}' deleted.")
-            except Exception as e:
-                logger.error(f"CleanupLogTask: Could not delete file '{log_file_path}'. Cause: {e}")
 
 @register_task("verificar_log")
 class VerifyLogTask(BaseTask):
     """
     Verifies if a log file exists, optionally checks content, and attaches to Allure.
     """
+    scope = "After Step"
     def should_run(self, hook_type, step) -> bool:
         # Original condition: s.status == 'passed'
         # Note: step.status might not be populated in 'after_step' exactly as expected depending on behave version,

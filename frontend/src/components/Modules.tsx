@@ -35,6 +35,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SyncIcon from '@mui/icons-material/Sync';
 import StopIcon from '@mui/icons-material/Stop';
 import LocalOfferIcon from '@mui/icons-material/LocalOffer';
+import WebhookIcon from '@mui/icons-material/Webhook';
 import { useSortable, SortableContext, verticalListSortingStrategy, } from '@dnd-kit/sortable';
 import { arrayMove } from '@dnd-kit/sortable';
 import { useDroppable, useDndContext, Active } from '@dnd-kit/core';
@@ -310,9 +311,10 @@ const SortableModule = React.forwardRef<HTMLDivElement, {
   onToggleCollapse: (moduleName: string) => void;
   onColorChange: (moduleName: string, color: string) => void;
   onDeleteModule: (moduleName: string) => void;
+  onToggleHook: (moduleName: string, isHook: boolean) => void;
   children: React.ReactNode;
 }>((props, ref) => {
-  const { module, isCollapsed, onToggleCollapse, onColorChange, onDeleteModule, children } = props;
+  const { module, isCollapsed, onToggleCollapse, onColorChange, onDeleteModule, onToggleHook, children } = props;
   const {
     attributes,
     listeners,
@@ -418,8 +420,8 @@ const SortableModule = React.forwardRef<HTMLDivElement, {
           >
             <Typography variant="h6" sx={{ fontSize: `${14 + 2}px`, flexGrow: 1 }}>
               {module.active
-                ? `${module.order}. ${module.module_name}`
-                : module.module_name}
+                ? `${module.order}. ${module.is_hook ? 'Hooks - ' : ''}${module.module_name}`
+                : `${module.is_hook ? 'Hooks - ' : ''}${module.module_name}`}
             </Typography>
           </Box>
           <Box display="flex" alignItems="center">
@@ -446,6 +448,11 @@ const SortableModule = React.forwardRef<HTMLDivElement, {
                   value={module.color || DEFAULT_MODULE_COLOR}
                   onChange={handleColorChange}
                 />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title={module.is_hook ? "Es un Hook (click para quitar)" : "Marcar como Hook"}>
+              <IconButton onClick={() => onToggleHook(module.module_name, !module.is_hook)} size="small" color={module.is_hook ? "primary" : "default"}>
+                <WebhookIcon fontSize="small" />
               </IconButton>
             </Tooltip>
             <Tooltip title="Eliminar módulo">
@@ -830,6 +837,31 @@ const Modules: React.FC<ExecutionOrderProps> = ({
     }
   };
 
+  const handleToggleHook = async (moduleName: string, isHook: boolean) => {
+    // Actualización optimista
+    const originalModules = modules;
+    setModules((prev: Module[]) =>
+      prev.map(m => (m.module_name === moduleName ? { ...m, is_hook: isHook } : m))
+    );
+
+    // Llamada a la API para persistir
+    try {
+      const response = await fetch(`/api/modules/${encodeURIComponent(moduleName)}/is_hook`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_hook: isHook }),
+      });
+
+      if (!response.ok) {
+        // Revertir en caso de error
+        setModules(originalModules);
+      }
+    } catch (error) {
+      console.error('Error al actualizar el estado de hook del módulo:', error);
+      setModules(originalModules); // Revertir en caso de error de red
+    }
+  };
+
   const handleRefreshFeatures = async () => {
     setIsRefreshing(true);
     try {
@@ -893,6 +925,7 @@ const Modules: React.FC<ExecutionOrderProps> = ({
                   onToggleCollapse={handleToggleModuleCollapse}
                   onColorChange={handleModuleColorChange}
                   onDeleteModule={handleDeleteModule}
+                  onToggleHook={handleToggleHook}
                 >
                   <CollapsibleSection title="Features" count={module.features.length} isOpen={!collapsedSections.has(`${module.module_name}::features`)} onToggle={() => handleToggleSectionCollapse(module.module_name, 'features')}>
                     {!collapsedSections.has(`${module.module_name}::features`) && (

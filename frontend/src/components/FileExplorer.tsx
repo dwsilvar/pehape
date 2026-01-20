@@ -39,7 +39,7 @@ const StyledTreeItem = styled(TreeItem)(({ theme }) => ({
 
   // Contenedor del icono (flecha + carpeta)
   [`& .${treeItemClasses.iconContainer}`]: {
-    marginRight: 4,
+    marginRight: 0,
     width: 'auto',
     display: 'flex',
     justifyContent: 'center',
@@ -51,7 +51,7 @@ const StyledTreeItem = styled(TreeItem)(({ theme }) => ({
     fontSize: '13px', // Tamaño fijo legible
     fontFamily: 'Consolas, "Courier New", monospace',
     lineHeight: 1.5,
-    paddingLeft: 4,
+    paddingLeft: 0,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
@@ -114,9 +114,9 @@ const DraggableTreeItem: React.FC<{
           onContextMenu={(e) => onContextMenu(e, node)}
         >
           {isFile ? (
-            <DescriptionIcon sx={{ mr: 1, fontSize: 16, color: 'info.main' }} />
+            <DescriptionIcon sx={{ mr: 0.5, fontSize: 16, color: 'info.main' }} />
           ) : (
-            <FolderIcon sx={{ mr: 1, fontSize: 16, color: '#FFCA28' }} />
+            <FolderIcon sx={{ mr: 0.5, fontSize: 16, color: '#FFCA28' }} />
           )}
 
           <Typography

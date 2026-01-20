@@ -32,7 +32,8 @@ class ExecutionPlanManager:
         except (FileNotFoundError, json.JSONDecodeError):
             # Devuelve una estructura por defecto si el archivo no existe o está corrupto.
             return {
-                "module_colors": {}
+                "module_colors": {},
+                "module_hooks": {}
             }
 
     def _save(self):
@@ -83,6 +84,8 @@ class ExecutionPlanManager:
         for module in all_modules:
             # Inyecta el color desde la configuración de UI
             module['color'] = self.ui_settings.get('module_colors', {}).get(module['module_name'])
+            # Inyecta la propiedad is_hook desde la configuración de UI
+            module['is_hook'] = self.ui_settings.get('module_hooks', {}).get(module['module_name'], False)
             # Inyecta el estado de colapso (default: false/expandido)
             module['view_states'] = self.ui_settings.get('view_states', {})
             
@@ -147,6 +150,32 @@ class ExecutionPlanManager:
 
         # Re-asigna todos los 'order' para que sean secuenciales (1, 2, 3...)
         self.update_sequence(self.data['execution_sequence'])
+        
+        # --- Limpieza de UI Settings ---
+        settings_changed = False
+        
+        # 1. Eliminar color
+        if 'module_colors' in self.ui_settings and module_name in self.ui_settings['module_colors']:
+             del self.ui_settings['module_colors'][module_name]
+             settings_changed = True
+        
+        # 2. Eliminar clasificación de hook
+        if 'module_hooks' in self.ui_settings and module_name in self.ui_settings['module_hooks']:
+             del self.ui_settings['module_hooks'][module_name]
+             settings_changed = True
+
+        # 3. Eliminar estados de vista (colapso)
+        if 'view_states' in self.ui_settings:
+            for view_name, sections in self.ui_settings['view_states'].items():
+                # Identifica las claves que pertenecen al módulo (ej: "ModuleName::features", "ModuleName::setup")
+                keys_to_remove = [k for k in sections if k.startswith(f"{module_name}::")]
+                for k in keys_to_remove:
+                    del sections[k]
+                    settings_changed = True
+        
+        if settings_changed:
+            self._save_ui_settings()
+            
         return self.get_sequence()
 
     def toggle_module_activity(self, module_name, active):
@@ -202,7 +231,23 @@ class ExecutionPlanManager:
         self.ui_settings['view_states'][view][section_id] = is_collapsed
         
         self._save_ui_settings()
+        self._save_ui_settings()
         return {"status": "success", "view": view, "section_id": section_id, "is_collapsed": is_collapsed}
+
+    def toggle_module_is_hook(self, module_name, is_hook):
+        """Activa o desactiva la clasificación de hook para un módulo específico."""
+        target_module = None
+        for m in self.data['execution_sequence']:
+            if m.get('module_name', '').lower() == module_name.lower():
+                target_module = m
+                break
+
+        if not target_module:
+            raise ValueError(f"El módulo '{module_name}' no fue encontrado.")
+
+        self.ui_settings.setdefault('module_hooks', {})[module_name] = is_hook
+        self._save_ui_settings()
+        return self.get_sequence()
 
     def update_feature_tags(self, module_name, feature_file, feature_dir, tags):
         """Actualiza los tags de ejecución para un feature específico dentro de un módulo."""
