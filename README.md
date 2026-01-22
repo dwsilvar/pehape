@@ -39,45 +39,107 @@ ocr_test_automation/
 └── README.md
 ```
 
+## Architecture & Modules 🏗️
+
+The project is composed of three main modules that work together:
+
+1.  **Core (Automation/OCR)**: Python-based BDD framework using `behave`, `pytesseract`, and `opencv`. Handles the actual test execution and image recognition.
+2.  **Backend (API)**: A Flask server that exposes the file system and automation capabilities to the frontend.
+3.  **Frontend (Web UI)**: A React/Vite application for easy management of feature files, execution plans, and test runs.
+
 ## Prerequisites ⚙️
 
-- Python 3.8 or newer
-- Tesseract OCR engine (install and ensure `tesseract` is on PATH or set `TESSERACT_CMD_PATH` in config) [[installation guide](https://github.com/tesseract-ocr/tesseract)]
-- Allure Commandline (optional, for serving reports)[[installation guide](https://allurereport.org/docs/install/)]
+Before you begin, ensure you have the following installed:
 
-## Installation 🚀
+- **Python 3.12+** (Tested with 3.12.10)
+- **Node.js 24+** (Tested with v24.11.0) & **npm** (for the Frontend)
+- **Tesseract OCR**:
+    - [Installation Guide](https://github.com/tesseract-ocr/tesseract)
+    - Ensure `tesseract` is in your system PATH or configure `TESSERACT_CMD_PATH` in `config/config.py`.
+- **Allure Commandline** (Optional): For viewing test reports.
 
-> [!IMPORTANT]
-> Before running tests, ensure Tesseract OCR and Allure are installed and available in your system PATH.
+## Dictionary of Deployment Steps 📋
 
+If you are moving this solution to a **new machine**, follow this checklist:
 
-1. Create and activate a virtual environment (recommended):
+1.  **Clone/Copy the project**: Copy the entire project folder to the new PC.
+2.  **Install Prerequisites**:
+    - [ ] Install **Python 3.12.10**.
+    - [ ] Install **Node.js v24.11.0**.
+    - [ ] Install **Tesseract OCR** (e.g., to `C:\src\tesseract-ocr\tesseract.exe`).
+3.  **Run Setup**:
+    - Open PowerShell in the project root.
+    - Run the commands in the **Installation & Setup** section below (create venv, install pip reqs, install npm reqs).
+4.  **Configure**:
+    - Open `config/config.py`.
+    - Verify `TESSERACT_CMD_PATH` matches your installation path on the new PC.
+5.  **Run**:
+    - Execute `./start-all.ps1`.
+
+## Installation & Setup 🚀
+
+Follow these steps to set up the complete environment.
+
+### 1. Python Environment (Core & Backend)
+
+It is recommended to use a single virtual environment for both Core and Backend.
 
 ```powershell
+# Create virtual environment
 python -m venv .venv
 .\.venv\Scripts\activate
-```
 
-2. Install Python dependencies:
-
-```powershell
+# Install ALL Python dependencies (Core + Backend)
 pip install -r requirements.txt
-pip install allure-behave
 ```
 
-3. Install Allure (optional) — example for Windows using Scoop:
+### 2. Frontend Environment (Web UI)
+
+Navigate to the frontend directory and install dependencies.
 
 ```powershell
-scoop install allure
+cd frontend
+npm install
 ```
 
-4. Edit config/config.py to adjust paths and set `TESSERACT_CMD_PATH` if Tesseract
-is not in your PATH. Logging is configured under `config/logging_config.py`.
+## Dependencies Reference 📚
+
+### Core (Automation)
+| Package | Version | Purpose |
+| :--- | :--- | :--- |
+| `behave` | `1.3.3` | BDD testing framework (Gherkin runner). |
+| `pytesseract` | `0.3.13` | Python wrapper for Google Tesseract OCR. |
+| `opencv-python` | `4.12.0.88` | Image processing and computer vision. |
+| `pyautogui` | `0.9.54` | GUI automation (mouse/keyboard control). |
+| `psutil` | `7.0.0` | System monitoring and process management. |
+
+### Backend (API)
+| Package | Version | Purpose |
+| :--- | :--- | :--- |
+| `Flask` | `3.1.2` | Micro-web framework for the API server. |
+| `Flask-CORS` | `6.0.1` | Handling Cross-Origin requests from the Frontend. |
+
+### Frontend (UI)
+| Package | Version | Purpose |
+| :--- | :--- | :--- |
+| `React` | `19.x` | UI library. |
+| `Vite` | `7.x` | Build tool and dev server. |
+| `MUI` | `7.x` | Component library for the interface. |
 
 
 ## Usage ▶️
 
-### Running tests 🏃‍♂️
+### Quick Start: Web Application (UI + Backend) 🚀
+
+To run the full environment (Frontend editor + Backend server) in a single command (PowerShell):
+
+```powershell
+./start-all.ps1
+```
+
+This will launch both servers. You can then access the Web UI at `http://localhost:3000`.
+
+### Running tests from CLI 🏃‍♂️
 
 Run the main runner which builds and executes the Behave scenarios according to
 the JSON execution plan in `features/run_list.json`:

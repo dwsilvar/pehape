@@ -2,34 +2,23 @@
 
 Este directorio contiene el servidor backend de la aplicación, desarrollado con Flask.
 
-El servidor se encarga de interactuar con el sistema de archivos para leer y escribir los archivos `.feature` que utiliza la aplicación de frontend.
+> [!NOTE]
+> Para la **documentación completa, instalación y dependencias**, por favor consulta el [README principal](../README.md#backend-api).
 
-## Instalación
+## Descripción
 
-Para instalar las dependencias necesarias, se recomienda crear un entorno virtual y luego instalar los paquetes listados en `requirements.txt`.
+El servidor se encarga de interactuar con el sistema de archivos para leer y escribir los archivos `.feature` que utiliza la aplicación de frontend, así como de gestionar los planes de ejecución.
 
-1.  **Crear un entorno virtual (opcional pero recomendado):**
-    ```bash
-    python -m venv venv
-    ```
+## Ejecución Rápida
 
-2.  **Activar el entorno virtual:**
-    -   En Windows:
-        ```bash
-        .\venv\Scripts\activate
-        ```
-
-3.  **Instalar las dependencias:**
-    ```bash
-    python -m pip install -r requirements.txt
-    ```
-
-## Ejecución
-
-Para iniciar el servidor, ejecuta el script `start-backend.ps1` desde la raíz del proyecto, o directamente el servidor de Python desde este directorio:
+Si ya has instalado las dependencias (ver README raíz), puedes iniciar el servidor con:
 
 ```bash
-python backend_server.py
+# Desde la raíz del proyecto
+./start-backend.ps1
+
+# O directamente con Python
+python backend/backend_server.py
 ```
 
-El servidor se ejecutará en `http://localhost:5000`.
+El servidor escucha en `http://localhost:5000`.
