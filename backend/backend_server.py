@@ -97,9 +97,58 @@ def check_literal_in_file():
             "count": len(matches),
             "matches": matches[:100] # Limitar a 100 resultados por seguridad
         })
-
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/tools/running-apps', methods=['GET'])
+def get_running_apps():
+    """
+    Devuelve una lista de ventanas activas con detalles (solo Windows).
+    Usa pygetwindow para obtener geometría y estado.
+    """
+    import platform
+    if platform.system() != 'Windows':
+        return jsonify({
+            "error": "Esta función solo está disponible en Windows.",
+            "platform": platform.system()
+        }), 400
+
+    try:
+        import pygetwindow as gw
+        windows = gw.getAllWindows()
+        apps_data = []
+
+        for w in windows:
+            title = w.title.strip()
+            if not title:
+                continue
+                
+            # Extract available attributes safely
+            app_info = {
+                "title": title,
+                "id": getattr(w, '_hWnd', 0), # Internal handle as ID
+                "isActive": getattr(w, 'isActive', False),
+                "isMaximized": getattr(w, 'isMaximized', False),
+                "isMinimized": getattr(w, 'isMinimized', False),
+                "geometry": {
+                    "left": getattr(w, 'left', 0),
+                    "top": getattr(w, 'top', 0),
+                    "width": getattr(w, 'width', 0),
+                    "height": getattr(w, 'height', 0)
+                }
+            }
+            apps_data.append(app_info)
+
+        return jsonify({
+            "platform": "Windows",
+            "count": len(apps_data),
+            "windows": apps_data
+        })
+    except ImportError:
+        return jsonify({"error": "El modulo 'pygetwindow' no está instalado."}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 # -----------------------------------------------
 
 @app.route('/api/tasks', methods=['GET'])
@@ -172,8 +221,6 @@ def serve_ocr_image(filename):
         return send_from_directory(RESOURCES_IMAGES_DIR, filename)
     except Exception as e:
         return jsonify({"error": str(e)}), 404
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/open-in-editor', methods=['POST'])
 def open_in_editor():

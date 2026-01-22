@@ -7,6 +7,7 @@ import HomePage from './pages/HomePage';
 import MaintenancePage from './pages/MaintenancePage';
 import TasksPage from './pages/TasksPage';
 import OCRResourcesPage from './pages/OCRResourcesPage';
+import RunningAppsPage from './pages/RunningAppsPage';
 import { useExecutionOrder } from './hooks/useExecutionOrder';
 
 import { LayoutProvider } from './context/LayoutContext';
@@ -104,8 +105,13 @@ const AppLayout: React.FC = () => {
               />
             } />
             <Route path="/maintenance" element={<MaintenancePage />} />
+// ... imports ...
+            import RunningAppsPage from './pages/RunningAppsPage';
+
+            // ... inside Routes ...
             <Route path="/tasks" element={<TasksPage />} />
             <Route path="/ocr-resources" element={<OCRResourcesPage />} />
+            <Route path="/running-apps" element={<RunningAppsPage />} />
           </Routes>
         </Box>
       </Box>

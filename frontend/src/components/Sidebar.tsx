@@ -8,7 +8,8 @@ import {
     AccountTree as AccountTreeIcon,
     Terminal as TerminalIcon,
     Assignment as AssignmentIcon,
-    Image as ImageIcon
+    Image as ImageIcon,
+    Window as WindowIcon
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useLayout } from '../context/LayoutContext';
@@ -102,6 +103,15 @@ const Sidebar: React.FC = () => {
                         onClick={() => handleNavigation('/ocr-resources')}
                     >
                         <ImageIcon />
+                    </IconButton>
+                </Tooltip>
+
+                <Tooltip title="Running Apps" placement="right">
+                    <IconButton
+                        color={isActive('/running-apps') ? 'primary' : 'default'}
+                        onClick={() => handleNavigation('/running-apps')}
+                    >
+                        <WindowIcon />
                     </IconButton>
                 </Tooltip>
             </Box>
@@ -200,6 +210,20 @@ const Sidebar: React.FC = () => {
                             <ImageIcon />
                         </ListItemIcon>
                         <ListItemText primary="OCR Images" />
+                    </ListItemButton>
+                </ListItem>
+
+                <Divider sx={{ my: 1 }} />
+
+                <ListItem disablePadding>
+                    <ListItemButton
+                        selected={isActive('/running-apps')}
+                        onClick={() => handleNavigation('/running-apps')}
+                    >
+                        <ListItemIcon>
+                            <WindowIcon />
+                        </ListItemIcon>
+                        <ListItemText primary="Running Apps" />
                     </ListItemButton>
                 </ListItem>
             </List>
