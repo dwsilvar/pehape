@@ -139,6 +139,16 @@ To run the full environment (Frontend editor + Backend server) in a single comma
 
 This will launch both servers. You can then access the Web UI at `http://localhost:3000`.
 
+### Port Configuration 🔌
+
+If the default ports (**5000** for Backend, **3000** for Frontend) are in use, you can change them by editing the JSON configuration files in each module:
+
+- **Backend**: `backend/server_config.json`
+    - Change `"port"` to your desired port (e.g., `5005`).
+- **Frontend**: `frontend/app_config.json`
+    - Change `"port"` to your desired port (e.g., `3005`).
+    - **Important**: Update `"api_url"` if you changed the Backend port.
+
 ### Running tests from CLI 🏃‍♂️
 
 Run the main runner which builds and executes the Behave scenarios according to

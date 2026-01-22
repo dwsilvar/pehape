@@ -23,8 +23,21 @@ except ImportError:
     print("Warning: Could not import util.system_utils")
 
 app = Flask(__name__)
-# Permitir peticiones desde el frontend de Vite (localhost:3000)
-CORS(app, resources={r"/api/*": {"origins": "http://localhost:3000"}})
+
+# Cargar configuración para CORS
+config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'server_config.json')
+frontend_origin = "http://localhost:3000"
+
+if os.path.exists(config_path):
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+            frontend_origin = config.get('frontend_origin', frontend_origin)
+    except Exception:
+        pass
+
+# Permitir peticiones desde el frontend configurado
+CORS(app, resources={r"/api/*": {"origins": frontend_origin}})
 
 # Definir la ruta base donde están los features.
 # Se necesita subir un nivel desde la ubicación actual del script (backend/).
@@ -1156,5 +1169,20 @@ def serve_react_app(path):
     return send_from_directory(frontend_dist, 'index.html')
 
 if __name__ == '__main__':
+    # Cargar configuración desde JSON si existe
+    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'server_config.json')
+    host = '0.0.0.0'
+    port = 5000
+    
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+                host = config.get('host', host)
+                port = config.get('port', port)
+                print(f"Loaded configuration from {config_path}")
+        except Exception as e:
+            print(f"Error loading config: {e}. Using defaults.")
+
     # Listen on all interfaces
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host=host, port=port, debug=True)

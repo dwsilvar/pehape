@@ -2,8 +2,22 @@
 
 Este directorio contiene la aplicación frontend desarrollada con React y Vite.
 
-> [!NOTE]
 > Para la **documentación completa, instalación y dependencias**, por favor consulta el [README principal](../README.md#frontend-ui).
+
+## Configuración ⚙️
+
+El puerto de desarrollo y la conexión con el backend se pueden configurar en el archivo `app_config.json`.
+
+```json
+{
+  "port": 3000,
+  "api_url": "http://localhost:5000"
+}
+```
+
+- **port**: Puerto donde se ejecutará la interfaz web.
+- **api_url**: URL del servidor Backend (para el proxy de API).
+
 
 ## Ejecución
 
