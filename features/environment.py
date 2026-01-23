@@ -12,6 +12,8 @@ import logging
 import time
 import json
 import sys
+# Import the executor instance so hooks can use executor.driver (UIExecutor.driver)
+from executor.ui_executor import executor
 
 logger = logging.getLogger(__name__)
 
