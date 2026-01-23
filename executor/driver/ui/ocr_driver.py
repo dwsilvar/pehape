@@ -98,7 +98,7 @@ class OCRDriver(DriverAbstractUI):
                     if center_coordinates is None:
                         logger.info(f"Phrase '{text_to_find}' not found on the full screen or in the app's screen section '{app_name}'")
                         if image_text_path is not None:                
-                            center_coordinates = self._get_element_coordinates_by_img(image_text_path, screenshot, screenshot_total_path)
+                            center_coordinates = self._get_element_coordinates_by_img(image_text_path, screenshot, screenshot_total_path, region=region)
 
  
             return center_coordinates
@@ -107,7 +107,7 @@ class OCRDriver(DriverAbstractUI):
             logger.error(f"An error occurred during text recognition. Cause: {e}")
             return None
 
-    def _get_element_coordinates_by_img(self, image_text_path: str, screenshot=None, screenshot_path: str = None) -> tuple[int, int] | None:
+    def _get_element_coordinates_by_img(self, image_text_path: str, screenshot=None, screenshot_path: str = None, region: tuple = None) -> tuple[int, int] | None:
         """
         Search for an image on the screen and return the coordinates of its center.
 
@@ -126,6 +126,9 @@ class OCRDriver(DriverAbstractUI):
         screenshot_path : str | None
             Path where to save the screenshot in case the image is not found.
 
+        region : tuple | None
+            Optional (left, top, width, height) to restrict the search.
+
         Returns
         -------
         tuple[int, int] | None
@@ -138,7 +141,7 @@ class OCRDriver(DriverAbstractUI):
         center_coordinates = None
         try:
             if image_text_path:
-                center_coordinates = self.pyAutoGUIWorker.get_element_coordinates_by_img(image_text_path)
+                center_coordinates = self.pyAutoGUIWorker.get_element_coordinates_by_img(image_text_path, region=region)
         except Exception as e:
             # Keep behavior tolerant: log and continue to fallback
             logger.debug(f"Direct image search failed for '{image_text_path}': {e}")
@@ -153,7 +156,7 @@ class OCRDriver(DriverAbstractUI):
             try:
                 image_name = Path(image_text_path).stem
                 logger.info(f"Falling back to generic image search using name '{image_name}'")
-                center_coordinates = self._find_generic_image_coordinates(image_name)
+                center_coordinates = self._find_generic_image_coordinates(image_name, region=region)
                 if center_coordinates is not None:
                     logger.info(f"Successfully found phrase by generic image '{image_name}', coordinates: {center_coordinates}")
                     return center_coordinates
@@ -169,7 +172,7 @@ class OCRDriver(DriverAbstractUI):
 
         return None
     
-    def _find_generic_image_coordinates(self, name_image: str) -> tuple[int, int] | None:
+    def _find_generic_image_coordinates(self, name_image: str, region: tuple = None) -> tuple[int, int] | None:
         """
         Search for an image inside the project's generic images folder and return its center coordinates.
 
@@ -180,6 +183,9 @@ class OCRDriver(DriverAbstractUI):
             `resources/images/features/generic/`. For example, passing
             `'ok_button'` will look for
             `resources/images/features/generic/ok_button.png`.
+        
+        region : tuple | None
+            Optional region to restrict the search.
 
         Returns
         -------
@@ -195,7 +201,7 @@ class OCRDriver(DriverAbstractUI):
         """
         logger.info("Attempting to find element by image in generic resources folder")
         image_text_path = f"resources/images/features/generic/{name_image}.png"
-        center_coordinates = self.pyAutoGUIWorker.get_element_coordinates_by_img(image_text_path)
+        center_coordinates = self.pyAutoGUIWorker.get_element_coordinates_by_img(image_text_path, region=region)
         if center_coordinates is not None:
             logger.info(f"Found image '{image_text_path}' at {center_coordinates}")
         else:

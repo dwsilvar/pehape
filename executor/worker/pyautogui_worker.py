@@ -56,6 +56,28 @@ class PyAutoGUIWorker(WorkerInterface):
 
 
 
+    def get_window_region(self, app_name: str) -> Optional[tuple]:
+        """
+        Gets the region (x, y, width, height) of the specified application window.
+        
+        Parameters:
+            app_name: The title (or partial title) of the window.
+            
+        Returns:
+            A tuple (left, top, width, height) or None if not found.
+        """
+        try:
+            windows = pyautogui.getWindowsWithTitle(app_name)
+            if windows:
+                window = windows[0] # Use the first one found
+                return (window.left, window.top, window.width, window.height)
+            else:
+                logger.warning(f"No window found with title containing '{app_name}'")
+                return None
+        except Exception as e:
+            logger.error(f"Error getting window region for '{app_name}': {e}")
+            return None
+
     def click_at(self, point: tuple) -> bool:
         """
         Clicks at a specific point on the screen.
@@ -74,19 +96,20 @@ class PyAutoGUIWorker(WorkerInterface):
             logger.exception(f"error clicking at {point}: {e}")
             return False
         
-    def click_on_image(self, image_path: str) -> bool:
+    def click_on_image(self, image_path: str, region: tuple = None) -> bool:
         """
         Locates an image on the screen and clicks its center.
 
         Parameters:
             image_path: Path to the reference image.
+            region: Optional tuple (left, top, width, height) to restrict the search.
 
         Returns:
             True if found and clicked, False otherwise.
         """
         try:
-            logger.info(f"Searching for image '{image_path}'...")
-            location = pyautogui.locateCenterOnScreen(image_path, confidence=(configurator.CONFIDENCE_THRESHOLD/100))
+            logger.info(f"Searching for image '{image_path}'..." + (f" in region {region}" if region else ""))
+            location = pyautogui.locateCenterOnScreen(image_path, confidence=(configurator.CONFIDENCE_THRESHOLD/100), region=region)
             if location is not None:
                 pyautogui.click(location)
                 logger.info(f"Successfully clicked at {location}.")
@@ -161,18 +184,21 @@ class PyAutoGUIWorker(WorkerInterface):
         """
         result = False
         if self.ensure_window_is_visible(app_name):
-            result = self.click_on_image(image_path)
+            # Optimización: Buscar solo dentro de la región de la ventana
+            region = self.get_window_region(app_name)
+            result = self.click_on_image(image_path, region=region)
 
         return result
     
     
 
-    def get_element_coordinates_by_img(self, image_path: str):
+    def get_element_coordinates_by_img(self, image_path: str, region: tuple = None):
         """
         Searches for an image on the screen and returns the coordinates of its center.
 
         Paremeters:
             image_path: The path to the image file to search for.
+            region: Optional tuple (left, top, width, height) to restrict the search.
 
         Returns:
             A tuple (x, y) with the coordinates of the image's center, or None if not found.
@@ -189,9 +215,9 @@ class PyAutoGUIWorker(WorkerInterface):
             return None
         
         try:
-            logger.info(f"PyAutoGUI: Searching for image '{image_path}'...")
+            logger.info(f"PyAutoGUI: Searching for image '{image_path}'..." + (f" in region {region}" if region else ""))
 
-            location = pyautogui.locateCenterOnScreen(image_path, confidence=(configurator.CONFIDENCE_THRESHOLD/100))
+            location = pyautogui.locateCenterOnScreen(image_path, confidence=(configurator.CONFIDENCE_THRESHOLD/100), region=region)
             if location:
                 logger.info(f"PyAutoGUI: Image found at {location}.")
                 return location
@@ -240,8 +266,8 @@ class PyAutoGUIWorker(WorkerInterface):
 
     def ensure_window_is_visible(self, title_substring: str) -> bool:
         """
-        Finds a window by its title. If found and minimized,
-        it restores it and brings it to the front.
+        Finds a window by its title. If found, it moves it to the primary screen,
+        restores it if minimized, and brings it to the front.
 
         Paremeters:
             title_substring: The text to search for in the window titles.
@@ -268,6 +294,13 @@ class PyAutoGUIWorker(WorkerInterface):
                 logger.info("Window is minimized. Restoring...")
                 window.restore()
                 time.sleep(0.5)  # Pause for the window to redraw.
+
+            # Move window to primary screen (0, 0) or slightly offset to be safe
+            # This avoids issues with secondary screens where pyautogui might struggle
+            if window.left < 0 or window.top < 0 or window.left > pyautogui.size().width:
+                 logger.info(f"Moving window '{sanitized_title}' to primary screen (10, 10)...")
+                 window.moveTo(10, 10)
+                 time.sleep(0.5)
 
             # If not active, bring it to the front.
             if not window.isActive:
