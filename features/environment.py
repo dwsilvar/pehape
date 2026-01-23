@@ -14,6 +14,7 @@ import json
 import sys
 # Import the executor instance so hooks can use executor.driver (UIExecutor.driver)
 from executor.ui_executor import executor
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,24 @@ def before_scenario(context, scenario):
     }
     print(json.dumps(status_report), flush=True)
 
+    # Setup for GIF generation: Create a temp directory for this scenario run
+    timestamp = int(time.time())
+    sanitized_name = "".join([c if c.isalnum() else "_" for c in scenario.name])
+    execution_id = f"{timestamp}_{sanitized_name}"
+    
+    # Store in context for steps to access
+    context.gif_execution_id = execution_id
+    context.gif_step_count = 0
+    
+    # Define and create the directory
+    import os
+    # Assuming 'reports' is in the project root, accessible via relative path or config
+    # detailed_path: reports/temp_gif/{execution_id}
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    gif_dir = os.path.join(project_root, 'reports', 'temp_gif', execution_id)
+    os.makedirs(gif_dir, exist_ok=True)
+    context.gif_dir = gif_dir
+
     # Execute setup tasks
     if hasattr(context, 'task_executor'):
         context.task_executor.run_tasks(context, None, 'before_scenario')
@@ -55,16 +74,20 @@ def after_step(context, step):
     # Delegates task processing to the TaskExecutor class.
     context.task_executor.run_tasks(context, step, 'after')
 
-    # Avoids taking a screenshot if the step itself is already for taking a screenshot, to prevent duplication.
-    if "take a screenshot as evidence" in step.name:
-        return
-
-    try:
-        screenshot_bytes = executor.driver.capture_evidence_screenshot()
-        if screenshot_bytes:
-            allure.attach(screenshot_bytes, name=f"After: '{step.name}'", attachment_type=AttachmentType.PNG)
-    except Exception as e:
-        logger.error(f"Could not take automatic screenshot after step '{step.name}'. Cause: {e}")
+    # Logic for GIF generation: always attempt to capture if context has gif_dir
+    if hasattr(context, 'gif_dir') and hasattr(context, 'gif_step_count'):
+        try:
+            # We explicitly ask for a new screenshot for the GIF to ensure we have one
+            # even if the evidence one was skipped or failed.
+            screenshot_bytes_gif = executor.driver.capture_evidence_screenshot()
+            if screenshot_bytes_gif:
+                context.gif_step_count += 1
+                filename = f"{context.gif_step_count:03d}.png"
+                filepath = os.path.join(context.gif_dir, filename)
+                with open(filepath, "wb") as f:
+                    f.write(screenshot_bytes_gif)
+        except Exception as e_gif:
+             logger.error(f"Failed to capture GIF frame for step '{step.name}': {e_gif}")
 
 def after_scenario(context, scenario):
     """
@@ -80,6 +103,7 @@ def after_scenario(context, scenario):
         "type": "scenario_status",
         "feature_id": feature_id,
         "name": scenario.name,
-        "status": scenario.status.name  # 'passed', 'failed', 'skipped', etc.
+        "status": scenario.status.name,  # 'passed', 'failed', 'skipped', etc.
+        "gifExecutionId": getattr(context, 'gif_execution_id', None) # Pass ID to frontend
     }
     print(json.dumps(status_report), flush=True)

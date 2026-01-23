@@ -157,6 +157,7 @@ interface ExecutionItemProps {
   onDelete: (item: FeatureItem) => void; // Para eliminación real
   onTagClick: (featureId: string, tag: string) => void;
   scenarioStatuses: ScenarioStatusMap;
+  scenarioGifs?: Record<string, string>;
   isRunning: boolean;
   isFirst: boolean;
   isLast: boolean;
@@ -172,6 +173,7 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
   onDelete, // Nueva prop
   onTagClick,
   scenarioStatuses,
+  scenarioGifs,
   isRunning,
   isFirst,
   isLast,
@@ -306,6 +308,8 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
                 // Construimos la clave única para este escenario específico
                 const uniqueScenarioId = `${item.id}::${scenario}`;
                 const status = scenarioStatuses[uniqueScenarioId] || 'untested';
+                const gifId = scenarioGifs ? scenarioGifs[uniqueScenarioId] : null;
+
                 const colorMap = {
                   passed: 'success',
                   failed: 'error',
@@ -331,6 +335,32 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
                       sx={{ fontSize: '0.7rem', height: '20px' }}
                     />
                   </Tooltip>
+                );
+              })}
+            </Box>
+          )}
+
+          {/* Mostrar botón de descarga de GIF si hay alguno disponible en los escenarios */}
+          {item.scenarios && item.scenarios.some(scenario => scenarioGifs && scenarioGifs[`${item.id}::${scenario}`]) && (
+            <Box sx={{ mt: 1 }}>
+              {item.scenarios.map(scenario => {
+                const gifId = scenarioGifs ? scenarioGifs[`${item.id}::${scenario}`] : null;
+                if (!gifId) return null;
+                return (
+                  <Button
+                    key={gifId}
+                    variant="outlined"
+                    size="small"
+                    color="secondary"
+                    startIcon={<PlayArrowIcon />}
+                    sx={{ mr: 1, textTransform: 'none', fontSize: '0.7rem', padding: '2px 8px', minWidth: 'auto' }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      window.open(`/api/execution/${gifId}/gif`, '_blank');
+                    }}
+                  >
+                    GIF: {scenario.length > 15 ? scenario.substring(0, 15) + '...' : scenario}
+                  </Button>
                 );
               })}
             </Box>
@@ -476,6 +506,7 @@ interface ExecutionOrderProps {
   modules: Module[]; // Usar el tipo Module
   setModules: React.Dispatch<React.SetStateAction<Module[]>>; // Usar el tipo Module
   scenarioStatuses: ScenarioStatusMap;
+  scenarioGifs: Record<string, string>; // New prop
   setScenarioStatuses: React.Dispatch<React.SetStateAction<ScenarioStatusMap>>;
   isExecuting: boolean;
   runningFeatureId: string | null;
@@ -496,6 +527,7 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
   modules,
   setModules,
   scenarioStatuses,
+  scenarioGifs, // New prop
   setScenarioStatuses,
   isExecuting,
   runningFeatureId,
@@ -1092,6 +1124,7 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
                             onMoveDown={() => handleMoveFeature(module.module_name, feature, 'down')}
                             onTagClick={(featureId, tag) => handleTagToggle(module.module_name, featureId, tag)}
                             scenarioStatuses={scenarioStatuses}
+                            scenarioGifs={scenarioGifs}
                             isRunning={feature.id === runningFeatureId}
                             isFirst={index === 0}
                             isLast={index === module.features.length - 1}

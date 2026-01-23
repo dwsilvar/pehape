@@ -3,7 +3,7 @@ import pathlib
 import json
 import shutil
 import subprocess
-from flask import Flask, jsonify, request, Response, send_from_directory
+from flask import Flask, jsonify, request, Response, send_from_directory, send_file
 import sys, signal
 import threading
 from queue import Queue
@@ -11,6 +11,9 @@ from behave.parser import Parser
 from behave.model import Feature, Scenario, ScenarioOutline
 
 from flask_cors import CORS
+from PIL import Image
+import glob
+import io
 
 from execution_plan_manager import ExecutionPlanManager
 
@@ -793,6 +796,42 @@ def parse_feature_file_with_behave(file_path):
         "tags": sorted(list(all_tags)),
         "scenarios": scenario_names
     }
+
+@app.route('/api/execution/<string:execution_id>/gif', methods=['GET'])
+def get_execution_gif(execution_id):
+    """
+    Generates and downloads a GIF for the specified execution ID.
+    """
+    try:
+        # PROJECT_ROOT is parent of 'features'
+        project_root = os.path.dirname(FEATURES_DIR)
+        gif_source_dir = os.path.join(project_root, 'reports', 'temp_gif', execution_id)
+        
+        if not os.path.exists(gif_source_dir):
+            return jsonify({"error": "Execution data not found"}), 404
+            
+        # Get all PNGs
+        images = sorted(glob.glob(os.path.join(gif_source_dir, "*.png")))
+        if not images:
+            return jsonify({"error": "No images found for this execution"}), 404
+            
+        # Load images
+        frames = [Image.open(image) for image in images]
+        
+        # Output buffer
+        output = io.BytesIO()
+        
+        # Save GIF
+        # duration in ms, loop=0 means infinite
+        # Duration 500ms = 0.5s per frame
+        frames[0].save(output, format="GIF", save_all=True, append_images=frames[1:], duration=500, loop=0)
+        output.seek(0)
+        
+        return send_file(output, mimetype='image/gif', as_attachment=True, download_name=f"execution_{execution_id}.gif")
+        
+    except Exception as e:
+        print(f"Error generating GIF: {e}")
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/execution-order/refresh', methods=['POST'])
 def refresh_execution_order():

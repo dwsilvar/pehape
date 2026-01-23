@@ -57,6 +57,9 @@ const MainLayout: React.FC = () => {
   const modulesRef = useRef(modules);
   const [focusedModule, setFocusedModule] = useState<string | null>(null);
 
+  // Map of uniqueScenarioId -> gifExecutionId
+  const [scenarioGifs, setScenarioGifs] = useState<Record<string, string>>({});
+
   // --- UI PERSPECTIVE STATE (Now shared via Context) ---
   const {
     activeView: activePerspective, setActiveView, isConsoleOpen, toggleConsole,
@@ -399,6 +402,9 @@ const MainLayout: React.FC = () => {
           if (data.status === 'running') {
             setRunningFeatureId(featureIdForUpdate);
           }
+          if (data.gifExecutionId) {
+            setScenarioGifs(prev => ({ ...prev, [uniqueScenarioId]: data.gifExecutionId }));
+          }
           const uniqueScenarioId = `${featureIdForUpdate}::${data.name}`;
           setScenarioStatuses(prev => ({ ...prev, [uniqueScenarioId]: data.status }));
         }
@@ -447,6 +453,7 @@ const MainLayout: React.FC = () => {
     setIsExecuting(true);
     setLogs(['Iniciando ejecución...']);
     setScenarioStatuses({});
+    setScenarioGifs({});
     setRunningFeatureId(null);
 
     try {
@@ -829,6 +836,7 @@ const MainLayout: React.FC = () => {
                           setModules={setModules}
                           scenarioStatuses={scenarioStatuses}
                           setScenarioStatuses={setScenarioStatuses}
+                          scenarioGifs={scenarioGifs}
                           isExecuting={isExecuting}
                           runningFeatureId={runningFeatureId}
                           onRunTests={handleRunTests}
