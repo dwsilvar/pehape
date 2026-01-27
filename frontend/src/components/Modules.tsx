@@ -445,6 +445,8 @@ const SortableModule = React.forwardRef<HTMLDivElement, {
                 <input
                   type="color"
                   hidden
+                  id={`module-color-${module.module_name}`}
+                  name={`module-color-${module.module_name}`}
                   value={module.color || DEFAULT_MODULE_COLOR}
                   onChange={handleColorChange}
                 />

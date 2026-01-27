@@ -48,6 +48,74 @@ class SetupDBTask(BaseTask):
         pass
 ```
 
+## Parámetros Configurables en Tareas
+
+Las tareas pueden aceptar parámetros configurables que se definen en la interfaz gráfica. Esto permite reutilizar la misma tarea con diferentes valores sin necesidad de crear múltiples clases.
+
+### Cómo Agregar Parámetros
+
+1. Implemente el método de clase `get_args_schema()` que retorna una lista de diccionarios.
+2. Cada diccionario define un parámetro con:
+   - `name`: Nombre del parámetro (usado en kwargs)
+   - `label`: Etiqueta mostrada en la UI
+   - `type`: Tipo de input (`text`, `number`, etc.)
+   - `default`: Valor por defecto
+
+3. En el método `execute()`, acceda a los parámetros desde `kwargs`.
+
+**Ejemplo con Parámetros:**
+
+```python
+# executor/tasks/log_tasks.py
+from executor.tasks_core.registry import register_task
+from executor.tasks_core.base_task import BaseTask
+import os
+import logging
+
+logger = logging.getLogger(__name__)
+
+@register_task("limpiar_log")
+class CleanupLogTask(BaseTask):
+    """
+    Elimina un archivo log antes de la generación.
+    Permite configurar la ruta del archivo a eliminar.
+    """
+    scope = "Before Scenario / Before Step"
+
+    @classmethod
+    def get_args_schema(cls) -> list:
+        return [
+            {
+                "name": "log_file_path",
+                "label": "Ruta del Archivo Log",
+                "type": "text",
+                "default": "C:\\temp\\activity.log"
+            }
+        ]
+
+    def execute(self, context, step, **kwargs):
+        log_file_path = kwargs.get('log_file_path', "C:\\temp\\activity.log")
+        
+        logger.info(f"Intentando eliminar log en '{log_file_path}'...")
+        
+        if os.path.exists(log_file_path):
+            os.remove(log_file_path)
+            logger.info(f"Archivo '{log_file_path}' eliminado exitosamente.")
+        else:
+            logger.info(f"Archivo '{log_file_path}' no existe, nada que eliminar.")
+
+    def should_run(self, hook_type, step) -> bool:
+        return hook_type == 'before' and "Generar Reporte" in step.name
+```
+
+### Configuración en la UI
+
+Cuando se agrega una tarea con parámetros configurables:
+1. La UI mostrará automáticamente campos de entrada basados en `get_args_schema()`
+2. El usuario puede modificar los valores por defecto
+3. Los valores se guardan en el archivo `execution_order.json`
+4. Durante la ejecución, los valores se pasan a `execute()` vía `kwargs`
+
 ## Guía de Clasificación y Nombres (Best Practices)
 
 Para mantener el orden y que los tags sean auto-explicativos, recomendamos la siguiente convención de nombres basada en el ámbito de ejecución:

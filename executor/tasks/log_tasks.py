@@ -17,6 +17,27 @@ class CleanupLogTask(BaseTask):
     """
     scope = "Before Scenario / Before Step"
 
+    @classmethod
+    def get_args_schema(cls) -> list:
+        return [
+            {"name": "log_file_path", "label": "Ruta del Archivo Log", "type": "text", "default": "C:\\temp\\activity.log"}
+        ]
+
+    def execute(self, context, step, **kwargs):
+        log_file_path = kwargs.get('log_file_path', "C:\\temp\\activity.log")
+        
+        logger.info(f"CleanupLogTask: Attempting to delete log file at '{log_file_path}'...")
+        
+        if os.path.exists(log_file_path):
+            try:
+                os.remove(log_file_path)
+                logger.info(f"CleanupLogTask: Successfully deleted '{log_file_path}'.")
+            except Exception as e:
+                logger.error(f"CleanupLogTask: Error deleting file '{log_file_path}'. Cause: {e}")
+                raise e
+        else:
+            logger.info(f"CleanupLogTask: File '{log_file_path}' does not exist, nothing to delete.")
+
     def should_run(self, hook_type, step) -> bool:
         # Original condition: "Generar Reporte" in s.name
         return hook_type == 'before' and "Generar Reporte" in step.name

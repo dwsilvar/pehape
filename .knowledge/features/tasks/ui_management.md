@@ -49,6 +49,38 @@ class MiNuevaTarea(BaseTask):
         pass
 ```
 
+## 4. Configuración de Parámetros de Tareas
+
+Algunas tareas aceptan parámetros configurables que permiten personalizar su comportamiento sin modificar el código.
+
+### Cómo Configurar Parámetros
+
+1. **Agregar Tarea a un Feature**:
+   - Navegue a un feature en la pantalla de Execution Order
+   - Haga clic en el menú de tres puntos (⋮) del feature
+   - Seleccione "Añadir Tarea"
+
+2. **Seleccionar Tarea**:
+   - Elija la tarea del dropdown (ej. "limpiar_log")
+   - Si la tarea tiene parámetros configurables, aparecerán campos de entrada automáticamente
+
+3. **Configurar Parámetros**:
+   - Complete los campos con los valores deseados
+   - Los campos muestran valores por defecto que puede modificar
+   - Ejemplo: Para "limpiar_log", configure "Ruta del Archivo Log" con la ruta de su archivo
+
+4. **Guardar Configuración**:
+   - Seleccione el scope (feature/scenario/step)
+   - Seleccione el hook (before/after)
+   - Haga clic en "Agregar"
+
+### Ejemplo de Tareas con Parámetros
+
+- **`limpiar_log`**: Acepta `log_file_path` para especificar qué archivo eliminar
+- **`validar_existencia_log`**: Acepta `log_file_path` para especificar qué archivo verificar
+
+Los parámetros configurados se guardan en `execution_order.json` y se pasan a la tarea durante la ejecución.
+
 ### Actualización
 
 La interfaz web lee la información dinámicamente desde el backend. Si modifica el código de una tarea, es posible que necesite reiniciar el servidor backend para que los cambios se reflejen en la documentación web.

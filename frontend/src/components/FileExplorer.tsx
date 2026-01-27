@@ -308,6 +308,8 @@ const FileExplorerComponent: React.FC<FileExplorerProps> = ({ onFileSelect, font
         <DialogTitle>Create {dialog?.type === 'folder' ? 'Folder' : 'File'}</DialogTitle>
         <DialogContent>
           <TextField
+            id="new-item-name-field"
+            name="new-item-name-field"
             autoFocus margin="dense" label="Name" fullWidth variant="outlined" size="small"
             value={newItemName} onChange={(e) => setNewItemName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleConfirmNewItem()}

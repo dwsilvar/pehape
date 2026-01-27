@@ -30,6 +30,8 @@ import {
   Select,
   FormControl,
   InputLabel,
+  Divider,
+  ListItemIcon,
 } from '@mui/material';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
@@ -49,6 +51,8 @@ import LocalOfferIcon from '@mui/icons-material/LocalOffer';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
+import DownloadIcon from '@mui/icons-material/Download';
+import AssessmentIcon from '@mui/icons-material/Assessment';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import SettingsIcon from '@mui/icons-material/Settings';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -463,31 +467,7 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
             </Box>
           )}
 
-          {/* FOOTER: EVIDENCIAS (GIFS) */}
-          {item.scenarios && item.scenarios.some(scenario => scenarioGifs && scenarioGifs[`${item.id}::${scenario}`]) && (
-            <Box sx={{ mt: 0.5, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-              {item.scenarios.map(scenario => {
-                const gifId = scenarioGifs ? scenarioGifs[`${item.id}::${scenario}`] : null;
-                if (!gifId) return null;
-                return (
-                  <Button
-                    key={gifId}
-                    variant="text"
-                    size="small"
-                    color="primary"
-                    startIcon={<PlayArrowIcon sx={{ fontSize: '14px !important' }} />}
-                    sx={{ textTransform: 'none', fontSize: '0.65rem', py: 0, px: 1, minWidth: 'auto' }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      window.open(`/api/execution/${gifId}/gif`, '_blank');
-                    }}
-                  >
-                    Ver GIF: {scenario.length > 15 ? scenario.substring(0, 15) + '...' : scenario}
-                  </Button>
-                );
-              })}
-            </Box>
-          )}
+          {/* FOOTER: EVIDENCIAS (GIFS) - MOVIDO AL MENÚ POR SOLICITUD DEL USUARIO */}
         </Box>
       </Paper>
       <Menu
@@ -504,6 +484,32 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
         <MenuItem onClick={handleToggle}>{item.active ? 'Desactivar' : 'Activar'}</MenuItem>
         <MenuItem onClick={handleAddTask}>Añadir Tarea</MenuItem>
         <MenuItem onClick={handleDelete}>Eliminar</MenuItem>
+
+        {/* Opciones de descarga de GIF si existen */}
+        {item.scenarios && item.scenarios.some(scenario => scenarioGifs && scenarioGifs[`${item.id}::${scenario}`]) && [
+          <Divider key="gif-divider" />,
+          ...item.scenarios.map(scenario => {
+            const gifId = scenarioGifs ? scenarioGifs[`${item.id}::${scenario}`] : null;
+            if (!gifId) return null;
+            return (
+              <MenuItem
+                key={gifId}
+                onClick={() => {
+                  window.open(`/api/execution/${gifId}/gif`, '_blank');
+                  handleClose();
+                }}
+              >
+                <ListItemIcon>
+                  <DownloadIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText
+                  primary={`Descargar GIF: ${scenario}`}
+                  primaryTypographyProps={{ sx: { fontSize: '0.75rem' } }}
+                />
+              </MenuItem>
+            );
+          }).filter(Boolean)
+        ]}
       </Menu>
     </>
   );
@@ -1284,6 +1290,17 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
             <AccessTimeIcon />
           </Button>
         </Tooltip>
+        <Tooltip title="Ver Último Reporte">
+          <Button
+            variant="outlined"
+            color="secondary"
+            size="small"
+            sx={{ mr: 1 }}
+            onClick={() => window.open('/api/report/index.html', '_blank')}
+          >
+            <AssessmentIcon />
+          </Button>
+        </Tooltip>
 
         {scheduledExecutionTime && (
           <Chip
@@ -1329,6 +1346,8 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
                         <input
                           type="color"
                           hidden
+                          id={`module-color-${module.module_name}`}
+                          name={`module-color-${module.module_name}`}
                           value={module.color || DEFAULT_MODULE_COLOR}
                           onChange={(e) => handleModuleColorChange(module.module_name, e.target.value)}
                         />

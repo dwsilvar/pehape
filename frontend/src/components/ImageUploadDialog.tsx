@@ -79,6 +79,8 @@ export const ImageUploadDialog: React.FC<ImageUploadDialogProps> = ({
             <DialogContent>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
                     <TextField
+                        id="image-text-field"
+                        name="image-text-field"
                         label="Selected Text / Image Name"
                         value={text}
                         onChange={(e) => setText(e.target.value)}
@@ -86,6 +88,8 @@ export const ImageUploadDialog: React.FC<ImageUploadDialogProps> = ({
                         helperText="This will be the filename (e.g. 'Submit Button.png')"
                     />
                     <TextField
+                        id="scenario-tag-field"
+                        name="scenario-tag-field"
                         label="Scenario Tag"
                         value={tag}
                         onChange={(e) => setTag(e.target.value)}
@@ -99,6 +103,7 @@ export const ImageUploadDialog: React.FC<ImageUploadDialogProps> = ({
                             accept="image/*"
                             style={{ display: 'none' }}
                             id="raised-button-file"
+                            name="raised-button-file"
                             type="file"
                             onChange={handleFileChange}
                         />
