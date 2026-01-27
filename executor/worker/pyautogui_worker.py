@@ -297,16 +297,32 @@ class PyAutoGUIWorker(WorkerInterface):
 
             # Move window to primary screen (0, 0) or slightly offset to be safe
             # This avoids issues with secondary screens where pyautogui might struggle
-            if window.left < 0 or window.top < 0 or window.left > pyautogui.size().width:
+            screen_width, screen_height = pyautogui.size()
+            if (window.left < 0 or window.top < 0 or 
+                window.left > screen_width or window.top > screen_height):
                  logger.info(f"Moving window '{sanitized_title}' to primary screen (10, 10)...")
                  window.moveTo(10, 10)
                  time.sleep(0.5)
 
-            # If not active, bring it to the front.
-            if not window.isActive:
-                logger.info("Window is not active. Bringing to front...")
+            # Ensure the window is truly active and in the foreground
+            # Note: window.isActive can be unreliable on Windows, so we use multiple strategies
+            try:
+                # Strategy 1: Always call activate() to ensure window is in foreground
+                logger.info(f"Activating window '{sanitized_title}'...")
                 window.activate()
-                time.sleep(0.5)  # Pause for the focus to change.
+                time.sleep(0.3)
+                
+                # Strategy 2: Click on the window center to ensure focus (fallback)
+                # This helps when activate() alone doesn't work reliably
+                if not window.isActive:
+                    logger.info("Window still not active after activate(). Clicking window center as fallback...")
+                    center_x = window.left + (window.width // 2)
+                    center_y = window.top + (window.height // 2)
+                    pyautogui.click(center_x, center_y)
+                    time.sleep(0.3)
+                    
+            except Exception as e:
+                logger.warning(f"Error during window activation: {e}. Continuing anyway...")
 
             logger.info(f"Window '{sanitized_title}' is visible and active.")
             return True
