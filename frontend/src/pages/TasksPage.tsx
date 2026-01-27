@@ -8,6 +8,12 @@ interface TaskDef {
     module: string;
     scope: string;
     doc: string;
+    args_schema?: Array<{
+        name: string;
+        label: string;
+        type: string;
+        default?: any;
+    }>;
 }
 
 interface LiteralCheckResult {
@@ -226,6 +232,30 @@ const TasksPage: React.FC = () => {
                                                 <Typography variant="body2" color="text.primary" sx={{ whiteSpace: 'pre-wrap' }}>
                                                     {task.doc}
                                                 </Typography>
+
+                                                {task.args_schema && task.args_schema.length > 0 && (
+                                                    <Box sx={{ mt: 2 }}>
+                                                        <Divider sx={{ mb: 1.5 }} />
+                                                        <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, fontWeight: 'bold' }}>
+                                                            Parámetros Configurables:
+                                                        </Typography>
+                                                        {task.args_schema.map((arg, idx) => (
+                                                            <Box key={idx} sx={{ mb: 1, pl: 2, borderLeft: '3px solid', borderColor: 'primary.light' }}>
+                                                                <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 'bold', color: 'primary.main' }}>
+                                                                    {arg.name}
+                                                                </Typography>
+                                                                <Typography variant="caption" color="text.secondary" display="block">
+                                                                    {arg.label} ({arg.type})
+                                                                </Typography>
+                                                                {arg.default !== undefined && (
+                                                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ fontStyle: 'italic' }}>
+                                                                        Por defecto: {String(arg.default)}
+                                                                    </Typography>
+                                                                )}
+                                                            </Box>
+                                                        ))}
+                                                    </Box>
+                                                )}
                                             </CardContent>
                                         </Card>
                                     </Grid>
