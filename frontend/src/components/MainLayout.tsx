@@ -56,6 +56,7 @@ const MainLayout: React.FC = () => {
   const [tabValue, setTabValue] = useState(0);
   const modulesRef = useRef(modules);
   const [focusedModule, setFocusedModule] = useState<string | null>(null);
+  const [validationTexts, setValidationTexts] = useState<string[]>([]); // Estado para textos a validar
 
   // --- UI PERSPECTIVE STATE (Now shared via Context) ---
   const {
@@ -785,6 +786,8 @@ const MainLayout: React.FC = () => {
                         onSave={handleSaveFile}
                         isDirty={isDirty}
                         isResizing={isResizingRef.current}
+                        validationTexts={validationTexts}
+                        onValidationTextsChange={setValidationTexts}
                       />
                     </TabPanel>
 
@@ -838,6 +841,7 @@ const MainLayout: React.FC = () => {
                           onScheduleTests={handleScheduleTests}
                           scheduledExecutionTime={scheduledExecutionTime}
                           onCancelSchedule={handleCancelSchedule}
+                          validationTexts={validationTexts}
                         />
                       ) : (
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 2 }}>

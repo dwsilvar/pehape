@@ -54,6 +54,7 @@ from executor.tasks_core.registry import get_all_tasks
 # Importar módulos de tareas conocidos para asegurar su registro
 # En un entorno real, esto podría ser dinámico (auto-discovery)
 import executor.tasks.log_tasks
+import executor.tasks.text_verification_tasks
 
 # --- Herramientas / Tareas Predefinidas ---
 @app.route('/api/tools/check-literal', methods=['POST'])

@@ -634,6 +634,7 @@ interface ExecutionOrderProps {
   onScheduleTests: (date: Date) => void;
   scheduledExecutionTime: Date | null;
   onCancelSchedule: () => void;
+  validationTexts?: string[]; // Textos a validar desde FeatureEditor
 }
 
 const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
@@ -652,6 +653,7 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
   onScheduleTests,
   scheduledExecutionTime,
   onCancelSchedule,
+  validationTexts = [],
 }) => {
   const { scenarioStatuses, scenarioGifs } = useLayout();
   // Necesitamos acceder al elemento activo para deshabilitar el SortableContext si no es un módulo.
@@ -716,6 +718,12 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
         }
       });
     }
+
+    // Pre-cargar textos de validación si la tarea es verificar_texto_archivo
+    if (taskName === 'verificar_texto_archivo' && validationTexts.length > 0) {
+      initialArgs['expected_texts'] = validationTexts.join('\n');
+    }
+
     setNewTaskConfig({ ...newTaskConfig, name: taskName, args: initialArgs });
   };
 
@@ -1614,15 +1622,21 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
                   {availableTasks.find(t => t.name === newTaskConfig.name).args_schema.map((arg: any) => (
                     <TextField
                       key={arg.name}
+                      id={`task-arg-${arg.name}`}
+                      name={`task-arg-${arg.name}`}
                       label={arg.label || arg.name}
                       fullWidth
                       size="small"
-                      value={newTaskConfig.args[arg.name] ?? ''}
+                      multiline={arg.type === 'textarea'}
+                      rows={arg.type === 'textarea' ? 4 : 1}
+                      value={newTaskConfig.args[arg.name] ?? arg.default ?? ''}
                       onChange={(e) => setNewTaskConfig({
                         ...newTaskConfig,
                         args: { ...newTaskConfig.args, [arg.name]: e.target.value }
                       })}
                       type={arg.type === 'number' ? 'number' : 'text'}
+                      placeholder={arg.type === 'textarea' ? 'Ingrese cada texto en una línea nueva' : ''}
+                      helperText={arg.type === 'textarea' ? 'Un texto por línea' : ''}
                     />
                   ))}
                 </Box>

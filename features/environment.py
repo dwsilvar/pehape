@@ -8,6 +8,7 @@ from allure_commons.types import AttachmentType
 from executor.task_executor import TaskExecutor
 # Import tasks module to ensure tasks are registered
 import executor.tasks.log_tasks
+import executor.tasks.text_verification_tasks
 import logging
 import time
 import json
