@@ -1,4 +1,4 @@
-import { FC, useState } from 'react';
+import { FC, useState, useEffect } from 'react';
 import { Box, Typography, Button, List, ListItem, ListItemText, IconButton, Chip, Paper } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -16,7 +16,7 @@ interface FeatureEditorProps {
   isDirty: boolean; // Nueva prop para saber si hay cambios
   isResizing: boolean; // Nueva prop para saber si se está redimensionando
   validationTexts?: string[]; // Nueva prop para textos a validar
-  onValidationTextsChange?: (texts: string[]) => void; // Nueva prop para actualizar textos
+  onValidationTextsChange?: React.Dispatch<React.SetStateAction<string[]>>; // Nueva prop para actualizar textos
 }
 
 export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorContent, onEditorChange, theme, onSave, isDirty, isResizing, validationTexts = [], onValidationTextsChange }) => {
@@ -25,18 +25,44 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
   const [detectedTag, setDetectedTag] = useState<string | null>(null);
   const [localValidationTexts, setLocalValidationTexts] = useState<string[]>(validationTexts);
 
+  // Sincronizar estado local con props cuando cambian
+  useEffect(() => {
+    setLocalValidationTexts(validationTexts);
+  }, [validationTexts]);
+
   // Usar validationTexts de props si está disponible, sino usar estado local
   const currentValidationTexts = onValidationTextsChange ? validationTexts : localValidationTexts;
-  const updateValidationTexts = onValidationTextsChange || setLocalValidationTexts;
 
   const handleAddValidationText = (text: string) => {
-    if (text && !currentValidationTexts.includes(text)) {
-      updateValidationTexts([...currentValidationTexts, text]);
+    if (!text) return;
+
+    // Usar forma funcional de setState para evitar problemas de estado obsoleto
+    if (onValidationTextsChange) {
+      // Si hay callback del padre, usarlo con forma funcional
+      onValidationTextsChange((prevTexts: string[]) => {
+        if (prevTexts.includes(text)) {
+          return prevTexts;
+        }
+        return [...prevTexts, text];
+      });
+    } else {
+      // Si no, usar estado local con forma funcional
+      setLocalValidationTexts((prevTexts: string[]) => {
+        if (prevTexts.includes(text)) {
+          return prevTexts;
+        }
+        return [...prevTexts, text];
+      });
     }
   };
 
   const handleRemoveValidationText = (index: number) => {
-    updateValidationTexts(currentValidationTexts.filter((_, i) => i !== index));
+    // Usar forma funcional de setState para evitar problemas de estado obsoleto
+    if (onValidationTextsChange) {
+      onValidationTextsChange((prevTexts: string[]) => prevTexts.filter((_: string, i: number) => i !== index));
+    } else {
+      setLocalValidationTexts((prevTexts: string[]) => prevTexts.filter((_: string, i: number) => i !== index));
+    }
   };
 
   const handleEditorDidMount: OnMount = (editor, monaco) => {
