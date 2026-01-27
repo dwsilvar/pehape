@@ -27,6 +27,9 @@ import {
   Radio,
   Checkbox,
   ListSubheader,
+  Select,
+  FormControl,
+  InputLabel,
 } from '@mui/material';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
@@ -45,11 +48,17 @@ import StopIcon from '@mui/icons-material/Stop';
 import LocalOfferIcon from '@mui/icons-material/LocalOffer';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import AssignmentIcon from '@mui/icons-material/Assignment';
+import SettingsIcon from '@mui/icons-material/Settings';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ErrorIcon from '@mui/icons-material/Error';
 import { useSortable, SortableContext, verticalListSortingStrategy, } from '@dnd-kit/sortable';
 import { arrayMove } from '@dnd-kit/sortable';
 import { useDroppable, useDndContext, Active } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { Module, FeatureItem, ScenarioStatusMap } from '../types';
+import { useLayout } from '../context/LayoutContext';
 
 const DEFAULT_FEATURE_COLOR = '#4db6ac';
 
@@ -154,13 +163,15 @@ interface ExecutionItemProps {
   fontSize: number;
   onDoubleClick: (item: FeatureItem) => void;
   onToggleActivity: (item: FeatureItem) => void;
-  onDelete: (item: FeatureItem) => void; // Para eliminación real
+  onDelete: (item: FeatureItem) => void;
   onTagClick: (featureId: string, tag: string) => void;
-  scenarioStatuses: ScenarioStatusMap;
-  scenarioGifs?: Record<string, string>;
   isRunning: boolean;
   isFirst: boolean;
   isLast: boolean;
+  onAddTask: (moduleName: string, item: FeatureItem) => void;
+  onDeleteTask: (moduleName: string, item: FeatureItem, taskIndex: number) => void;
+  onEditTask: (moduleName: string, item: FeatureItem, task: any, index: number) => void;
+  moduleName: string;
 }
 
 const ExecutionItem: React.FC<ExecutionItemProps> = ({
@@ -170,14 +181,17 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
   fontSize,
   onDoubleClick,
   onToggleActivity,
-  onDelete, // Nueva prop
+  onDelete,
   onTagClick,
-  scenarioStatuses,
-  scenarioGifs,
   isRunning,
   isFirst,
   isLast,
+  onAddTask,
+  onDeleteTask,
+  onEditTask,
+  moduleName,
 }) => {
+  const { scenarioStatuses, taskStatuses, scenarioGifs } = useLayout();
   const {
     attributes,
     listeners,
@@ -209,6 +223,14 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
     );
   };
 
+  const handleOpenMenu = (event: React.MouseEvent) => {
+    event.stopPropagation();
+    setContextMenu({
+      mouseX: event.clientX,
+      mouseY: event.clientY,
+    });
+  };
+
   const handleClose = () => {
     setContextMenu(null);
   };
@@ -225,6 +247,11 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
 
   const handleDelete = () => {
     onDelete(item);
+    handleClose();
+  };
+
+  const handleAddTask = () => {
+    onAddTask(moduleName, item);
     handleClose();
   };
   const style = {
@@ -279,105 +306,189 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
           <DragIndicatorIcon fontSize="small" />
         </Box>
         {/* Contenido del feature */}
-        <Box sx={{ flexGrow: 1, ml: 1, cursor: item.active ? 'pointer' : 'default' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-            <Typography sx={{ fontSize: `${fontSize}px`, textDecoration: item.active ? 'none' : 'line-through', color: item.active ? 'text.primary' : 'text.disabled' }}>
+        <Box sx={{ flexGrow: 1, ml: 1, cursor: item.active ? 'pointer' : 'default', display: 'flex', flexDirection: 'column', gap: 1 }}>
+
+          {/* SECCIÓN 1: CABECERA Y CONTROLES */}
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Typography sx={{
+              fontSize: `${fontSize}px`,
+              fontWeight: 'bold',
+              textDecoration: item.active ? 'none' : 'line-through',
+              color: item.active ? 'text.primary' : 'text.disabled'
+            }}>
               {`${item.order}. ${item.feature_file}`}
             </Typography>
-            {/* Mostrar los tags del feature si existen, ahora al lado del nombre */}
-            {item.display_tags && item.display_tags.length > 0 && (
-              item.display_tags.map((tag) => (
+
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <Tooltip title="Subir">
+                <span>
+                  <IconButton edge="end" onClick={onMoveUp} size="small" disabled={isFirst || !item.active}>
+                    <ArrowUpwardIcon fontSize="small" />
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Tooltip title="Bajar">
+                <span>
+                  <IconButton edge="end" onClick={onMoveDown} size="small" disabled={isLast || !item.active}>
+                    <ArrowDownwardIcon fontSize="small" />
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Tooltip title={item.active ? "Desactivar feature" : "Activar feature"}>
+                <IconButton onClick={() => onToggleActivity(item)} size="small" sx={{ ml: 0.5 }}>
+                  {item.active ? <VisibilityIcon fontSize="small" /> : <VisibilityOffIcon fontSize="small" color="disabled" />}
+                </IconButton>
+              </Tooltip>
+              <IconButton onClick={handleOpenMenu} size="small" sx={{ ml: 0.5 }}>
+                <MoreVertIcon fontSize="small" />
+              </IconButton>
+            </Box>
+          </Box>
+
+          {/* SECCIÓN 2: TAGS */}
+          {item.display_tags && item.display_tags.length > 0 && (
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+              {item.display_tags.map((tag) => (
                 <Chip
                   clickable={item.active}
                   key={tag}
                   label={tag}
-                  icon={<LocalOfferIcon fontSize="small" />}
+                  icon={<LocalOfferIcon sx={{ fontSize: '10px !important' }} />}
                   size="small"
                   color={item.tags?.includes(tag) ? 'primary' : 'default'}
                   variant={item.tags?.includes(tag) && item.active ? 'filled' : 'outlined'}
                   onClick={() => item.active && onTagClick(item.id, tag)}
-                  sx={{ fontSize: '0.7rem', height: '22px', borderRadius: '4px' }} // Hacemos el chip más rectangular
+                  sx={{ fontSize: '0.65rem', height: '18px', borderRadius: '4px' }}
                 />
-              ))
-            )}
-          </Box>
-          {/* Mostrar los escenarios del feature si existen */}
-          {item.scenarios && item.scenarios.length > 0 && (
-            <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-              {item.scenarios.map((scenario) => {
-                // Construimos la clave única para este escenario específico
-                const uniqueScenarioId = `${item.id}::${scenario}`;
-                const status = scenarioStatuses[uniqueScenarioId] || 'untested';
-                const gifId = scenarioGifs ? scenarioGifs[uniqueScenarioId] : null;
-
-                const colorMap = {
-                  passed: 'success',
-                  failed: 'error',
-                  skipped: 'warning',
-                  untested: 'default',
-                  running: 'info',
-                } as const;
-
-                const truncatedLabel = scenario.length > 25 ? `${scenario.substring(0, 25)}...` : scenario;
-
-                return (
-                  <Tooltip key={scenario} title={scenario} arrow>
-                    <Chip
-                      icon={
-                        status === 'running' ? (
-                          <CircularProgress size={14} color="inherit" />
-                        ) : undefined
-                      }
-                      label={truncatedLabel}
-                      size="small"
-                      color={colorMap[status]}
-                      variant={status === 'untested' ? 'outlined' : 'filled'}
-                      sx={{ fontSize: '0.7rem', height: '20px' }}
-                    />
-                  </Tooltip>
-                );
-              })}
+              ))}
             </Box>
           )}
 
-          {/* Mostrar botón de descarga de GIF si hay alguno disponible en los escenarios */}
+          {/* SECCIÓN 3: ESCENARIOS */}
+          {item.scenarios && item.scenarios.length > 0 && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 'medium', fontSize: '0.65rem' }}>
+                Escenarios:
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                {item.scenarios.map((scenario) => {
+                  const uniqueScenarioId = `${item.id}::${scenario}`;
+                  const status = scenarioStatuses[uniqueScenarioId] || 'untested';
+                  const colorMap = {
+                    passed: 'success',
+                    failed: 'error',
+                    skipped: 'warning',
+                    untested: 'default',
+                    running: 'info',
+                  } as const;
+
+                  const truncatedLabel = scenario.length > 35 ? `${scenario.substring(0, 35)}...` : scenario;
+
+                  return (
+                    <Tooltip key={uniqueScenarioId} title={scenario} arrow>
+                      <Chip
+                        icon={status === 'running' ? <CircularProgress size={10} color="inherit" /> : undefined}
+                        label={truncatedLabel}
+                        size="small"
+                        color={colorMap[status]}
+                        variant={status === 'untested' ? 'outlined' : 'filled'}
+                        sx={{ fontSize: '0.65rem', height: '20px' }}
+                      />
+                    </Tooltip>
+                  );
+                })}
+              </Box>
+            </Box>
+          )}
+
+          {/* SECCIÓN 4: TAREAS (SOLO SI EXISTEN) */}
+          {item.ui_tasks && item.ui_tasks.length > 0 && (
+            <Box sx={{
+              mt: 0.5,
+              pt: 0.5,
+              borderTop: '1px solid',
+              borderColor: 'divider',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 0.5
+            }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <SettingsIcon sx={{ fontSize: '12px', color: 'text.secondary' }} />
+                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 'bold', fontSize: '0.65rem' }}>
+                  Tareas Asociadas:
+                </Typography>
+              </Box>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                {item.ui_tasks.map((task, index) => {
+                  const taskState = taskStatuses[item.id]?.[index];
+                  const status = taskState?.status || 'pending';
+                  const error = taskState?.error;
+
+                  const colorMap = {
+                    passed: 'success',
+                    failed: 'error',
+                    pending: 'default',
+                    running: 'info',
+                  } as const;
+
+                  const Icon = status === 'passed' ? CheckCircleIcon : (status === 'failed' ? ErrorIcon : undefined);
+
+                  return (
+                    <Tooltip key={`${task.name}-${index}`} title={error || `${task.name} (${status})`} arrow>
+                      <Chip
+                        clickable
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEditTask(moduleName, item, task, index);
+                        }}
+                        label={`${task.name} (${task.scope}${task.scenario_name ? ':' + task.scenario_name : ''})`}
+                        size="small"
+                        variant={status === 'pending' ? 'outlined' : 'filled'}
+                        color={colorMap[status as keyof typeof colorMap]}
+                        icon={Icon ? <Icon sx={{ fontSize: '12px !important' }} /> : (status === 'running' ? <CircularProgress size={10} color="inherit" /> : undefined)}
+                        onDelete={(e) => {
+                          e.stopPropagation();
+                          onDeleteTask(moduleName, item, index);
+                        }}
+                        sx={{
+                          fontSize: '0.6rem',
+                          height: '18px',
+                          backgroundColor: status === 'pending' ? 'rgba(0,0,0,0.03)' : undefined,
+                        }}
+                      />
+                    </Tooltip>
+                  );
+                })}
+              </Box>
+            </Box>
+          )}
+
+          {/* FOOTER: EVIDENCIAS (GIFS) */}
           {item.scenarios && item.scenarios.some(scenario => scenarioGifs && scenarioGifs[`${item.id}::${scenario}`]) && (
-            <Box sx={{ mt: 1 }}>
+            <Box sx={{ mt: 0.5, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
               {item.scenarios.map(scenario => {
                 const gifId = scenarioGifs ? scenarioGifs[`${item.id}::${scenario}`] : null;
                 if (!gifId) return null;
                 return (
                   <Button
                     key={gifId}
-                    variant="outlined"
+                    variant="text"
                     size="small"
-                    color="secondary"
-                    startIcon={<PlayArrowIcon />}
-                    sx={{ mr: 1, textTransform: 'none', fontSize: '0.7rem', padding: '2px 8px', minWidth: 'auto' }}
+                    color="primary"
+                    startIcon={<PlayArrowIcon sx={{ fontSize: '14px !important' }} />}
+                    sx={{ textTransform: 'none', fontSize: '0.65rem', py: 0, px: 1, minWidth: 'auto' }}
                     onClick={(e) => {
                       e.stopPropagation();
                       window.open(`/api/execution/${gifId}/gif`, '_blank');
                     }}
                   >
-                    GIF: {scenario.length > 15 ? scenario.substring(0, 15) + '...' : scenario}
+                    Ver GIF: {scenario.length > 15 ? scenario.substring(0, 15) + '...' : scenario}
                   </Button>
                 );
               })}
             </Box>
           )}
         </Box>
-        {/* Los botones ahora están fuera del handle y sus clics funcionarán. */}
-        <IconButton key={`${item.id}-up`} edge="end" onClick={onMoveUp} size="small" disabled={isFirst || !item.active}>
-          <ArrowUpwardIcon />
-        </IconButton>
-        <IconButton key={`${item.id}-down`} edge="end" onClick={onMoveDown} size="small" disabled={isLast || !item.active}>
-          <ArrowDownwardIcon />
-        </IconButton>
-        <Tooltip title={item.active ? "Desactivar feature" : "Activar feature"}>
-          <IconButton edge="end" onClick={() => onToggleActivity(item)} size="small" sx={{ ml: 1 }}>
-            {item.active ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
-          </IconButton>
-        </Tooltip>
       </Paper>
       <Menu
         open={contextMenu !== null}
@@ -391,6 +502,7 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
       >
         <MenuItem onClick={handleOpenInEditor}>Abrir en editor</MenuItem>
         <MenuItem onClick={handleToggle}>{item.active ? 'Desactivar' : 'Activar'}</MenuItem>
+        <MenuItem onClick={handleAddTask}>Añadir Tarea</MenuItem>
         <MenuItem onClick={handleDelete}>Eliminar</MenuItem>
       </Menu>
     </>
@@ -503,11 +615,8 @@ const MemoizedSortableModule = React.memo(SortableModule);
 interface ExecutionOrderProps {
   fontSize: number;
   onFeatureSelect: (path: string) => void;
-  modules: Module[]; // Usar el tipo Module
-  setModules: React.Dispatch<React.SetStateAction<Module[]>>; // Usar el tipo Module
-  scenarioStatuses: ScenarioStatusMap;
-  scenarioGifs: Record<string, string>; // New prop
-  setScenarioStatuses: React.Dispatch<React.SetStateAction<ScenarioStatusMap>>;
+  modules: Module[];
+  setModules: React.Dispatch<React.SetStateAction<Module[]>>;
   isExecuting: boolean;
   runningFeatureId: string | null;
   onRunTests: () => void;
@@ -526,9 +635,6 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
   onFeatureSelect,
   modules,
   setModules,
-  scenarioStatuses,
-  scenarioGifs, // New prop
-  setScenarioStatuses,
   isExecuting,
   runningFeatureId,
   onRunTests,
@@ -537,11 +643,11 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
   onToggleSectionCollapse,
   navigateToModule,
   onStopTests,
-
   onScheduleTests,
   scheduledExecutionTime,
   onCancelSchedule,
 }) => {
+  const { scenarioStatuses, scenarioGifs } = useLayout();
   // Necesitamos acceder al elemento activo para deshabilitar el SortableContext si no es un módulo.
   // Esto es un patrón avanzado para permitir que droppables externos funcionen dentro de un SortableContext.
   const { active } = useDndContext();
@@ -578,6 +684,158 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
   const [selectedHookModule, setSelectedHookModule] = React.useState<string>('');
   const [expandedHookModule, setExpandedHookModule] = React.useState<string | null>(null);
   const [selectedTags, setSelectedTags] = React.useState<Set<string>>(new Set());
+
+  // --- State y Handlers para el diálogo de "Asociar Tarea" ---
+  const [taskDialogOpen, setTaskDialogOpen] = React.useState(false);
+  const [availableTasks, setAvailableTasks] = React.useState<any[]>([]);
+  const [selectedFeatureForTask, setSelectedFeatureForTask] = React.useState<{ moduleName: string, item: FeatureItem } | null>(null);
+  const [editingTaskIndex, setEditingTaskIndex] = React.useState<number | null>(null);
+  const [newTaskConfig, setNewTaskConfig] = React.useState<{
+    name: string;
+    scope: 'feature' | 'scenario' | 'step';
+    hook: 'before' | 'after';
+    scenario_name?: string;
+    args: Record<string, any>;
+  }>({ name: '', scope: 'feature', hook: 'before', args: {} });
+
+  const handleTaskChange = (taskName: string) => {
+    const task = availableTasks.find(t => t.name === taskName);
+    const initialArgs: Record<string, any> = {};
+    if (task && task.args_schema) {
+      task.args_schema.forEach((arg: any) => {
+        if (arg.default !== undefined) {
+          initialArgs[arg.name] = arg.default;
+        } else {
+          initialArgs[arg.name] = arg.type === 'number' ? 0 : '';
+        }
+      });
+    }
+    setNewTaskConfig({ ...newTaskConfig, name: taskName, args: initialArgs });
+  };
+
+  const handleOpenTaskDialog = async (moduleName: string, item: FeatureItem) => {
+    setSelectedFeatureForTask({ moduleName, item });
+    setTaskDialogOpen(true);
+
+    // Fetch available tasks if not already loaded
+    if (availableTasks.length === 0) {
+      try {
+        const response = await fetch('/api/tasks');
+        if (response.ok) {
+          const data = await response.json();
+          setAvailableTasks(data.tasks || []);
+        }
+      } catch (error) {
+        console.error("Error fetching tasks:", error);
+      }
+    }
+  };
+
+  const handleOpenEditTaskDialog = async (moduleName: string, item: FeatureItem, task: any, index: number) => {
+    setSelectedFeatureForTask({ moduleName, item });
+    setEditingTaskIndex(index);
+    setTaskDialogOpen(true);
+
+    // Fetch tasks first to ensure schema availability
+    let tasksList = availableTasks;
+    if (availableTasks.length === 0) {
+      try {
+        const response = await fetch('/api/tasks');
+        if (response.ok) {
+          const data = await response.json();
+          setAvailableTasks(data.tasks || []);
+          tasksList = data.tasks || [];
+        }
+      } catch (error) {
+        console.error("Error fetching tasks:", error);
+      }
+    }
+
+    // Populate config with existing task data
+    const taskDef = tasksList.find(t => t.name === task.name);
+    const initialArgs = { ...task.args };
+
+    if (taskDef && taskDef.args_schema) {
+      taskDef.args_schema.forEach((arg: any) => {
+        if (initialArgs[arg.name] === undefined) {
+          if (arg.default !== undefined) initialArgs[arg.name] = arg.default;
+          else initialArgs[arg.name] = arg.type === 'number' ? 0 : '';
+        }
+      });
+    }
+
+    setNewTaskConfig({
+      name: task.name,
+      scope: task.scope,
+      hook: task.hook,
+      scenario_name: task.scenario_name,
+      args: initialArgs
+    });
+  };
+
+  const handleCloseTaskDialog = () => {
+    setTaskDialogOpen(false);
+    setSelectedFeatureForTask(null);
+    setEditingTaskIndex(null);
+    setNewTaskConfig({ name: '', scope: 'feature', hook: 'before', args: {} });
+  };
+
+  const handleConfirmAddTask = async () => {
+    if (!selectedFeatureForTask || !newTaskConfig.name) return;
+
+    try {
+      const method = editingTaskIndex !== null ? 'PUT' : 'POST';
+      const body: any = {
+        feature_file: selectedFeatureForTask.item.feature_file,
+        feature_dir: selectedFeatureForTask.item.feature_dir,
+        task_config: newTaskConfig
+      };
+      if (editingTaskIndex !== null) {
+        body.task_index = editingTaskIndex;
+      }
+
+      const response = await fetch(`/api/modules/${encodeURIComponent(selectedFeatureForTask.moduleName)}/features/tasks`, {
+        method: method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+
+      if (response.ok) {
+        const updatedModules = await response.json();
+        setModules(updatedModules);
+        handleCloseTaskDialog();
+      } else {
+        const error = await response.json();
+        alert(`Error al añadir tarea: ${error.error}`);
+      }
+    } catch (error) {
+      console.error("Error adding task:", error);
+    }
+  };
+
+  const handleDeleteTask = async (moduleName: string, item: FeatureItem, taskIndex: number) => {
+    try {
+      const response = await fetch(`/api/modules/${encodeURIComponent(moduleName)}/features/tasks`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          feature_file: item.feature_file,
+          feature_dir: item.feature_dir,
+          task_index: taskIndex
+        })
+      });
+
+      if (response.ok) {
+        const updatedModules = await response.json();
+        setModules(updatedModules);
+      } else {
+        const error = await response.json();
+        alert(`Error al eliminar tarea: ${error.error}`);
+      }
+    } catch (error) {
+      console.error("Error deleting task:", error);
+    }
+  };
 
   // --- State para el diálogo de agendar ejecución ---
   const [scheduleDialogOpen, setScheduleDialogOpen] = React.useState(false);
@@ -1123,11 +1381,13 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
                             onMoveUp={() => handleMoveFeature(module.module_name, feature, 'up')}
                             onMoveDown={() => handleMoveFeature(module.module_name, feature, 'down')}
                             onTagClick={(featureId, tag) => handleTagToggle(module.module_name, featureId, tag)}
-                            scenarioStatuses={scenarioStatuses}
-                            scenarioGifs={scenarioGifs}
                             isRunning={feature.id === runningFeatureId}
                             isFirst={index === 0}
                             isLast={index === module.features.length - 1}
+                            onAddTask={handleOpenTaskDialog}
+                            onDeleteTask={handleDeleteTask}
+                            onEditTask={handleOpenEditTaskDialog}
+                            moduleName={module.module_name}
                           />
                         ))}
                     </SortableContext>
@@ -1305,6 +1565,100 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
         <DialogActions>
           <Button onClick={handleCloseHookDialog}>Cancelar</Button>
           <Button onClick={handleConfirmAddHook} disabled={!selectedHookModule}>Agregar</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Diálogo para añadir tarea */}
+      <Dialog open={taskDialogOpen} onClose={handleCloseTaskDialog} fullWidth maxWidth="sm">
+        <DialogTitle>{editingTaskIndex !== null ? `Editar Tarea: ${newTaskConfig.name}` : `Asociar Tarea a: ${selectedFeatureForTask?.item.feature_file}`}</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+            <FormControl fullWidth>
+              <InputLabel id="task-select-label">Seleccionar Tarea</InputLabel>
+              <Select
+                labelId="task-select-label"
+                value={newTaskConfig.name}
+                label="Seleccionar Tarea"
+                onChange={(e) => handleTaskChange(e.target.value)}
+              >
+                {availableTasks.map(task => (
+                  <MenuItem key={task.name} value={task.name}>{task.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            {/* Dynamic arguments schema rendering */}
+            {newTaskConfig.name && availableTasks.find(t => t.name === newTaskConfig.name)?.args_schema?.length > 0 && (
+              <Box sx={{ border: '1px solid #eee', p: 2, borderRadius: 1, bgcolor: 'rgba(0,0,0,0.02)' }}>
+                <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>Configuración de la Tarea</Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {availableTasks.find(t => t.name === newTaskConfig.name).args_schema.map((arg: any) => (
+                    <TextField
+                      key={arg.name}
+                      label={arg.label || arg.name}
+                      fullWidth
+                      size="small"
+                      value={newTaskConfig.args[arg.name] ?? ''}
+                      onChange={(e) => setNewTaskConfig({
+                        ...newTaskConfig,
+                        args: { ...newTaskConfig.args, [arg.name]: e.target.value }
+                      })}
+                      type={arg.type === 'number' ? 'number' : 'text'}
+                    />
+                  ))}
+                </Box>
+              </Box>
+            )}
+
+            <FormControl fullWidth>
+              <InputLabel id="scope-select-label">Alcance (Scope)</InputLabel>
+              <Select
+                labelId="scope-select-label"
+                value={newTaskConfig.scope}
+                label="Alcance (Scope)"
+                onChange={(e) => setNewTaskConfig({ ...newTaskConfig, scope: e.target.value as any })}
+              >
+                <MenuItem value="feature">Feature (Toda la prueba)</MenuItem>
+                <MenuItem value="scenario">Scenario (Solo un escenario)</MenuItem>
+                <MenuItem value="step">Step (Todos los pasos)</MenuItem>
+              </Select>
+            </FormControl>
+
+            {newTaskConfig.scope === 'scenario' && (
+              <FormControl fullWidth>
+                <InputLabel id="scenario-select-label">Seleccionar Escenario</InputLabel>
+                <Select
+                  labelId="scenario-select-label"
+                  value={newTaskConfig.scenario_name || ''}
+                  label="Seleccionar Escenario"
+                  onChange={(e) => setNewTaskConfig({ ...newTaskConfig, scenario_name: e.target.value })}
+                >
+                  {selectedFeatureForTask?.item.scenarios?.map(scenario => (
+                    <MenuItem key={scenario} value={scenario}>{scenario}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+
+            <FormControl fullWidth>
+              <InputLabel id="hook-select-label">Gancho (Hook)</InputLabel>
+              <Select
+                labelId="hook-select-label"
+                value={newTaskConfig.hook}
+                label="Gancho (Hook)"
+                onChange={(e) => setNewTaskConfig({ ...newTaskConfig, hook: e.target.value as any })}
+              >
+                <MenuItem value="before">Antes (Before)</MenuItem>
+                <MenuItem value="after">Después (After)</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseTaskDialog}>Cancelar</Button>
+          <Button onClick={handleConfirmAddTask} variant="contained" color="primary" disabled={!newTaskConfig.name || (newTaskConfig.scope === 'scenario' && !newTaskConfig.scenario_name)}>
+            {editingTaskIndex !== null ? 'Actualizar Tarea' : 'Asociar Tarea'}
+          </Button>
         </DialogActions>
       </Dialog>
     </Box >

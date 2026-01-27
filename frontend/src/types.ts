@@ -21,6 +21,12 @@ export interface FeatureItem {
   tags: string[] | null; // Tags seleccionados para la ejecución (se guarda en JSON)
   display_tags?: string[]; // Todos los tags del .feature (solo para mostrar)
   scenarios?: string[]; // Nombres de los escenarios del .feature
+  ui_tasks?: {
+    name: string;
+    scope: 'feature' | 'scenario' | 'step';
+    hook: 'before' | 'after';
+    scenario_name?: string;
+  }[];
 }
 
 /**

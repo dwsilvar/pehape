@@ -12,13 +12,18 @@ Set-Location -Path $backendDir # Cambia al directorio del backend para que los c
 if ($env:VIRTUAL_ENV) {
     Write-Host "Usando el entorno virtual ya activado en: $env:VIRTUAL_ENV"
 } else {
-    # Si no hay un venv activo, buscar o crear uno local en el directorio backend/
-    $venvPath = Join-Path $backendDir "venv"
+    # Si no hay un venv activo, buscar o crear uno local
+    $venvPath = Join-Path $ProjectRoot ".venv"
+    if (-not (Test-Path $venvPath)) {
+        $venvPath = Join-Path $backendDir "venv"
+    }
+    
     if (Test-Path (Join-Path $venvPath "Scripts" "Activate.ps1")) {
-        Write-Host "Activando entorno virtual local..."
+        Write-Host "Activando entorno virtual local en: $venvPath..."
         . (Join-Path $venvPath "Scripts" "Activate.ps1")
     } else {
-        Write-Host "Entorno virtual no encontrado. Creándolo ahora en 'backend\venv'..."
+        Write-Host "Entorno virtual no encontrado en root (.venv) ni backend (venv). Creándolo ahora en 'backend\venv'..."
+        $venvPath = Join-Path $backendDir "venv"
         python -m venv venv
         Write-Host "Activando entorno virtual local..."
         . (Join-Path $venvPath "Scripts" "Activate.ps1")

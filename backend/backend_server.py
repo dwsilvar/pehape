@@ -169,10 +169,11 @@ def list_tasks():
                 "class_name": task_class.__name__,
                 "module": task_class.__module__,
                 "scope": getattr(task_class, "scope", "General"),
-                "doc": task_class.__doc__.strip() if task_class.__doc__ else "Sin documentación"
+                "doc": task_class.__doc__.strip() if task_class.__doc__ else "Sin documentación",
+                "args_schema": task_class.get_args_schema()
             })
             
-        return jsonify(tasks_data)
+        return jsonify({"tasks": tasks_data})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -797,6 +798,70 @@ def parse_feature_file_with_behave(file_path):
         "scenarios": scenario_names
     }
 
+@app.route('/api/modules/<string:module_name>/features/tasks', methods=['POST'])
+def add_task_to_feature(module_name):
+    """
+    Endpoint para añadir una tarea de UI a un feature.
+    """
+    try:
+        data = request.json
+        feature_file = data.get('feature_file')
+        feature_dir = data.get('feature_dir', '')
+        task_config = data.get('task_config') # { name, scope, hook, scenario_name? }
+
+        if not feature_file or not task_config:
+            return jsonify({"error": "feature_file y task_config son requeridos"}), 400
+
+        updated_sequence = plan_manager.add_task_to_feature(module_name, feature_file, feature_dir, task_config)
+        return jsonify(_add_ids_to_sequence(updated_sequence))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/modules/<string:module_name>/features/tasks', methods=['PUT'])
+def update_task_in_feature(module_name):
+    """
+    Endpoint para editar una tarea de UI existente en un feature.
+    """
+    try:
+        data = request.json
+        feature_file = data.get('feature_file')
+        feature_dir = data.get('feature_dir', '')
+        task_index = data.get('task_index')
+        new_task_config = data.get('task_config')
+
+        if not feature_file or task_index is None or not new_task_config:
+            return jsonify({"error": "feature_file, task_index y task_config son requeridos"}), 400
+
+        updated_sequence = plan_manager.update_task_in_feature(module_name, feature_file, feature_dir, int(task_index), new_task_config)
+        return jsonify(_add_ids_to_sequence(updated_sequence))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/modules/<string:module_name>/features/tasks', methods=['DELETE'])
+def delete_task_from_feature(module_name):
+    """
+    Endpoint para eliminar una tarea de UI de un feature.
+    """
+    try:
+        data = request.json
+        feature_file = data.get('feature_file')
+        feature_dir = data.get('feature_dir', '')
+        task_index = data.get('task_index')
+
+        if not feature_file or task_index is None:
+            return jsonify({"error": "feature_file y task_index son requeridos"}), 400
+
+        updated_sequence = plan_manager.delete_task_from_feature(module_name, feature_file, feature_dir, int(task_index))
+        return jsonify(_add_ids_to_sequence(updated_sequence))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/execution/<string:execution_id>/gif', methods=['GET'])
 def get_execution_gif(execution_id):
     """
@@ -910,8 +975,8 @@ def stream_logs():
             # Intenta parsear la línea como JSON
             try:
                 data = json.loads(line_strip)
-                # Si es un reporte de estado de escenario, envíalo con su tipo
-                if data.get("type") == "scenario_status":
+                # Si es un reporte de estado (escenario o tarea), envíalo con su tipo
+                if data.get("type") in ["scenario_status", "task_status"]:
                     yield f"data: {json.dumps(data)}\n\n"
                     continue # Pasa a la siguiente línea sin tratarlo como un log normal
             except (json.JSONDecodeError, TypeError):

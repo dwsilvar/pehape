@@ -50,6 +50,18 @@ class BehaveRunJson:
         behave_args.extend(["-f", "allure_behave.formatter:AllureFormatter", "-o", "reports/allure_results"])
         behave_args.extend(["--define", f"feature_id={feature_id}"])
 
+        # Pass UI-configured tasks via a temporary JSON file
+        ui_tasks = feature_item.get("ui_tasks", [])
+        if ui_tasks:
+            import json
+            import tempfile
+            # Create a temporary file that persists during the behave run
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False, encoding='utf-8') as tf:
+                json.dump(ui_tasks, tf)
+                temp_tasks_path = tf.name
+            
+            behave_args.extend(["--define", f"ui_tasks_file={temp_tasks_path}"])
+
         tag_info = ""
         if tags and isinstance(tags, list):
             tag_expression = ",".join(tags)
@@ -61,6 +73,14 @@ class BehaveRunJson:
         logger.info(f"  INCLUDED: {full_feature_path}{tag_info}")
 
         exit_code = behave_main(behave_args)
+        
+        # Cleanup temporary file if it was created
+        if ui_tasks and 'temp_tasks_path' in locals() and os.path.exists(temp_tasks_path):
+            try:
+                os.remove(temp_tasks_path)
+            except Exception as e:
+                logger.warning(f"Could not remove temporary tasks file: {e}")
+
         if exit_code == 0:
             logger.info("Tests executed successfully.")
         else:

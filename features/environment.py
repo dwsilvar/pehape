@@ -22,6 +22,17 @@ def before_all(context):
     """Executes once before all tests."""
     # Instantiate the task executor once for the entire lifecycle.
     context.task_executor = TaskExecutor()
+    
+    # Load UI-configured tasks if they exist
+    context.ui_tasks = []
+    ui_tasks_file = context.config.userdata.get("ui_tasks_file")
+    if ui_tasks_file and os.path.exists(ui_tasks_file):
+        try:
+            with open(ui_tasks_file, 'r', encoding='utf-8') as f:
+                context.ui_tasks = json.load(f)
+            logger.info(f"Environment: Loaded {len(context.ui_tasks)} UI tasks.")
+        except Exception as e:
+            logger.error(f"Environment: Error loading UI tasks from {ui_tasks_file}: {e}")
 
 def before_scenario(context, scenario):
     """
@@ -74,20 +85,26 @@ def after_step(context, step):
     # Delegates task processing to the TaskExecutor class.
     context.task_executor.run_tasks(context, step, 'after')
 
-    # Logic for GIF generation: always attempt to capture if context has gif_dir
-    if hasattr(context, 'gif_dir') and hasattr(context, 'gif_step_count'):
-        try:
-            # We explicitly ask for a new screenshot for the GIF to ensure we have one
-            # even if the evidence one was skipped or failed.
-            screenshot_bytes_gif = executor.driver.capture_evidence_screenshot()
-            if screenshot_bytes_gif:
+    # Capture screenshot for Allure and GIF
+    try:
+        screenshot_bytes = executor.driver.capture_evidence_screenshot()
+        if screenshot_bytes:
+            # 1. Attach to Allure Report
+            allure.attach(
+                screenshot_bytes, 
+                name=f"Step: {step.name}", 
+                attachment_type=AttachmentType.PNG
+            )
+
+            # 2. Logic for GIF generation: save to temp directory
+            if hasattr(context, 'gif_dir') and hasattr(context, 'gif_step_count'):
                 context.gif_step_count += 1
                 filename = f"{context.gif_step_count:03d}.png"
                 filepath = os.path.join(context.gif_dir, filename)
                 with open(filepath, "wb") as f:
-                    f.write(screenshot_bytes_gif)
-        except Exception as e_gif:
-             logger.error(f"Failed to capture GIF frame for step '{step.name}': {e_gif}")
+                    f.write(screenshot_bytes)
+    except Exception as e:
+        logger.error(f"Failed to capture evidence/GIF frame for step '{step.name}': {e}")
 
 def after_scenario(context, scenario):
     """

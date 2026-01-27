@@ -57,9 +57,6 @@ const MainLayout: React.FC = () => {
   const modulesRef = useRef(modules);
   const [focusedModule, setFocusedModule] = useState<string | null>(null);
 
-  // Map of uniqueScenarioId -> gifExecutionId
-  const [scenarioGifs, setScenarioGifs] = useState<Record<string, string>>({});
-
   // --- UI PERSPECTIVE STATE (Now shared via Context) ---
   const {
     activeView: activePerspective, setActiveView, isConsoleOpen, toggleConsole,
@@ -67,10 +64,11 @@ const MainLayout: React.FC = () => {
     scenarioStatuses, setScenarioStatuses,
     isExecuting, setIsExecuting,
     runningFeatureId, setRunningFeatureId,
-    scheduledExecutionTime, setScheduledExecutionTime
+    scheduledExecutionTime, setScheduledExecutionTime,
+    taskStatuses, setTaskStatuses,
+    scenarioGifs, setScenarioGifs
   } = useLayout();
-  // const [activePerspective, setActivePerspective] = useState<'editor' | 'orchestrator'>('editor'); // REMOVED local state
-  // const [isConsoleOpen, setIsConsoleOpen] = useState(true); // REMOVED local state
+
   const [orchestratorTab, setOrchestratorTab] = useState(0); // 0: ExecutionOrder, 1: Modules
 
   // --- LIFTED STATE FOR COLLAPSE/EXPAND ---
@@ -116,27 +114,6 @@ const MainLayout: React.FC = () => {
   }, [handleMouseUp]); // Solo necesita handleMouseUp como dependencia
   // ----------------------------------------------------
 
-  useEffect(() => {
-    modulesRef.current = modules;
-  }, [modules]);
-
-  // Este efecto se ejecuta cuando los módulos se cargan para inicializar los estados de colapso
-  useEffect(() => {
-    if (modules.length > 0) {
-      const initialExecOrder = new Set<string>();
-      const initialModulesView = new Set<string>();
-      modules.forEach(module => {
-        const execOrderStates = module.view_states?.execution_order || {};
-        Object.keys(execOrderStates).forEach(sectionId => { if (execOrderStates[sectionId]) initialExecOrder.add(sectionId); });
-
-        const modulesViewStates = module.view_states?.modules_view || {};
-        Object.keys(modulesViewStates).forEach(sectionId => { if (modulesViewStates[sectionId]) initialModulesView.add(sectionId); });
-      });
-      setExecutionOrderCollapsed(initialExecOrder);
-      setModulesViewCollapsed(initialModulesView);
-    }
-  }, [modules]);
-
   const createToggleHandler = useCallback((
     view: 'execution_order' | 'modules_view',
     setter: React.Dispatch<React.SetStateAction<Set<string>>>
@@ -154,7 +131,6 @@ const MainLayout: React.FC = () => {
     });
 
     // Espera un momento para que el estado se actualice antes de enviar la llamada a la API.
-    // Esto no es ideal, pero es una solución simple para este patrón.
     await new Promise(resolve => setTimeout(resolve, 0));
 
     await fetch('/api/ui-settings/module-collapse', {
@@ -340,7 +316,7 @@ const MainLayout: React.FC = () => {
       // But keep it clean for now to see it works
       // navigate('/', { replace: true }); 
     }
-  }, [location.search, handleFileSelect, selectedFile, navigate]);
+  }, [location.search, handleFileSelect, selectedFile, navigate, activePerspective, setActiveView]);
 
   const handleEditorChange = useCallback((value: string | undefined) => {
     if (value !== undefined) {
@@ -399,14 +375,32 @@ const MainLayout: React.FC = () => {
       if (data.type === 'scenario_status') {
         const featureIdForUpdate = data.feature_id;
         if (featureIdForUpdate) {
+          const uniqueScenarioId = `${featureIdForUpdate}::${data.name}`;
           if (data.status === 'running') {
             setRunningFeatureId(featureIdForUpdate);
           }
           if (data.gifExecutionId) {
             setScenarioGifs(prev => ({ ...prev, [uniqueScenarioId]: data.gifExecutionId }));
           }
-          const uniqueScenarioId = `${featureIdForUpdate}::${data.name}`;
           setScenarioStatuses(prev => ({ ...prev, [uniqueScenarioId]: data.status }));
+        }
+        return;
+      }
+
+      if (data.type === 'task_status') {
+        const featureId = data.feature_id;
+        const taskResult = data.task;
+        if (featureId && taskResult && typeof taskResult.ui_index === 'number') {
+          setTaskStatuses(prev => ({
+            ...prev,
+            [featureId]: {
+              ...(prev[featureId] || {}),
+              [taskResult.ui_index]: {
+                status: taskResult.status,
+                error: taskResult.error
+              }
+            }
+          }));
         }
         return;
       }
@@ -428,7 +422,7 @@ const MainLayout: React.FC = () => {
         setIsExecuting(false);
         eventSource.close();
       } else if (data.log === '---EXECUTION_KILLED_BY_WATCHDOG---') {
-        setLogs(prev => [...prev, '--- Ejecución terminada por el Watchdog (Tiempo de espera agotado) ---']);
+        setLogs(prev => [...prev, '--- Ejecución terminada por el Watchdog ---']);
         setRunningFeatureId(null);
         setIsExecuting(false);
         eventSource.close();
@@ -443,9 +437,7 @@ const MainLayout: React.FC = () => {
       console.log("EventSource connection closed or error.");
       eventSource.close();
     };
-
-    return eventSource;
-  }, []);
+  }, [setLogs, setIsExecuting, setRunningFeatureId, setScenarioStatuses, setScenarioGifs, setTaskStatuses]);
 
   const handleRunTests = async () => {
     if (isExecuting) return;
@@ -453,6 +445,7 @@ const MainLayout: React.FC = () => {
     setIsExecuting(true);
     setLogs(['Iniciando ejecución...']);
     setScenarioStatuses({});
+    setTaskStatuses({});
     setScenarioGifs({});
     setRunningFeatureId(null);
 
@@ -834,9 +827,6 @@ const MainLayout: React.FC = () => {
                           onFeatureSelect={handleFileSelect}
                           modules={modules}
                           setModules={setModules}
-                          scenarioStatuses={scenarioStatuses}
-                          setScenarioStatuses={setScenarioStatuses}
-                          scenarioGifs={scenarioGifs}
                           isExecuting={isExecuting}
                           runningFeatureId={runningFeatureId}
                           onRunTests={handleRunTests}

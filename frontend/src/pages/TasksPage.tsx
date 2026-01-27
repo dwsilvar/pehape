@@ -46,7 +46,7 @@ const TasksPage: React.FC = () => {
                     throw new Error(`Error fetching tasks: ${response.statusText}`);
                 }
                 const data = await response.json();
-                setTasks(data);
+                setTasks(data.tasks || []);
             } catch (err: any) {
                 setError(err.message);
             } finally {

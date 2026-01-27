@@ -52,6 +52,7 @@ class ExecutionPlanManager:
             for feature in module.get('features', []):
                 feature.pop('display_tags', None)
                 feature.pop('scenarios', None)
+                # NOTA: NO eliminamos 'ui_tasks' porque queremos que persista.
 
         with open(self.run_list_path, 'w', encoding='utf-8') as f:
             json.dump({"execution_sequence": data_to_save}, f, indent=2)
@@ -230,7 +231,6 @@ class ExecutionPlanManager:
         
         self.ui_settings['view_states'][view][section_id] = is_collapsed
         
-        self._save_ui_settings()
         self._save_ui_settings()
         return {"status": "success", "view": view, "section_id": section_id, "is_collapsed": is_collapsed}
 
@@ -443,4 +443,67 @@ class ExecutionPlanManager:
                     feature['scenarios'] = []
         
         self._save()
+        return self.get_sequence()
+
+    def add_task_to_feature(self, module_name, feature_file, feature_dir, task_config):
+        """
+        Añade una configuración de tarea a un feature específico.
+        task_config: { "name": "nombre_tarea", "scope": "feature|scenario|step", 
+                       "hook": "before|after", "scenario_name": "..." }
+        """
+        target_module = next((m for m in self.data['execution_sequence'] 
+                             if m['module_name'].lower() == module_name.lower()), None)
+        if not target_module:
+            raise ValueError(f"Módulo '{module_name}' no encontrado.")
+            
+        target_feature = next((f for f in target_module.get('features', []) 
+                              if f['feature_file'] == feature_file and f.get('feature_dir', '') == feature_dir), None)
+        if not target_feature:
+            raise ValueError(f"Feature '{feature_file}' no encontrado en el módulo '{module_name}'.")
+
+        if 'ui_tasks' not in target_feature:
+            target_feature['ui_tasks'] = []
+            
+        target_feature['ui_tasks'].append(task_config)
+        self._save()
+        return self.get_sequence()
+
+    def update_task_in_feature(self, module_name, feature_file, feature_dir, task_index, new_task_config):
+        """Actualiza una tarea existente en un feature por su índice."""
+        target_module = next((m for m in self.data['execution_sequence'] 
+                             if m['module_name'].lower() == module_name.lower()), None)
+        if not target_module:
+            raise ValueError(f"Módulo '{module_name}' no encontrado.")
+            
+        target_feature = next((f for f in target_module.get('features', []) 
+                              if f['feature_file'] == feature_file and f.get('feature_dir', '') == feature_dir), None)
+        if not target_feature or 'ui_tasks' not in target_feature:
+             raise ValueError("Feature o tareas no encontradas.")
+
+        if 0 <= task_index < len(target_feature['ui_tasks']):
+            target_feature['ui_tasks'][task_index] = new_task_config
+            self._save()
+        else:
+            raise ValueError("Índice de tarea fuera de rango.")
+            
+        return self.get_sequence()
+
+    def delete_task_from_feature(self, module_name, feature_file, feature_dir, task_index):
+        """Elimina una tarea de un feature por su índice."""
+        target_module = next((m for m in self.data['execution_sequence'] 
+                             if m['module_name'].lower() == module_name.lower()), None)
+        if not target_module:
+            raise ValueError(f"Módulo '{module_name}' no encontrado.")
+            
+        target_feature = next((f for f in target_module.get('features', []) 
+                              if f['feature_file'] == feature_file and f.get('feature_dir', '') == feature_dir), None)
+        if not target_feature or 'ui_tasks' not in target_feature:
+             raise ValueError("Feature o tareas no encontradas.")
+
+        if 0 <= task_index < len(target_feature['ui_tasks']):
+            target_feature['ui_tasks'].pop(task_index)
+            self._save()
+        else:
+            raise ValueError("Índice de tarea fuera de rango.")
+            
         return self.get_sequence()

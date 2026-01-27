@@ -20,6 +20,10 @@ interface LayoutContextProps {
     setRunningFeatureId: React.Dispatch<React.SetStateAction<string | null>>;
     scheduledExecutionTime: Date | null;
     setScheduledExecutionTime: React.Dispatch<React.SetStateAction<Date | null>>;
+    taskStatuses: Record<string, Record<number, { status: string, error?: string }>>;
+    setTaskStatuses: React.Dispatch<React.SetStateAction<Record<string, Record<number, { status: string, error?: string }>>>>;
+    scenarioGifs: Record<string, string>;
+    setScenarioGifs: React.Dispatch<React.SetStateAction<Record<string, string>>>;
 }
 
 const LayoutContext = createContext<LayoutContextProps | undefined>(undefined);
@@ -34,6 +38,8 @@ export const LayoutProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const [isExecuting, setIsExecuting] = useState(false);
     const [runningFeatureId, setRunningFeatureId] = useState<string | null>(null);
     const [scheduledExecutionTime, setScheduledExecutionTime] = useState<Date | null>(null);
+    const [taskStatuses, setTaskStatuses] = useState<Record<string, Record<number, { status: string, error?: string }>>>({});
+    const [scenarioGifs, setScenarioGifs] = useState<Record<string, string>>({});
 
     const toggleConsole = () => setIsConsoleOpen(prev => !prev);
 
@@ -44,7 +50,9 @@ export const LayoutProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             scenarioStatuses, setScenarioStatuses,
             isExecuting, setIsExecuting,
             runningFeatureId, setRunningFeatureId,
-            scheduledExecutionTime, setScheduledExecutionTime
+            scheduledExecutionTime, setScheduledExecutionTime,
+            taskStatuses, setTaskStatuses,
+            scenarioGifs, setScenarioGifs
         }}>
             {children}
         </LayoutContext.Provider>

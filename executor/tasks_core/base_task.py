@@ -25,6 +25,17 @@ class BaseTask(ABC):
         """
         return True
 
+    @classmethod
+    def get_args_schema(cls) -> list:
+        """
+        Returns a list of argument definitions for the UI to render.
+        Example: [
+            {"name": "path", "label": "Log Path", "type": "text", "default": "C:\\temp\\activity.log"},
+            {"name": "expected_text", "label": "Expected Text", "type": "text"}
+        ]
+        """
+        return []
+
     @abstractmethod
     def execute(self, context, step, **kwargs):
         """
