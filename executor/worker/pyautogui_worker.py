@@ -306,7 +306,12 @@ class PyAutoGUIWorker(WorkerInterface):
 
             # Ensure the window is truly active and in the foreground
             # Note: window.isActive can be unreliable on Windows, so we use multiple strategies
+            # IMPORTANT: Temporarily disable FAILSAFE to avoid false-positive cancellations
+            # when the cursor moves near screen corners during window activation
+            original_failsafe = pyautogui.FAILSAFE
             try:
+                pyautogui.FAILSAFE = False  # Disable FAILSAFE temporarily
+                
                 # Strategy 1: Always call activate() to ensure window is in foreground
                 logger.info(f"Activating window '{sanitized_title}'...")
                 window.activate()
@@ -318,7 +323,7 @@ class PyAutoGUIWorker(WorkerInterface):
                     logger.info("Window still not active after activate(). Moving cursor to window as fallback...")
                     center_x = window.left + (window.width // 2)
                     center_y = window.top + (window.height // 2)
-                    # Use moveTo instead of click to avoid FAILSAFE issues
+                    # Use moveTo instead of direct click to avoid FAILSAFE issues
                     pyautogui.moveTo(center_x, center_y, duration=0.2)
                     time.sleep(0.1)
                     # Now click to ensure focus
@@ -327,6 +332,9 @@ class PyAutoGUIWorker(WorkerInterface):
                     
             except Exception as e:
                 logger.warning(f"Error during window activation: {e}. Continuing anyway...")
+            finally:
+                # Always restore FAILSAFE to its original state
+                pyautogui.FAILSAFE = original_failsafe
 
             logger.info(f"Window '{sanitized_title}' is visible and active.")
             return True
