@@ -312,14 +312,18 @@ class PyAutoGUIWorker(WorkerInterface):
                 window.activate()
                 time.sleep(0.3)
                 
-                # Strategy 2: Click on the window center to ensure focus (fallback)
-                # This helps when activate() alone doesn't work reliably
+                # Strategy 2: Move cursor to window center (safer than clicking)
+                # This helps ensure focus without triggering FAILSAFE if cursor passes through corners
                 if not window.isActive:
-                    logger.info("Window still not active after activate(). Clicking window center as fallback...")
+                    logger.info("Window still not active after activate(). Moving cursor to window as fallback...")
                     center_x = window.left + (window.width // 2)
                     center_y = window.top + (window.height // 2)
-                    pyautogui.click(center_x, center_y)
-                    time.sleep(0.3)
+                    # Use moveTo instead of click to avoid FAILSAFE issues
+                    pyautogui.moveTo(center_x, center_y, duration=0.2)
+                    time.sleep(0.1)
+                    # Now click to ensure focus
+                    pyautogui.click()
+                    time.sleep(0.2)
                     
             except Exception as e:
                 logger.warning(f"Error during window activation: {e}. Continuing anyway...")
