@@ -8,6 +8,7 @@ import config.config as configurator
 import logging
 from .worker_interface import WorkerInterface
 import time
+import ctypes # For robust window handling on Windows
 
 logger = logging.getLogger(__name__)
 
@@ -266,83 +267,82 @@ class PyAutoGUIWorker(WorkerInterface):
 
     def ensure_window_is_visible(self, title_substring: str) -> bool:
         """
-        Finds a window by its title. If found, it moves it to the primary screen,
-        restores it if minimized, and brings it to the front.
-
-        Paremeters:
-            title_substring: The text to search for in the window titles.
-
-        Returns:
-            True if the window was found (and restored if necessary), False otherwise.
+        Finds a window by its title and activates it using Windows API (ctypes) to avoid 
+        mouse interaction issues and FAILSAFE triggers.
         """
         logger.info(f"Ensuring window '{title_substring}' is visible...")
         try:
-            # getWindowsWithTitle is more direct than iterating over all windows.
+            # getWindowsWithTitle works well to find the object
             windows = pyautogui.getWindowsWithTitle(title_substring)
             
             if not windows:
                 logger.info(f"No window found with title '{title_substring}'.")
                 return False
 
-            # Use the first matching window
             window = windows[0]
             sanitized_title = window.title.replace('\u200b', '')
             logger.info(f"Window found: '{sanitized_title}'")
 
-            # If the window is minimized, restore it.
-            if window.isMinimized:
-                logger.info("Window is minimized. Restoring...")
-                window.restore()
-                time.sleep(0.5)  # Pause for the window to redraw.
+            # Try to get the HWND (Window Handle)
+            hwnd = getattr(window, '_hWnd', None)
+            if not hwnd:
+                 # Fallback for some pygetwindow versions/platforms
+                 logger.warning("Could not get HWND from window object. Using default activate.")
+                 window.activate()
+                 return True
 
-            # Move window to primary screen (0, 0) or slightly offset to be safe
-            # This avoids issues with secondary screens where pyautogui might struggle
-            screen_width, screen_height = pyautogui.size()
-            if (window.left < 0 or window.top < 0 or 
-                window.left > screen_width or window.top > screen_height):
-                 logger.info(f"Moving window '{sanitized_title}' to primary screen (10, 10)...")
-                 window.moveTo(10, 10)
-                 time.sleep(0.5)
+            # Use ctypes for robust handling
+            user32 = ctypes.windll.user32
+            
+            # 1. Restore if minimized using ShowWindow (SW_RESTORE = 9)
+            if user32.IsIconic(hwnd):
+                logger.info("Window is minimized. Restoring via User32...")
+                user32.ShowWindow(hwnd, 9)
+                time.sleep(0.5)
 
-            # Ensure the window is truly active and in the foreground
-            # Note: window.isActive can be unreliable on Windows, so we use multiple strategies
-            # IMPORTANT: Temporarily disable FAILSAFE to avoid false-positive cancellations
-            # when the cursor moves near screen corners during window activation
-            original_failsafe = pyautogui.FAILSAFE
-            try:
-                pyautogui.FAILSAFE = False  # Disable FAILSAFE temporarily
+            # 2. Check if already active
+            foreground_hwnd = user32.GetForegroundWindow()
+            if foreground_hwnd == hwnd:
+                logger.info("Window is already in foreground.")
+                return True
+
+            # 3. Force activation
+            logger.info("Activating window via User32...")
+            
+            # Try plain SetForegroundWindow
+            user32.SetForegroundWindow(hwnd)
+            time.sleep(0.2)
+            
+            # Double check
+            if user32.GetForegroundWindow() != hwnd:
+                logger.info("SetForegroundWindow failed. Trying SwitchToThisWindow...")
+                # SwitchToThisWindow(hwnd, TRUE) - The magic function
+                user32.SwitchToThisWindow(hwnd, True)
+                time.sleep(0.2)
+
+            # 4. Final verification
+            is_active = (user32.GetForegroundWindow() == hwnd)
+            if is_active:
+                logger.info(f"Window '{sanitized_title}' is now active (verified via HWND).")
+            else:
+                logger.warning(f"Could not force window '{sanitized_title}' to foreground.")
                 
-                # Strategy 1: Always call activate() to ensure window is in foreground
-                logger.info(f"Activating window '{sanitized_title}'...")
-                window.activate()
+                # Ultimate fallback: Minimize and Restore (force focus steal)
+                logger.info("Attempting minimize/restore cycle to steal focus...")
+                user32.ShowWindow(hwnd, 6) # SW_MINIMIZE
+                time.sleep(0.1)
+                user32.ShowWindow(hwnd, 9) # SW_RESTORE
                 time.sleep(0.3)
-                
-                # Strategy 2: Move cursor to window center (safer than clicking)
-                # This helps ensure focus without triggering FAILSAFE if cursor passes through corners
-                if not window.isActive:
-                    logger.info("Window still not active after activate(). Moving cursor to window as fallback...")
-                    center_x = window.left + (window.width // 2)
-                    center_y = window.top + (window.height // 2)
-                    # Use moveTo instead of direct click to avoid FAILSAFE issues
-                    pyautogui.moveTo(center_x, center_y, duration=0.2)
-                    time.sleep(0.1)
-                    # Now click to ensure focus
-                    pyautogui.click()
-                    time.sleep(0.2)
-                    
-            except Exception as e:
-                logger.warning(f"Error during window activation: {e}. Continuing anyway...")
-            finally:
-                # Always restore FAILSAFE to its original state
-                pyautogui.FAILSAFE = original_failsafe
+                is_active = (user32.GetForegroundWindow() == hwnd)
 
-            logger.info(f"Window '{sanitized_title}' is visible and active.")
-            return True
+            return is_active
 
         except Exception as e:
-            # PyAutoGUI can raise exceptions if there are issues with permissions or the graphical environment.
             logger.error(f"An error occurred while manipulating windows: {e}")
             return False
+        finally:
+             if 'original_failsafe' in locals():
+                 pyautogui.FAILSAFE = original_failsafe
         
 
     def press_enter(self) -> bool:
