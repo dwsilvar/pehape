@@ -11,7 +11,7 @@ from behave.parser import Parser
 from behave.model import Feature, Scenario, ScenarioOutline
 
 from flask_cors import CORS
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 import glob
 import io
 
@@ -882,15 +882,50 @@ def get_execution_gif(execution_id):
             return jsonify({"error": "No images found for this execution"}), 404
             
         # Load images
-        frames = [Image.open(image) for image in images]
+        frames = []
+        for index, image_path in enumerate(images):
+            try:
+                img = Image.open(image_path).convert('RGB')
+                
+                # Draw frame number
+                draw = ImageDraw.Draw(img)
+                # Try to use a large font if possible, otherwise default
+                try:
+                    # Try Arial or generic sans-serif
+                    font = ImageFont.truetype("arial.ttf", 36)
+                except IOError:
+                    # Fallback to default
+                    font = ImageFont.load_default()
+                
+                text = f"#{index + 1}"
+                
+                # Calculate position (bottom right)
+                # bbox = draw.textbbox((0, 0), text, font=font) # Needs newer Pillow
+                # text_width = bbox[2] - bbox[0]
+                # text_height = bbox[3] - bbox[1]
+                
+                # Simple positioning (Top Left)
+                x, y = 10, 10
+                
+                # Draw background rectangle for visibility
+                text_bbox = draw.textbbox((x, y), text, font=font)
+                draw.rectangle(text_bbox, fill="black")
+                draw.text((x, y), text, font=font, fill="white")
+                
+                frames.append(img)
+            except Exception as ex:
+                print(f"Error processing frame {image_path}: {ex}")
+
+        if not frames:
+             return jsonify({"error": "Failed to process frames"}), 500
         
         # Output buffer
         output = io.BytesIO()
         
         # Save GIF
         # duration in ms, loop=0 means infinite
-        # Duration 500ms = 0.5s per frame
-        frames[0].save(output, format="GIF", save_all=True, append_images=frames[1:], duration=500, loop=0)
+        # Duration 1000ms = 1s per frame
+        frames[0].save(output, format="GIF", save_all=True, append_images=frames[1:], duration=1000, loop=0)
         output.seek(0)
         
         return send_file(output, mimetype='image/gif', as_attachment=True, download_name=f"execution_{execution_id}.gif")
@@ -898,6 +933,88 @@ def get_execution_gif(execution_id):
     except Exception as e:
         print(f"Error generating GIF: {e}")
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/execution/<string:execution_id>/video', methods=['GET'])
+def get_execution_video(execution_id):
+    """
+    Generates and downloads a Video (MP4) for the specified execution ID.
+    """
+    try:
+        import cv2
+        import numpy as np
+        
+        # PROJECT_ROOT is parent of 'features'
+        project_root = os.path.dirname(FEATURES_DIR)
+        video_source_dir = os.path.join(project_root, 'reports', 'temp_gif', execution_id)
+        
+        if not os.path.exists(video_source_dir):
+            return jsonify({"error": "Execution data not found"}), 404
+            
+        # Get all PNGs
+        images = sorted(glob.glob(os.path.join(video_source_dir, "*.png")))
+        if not images:
+            return jsonify({"error": "No images found for this execution"}), 404
+        
+        # Read first image to get dimensions
+        first_frame = cv2.imread(images[0])
+        if first_frame is None:
+            return jsonify({"error": "Failed to read first frame"}), 500
+            
+        height, width, _ = first_frame.shape
+        
+        # Create temporary video file
+        import tempfile
+        temp_video = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
+        temp_video_path = temp_video.name
+        temp_video.close()
+        
+        # Define codec and create VideoWriter
+        # Using 'avc1' (H.264) for better compatibility and no audio track
+        fourcc = cv2.VideoWriter_fourcc(*'avc1')
+        fps = 1  # 1 frame per second (matching the 1000ms GIF duration)
+        out = cv2.VideoWriter(temp_video_path, fourcc, fps, (width, height))
+        
+        # Process each frame
+        for index, image_path in enumerate(images):
+            try:
+                frame = cv2.imread(image_path)
+                if frame is None:
+                    print(f"Warning: Could not read {image_path}")
+                    continue
+                
+                # Draw frame number
+                text = f"#{index + 1}"
+                font = cv2.FONT_HERSHEY_SIMPLEX
+                font_scale = 1.2
+                thickness = 3
+                
+                # Get text size for background rectangle
+                (text_width, text_height), baseline = cv2.getTextSize(text, font, font_scale, thickness)
+                
+                # Position (top-left)
+                x, y = 10, 10 + text_height
+                
+                # Draw black background rectangle
+                cv2.rectangle(frame, (x - 5, y - text_height - 5), (x + text_width + 5, y + baseline + 5), (0, 0, 0), -1)
+                
+                # Draw white text
+                cv2.putText(frame, text, (x, y), font, font_scale, (255, 255, 255), thickness)
+                
+                out.write(frame)
+            except Exception as ex:
+                print(f"Error processing video frame {image_path}: {ex}")
+        
+        out.release()
+        
+        # Send the video file
+        return send_file(temp_video_path, mimetype='video/mp4', as_attachment=True, download_name=f"execution_{execution_id}.mp4")
+        
+    except ImportError:
+        return jsonify({"error": "OpenCV (cv2) is not installed. Install with: pip install opencv-python"}), 500
+    except Exception as e:
+        print(f"Error generating video: {e}")
+        return jsonify({"error": str(e)}), 500
+
 
 @app.route('/api/execution-order/refresh', methods=['POST'])
 def refresh_execution_order():

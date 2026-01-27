@@ -508,6 +508,27 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
                 />
               </MenuItem>
             );
+          }).filter(Boolean),
+          ...item.scenarios.map(scenario => {
+            const gifId = scenarioGifs ? scenarioGifs[`${item.id}::${scenario}`] : null;
+            if (!gifId) return null;
+            return (
+              <MenuItem
+                key={`${gifId}-video`}
+                onClick={() => {
+                  window.open(`/api/execution/${gifId}/video`, '_blank');
+                  handleClose();
+                }}
+              >
+                <ListItemIcon>
+                  <DownloadIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText
+                  primary={`Descargar Video: ${scenario}`}
+                  primaryTypographyProps={{ sx: { fontSize: '0.75rem' } }}
+                />
+              </MenuItem>
+            );
           }).filter(Boolean)
         ]}
       </Menu>

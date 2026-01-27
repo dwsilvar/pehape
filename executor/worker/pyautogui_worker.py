@@ -4,11 +4,12 @@ Implementation of the automation driver using PyAutoGUI.
 import os
 from typing import Any, Optional
 import pyautogui
+
 import config.config as configurator
 import logging
 from .worker_interface import WorkerInterface
 import time
-import ctypes # For robust window handling on Windows
+from .window_manager import get_window_manager # Import factory
 
 logger = logging.getLogger(__name__)
 
@@ -53,13 +54,19 @@ class PyAutoGUIWorker(WorkerInterface):
         """
         pyautogui.FAILSAFE = True
         pyautogui.PAUSE = 0.5
-        logger.info("PyAutoGUI driver initialized.")
+        
+        # Initialize WindowManager Strategy
+        self.window_manager = get_window_manager()
+        
+        logger.info(f"PyAutoGUI driver initialized with {type(self.window_manager).__name__}.")
+
 
 
 
     def get_window_region(self, app_name: str) -> Optional[tuple]:
         """
         Gets the region (x, y, width, height) of the specified application window.
+        DELEGATES to WindowManager.
         
         Parameters:
             app_name: The title (or partial title) of the window.
@@ -67,17 +74,7 @@ class PyAutoGUIWorker(WorkerInterface):
         Returns:
             A tuple (left, top, width, height) or None if not found.
         """
-        try:
-            windows = pyautogui.getWindowsWithTitle(app_name)
-            if windows:
-                window = windows[0] # Use the first one found
-                return (window.left, window.top, window.width, window.height)
-            else:
-                logger.warning(f"No window found with title containing '{app_name}'")
-                return None
-        except Exception as e:
-            logger.error(f"Error getting window region for '{app_name}': {e}")
-            return None
+        return self.window_manager.get_window_region(app_name)
 
     def click_at(self, point: tuple) -> bool:
         """
@@ -132,12 +129,13 @@ class PyAutoGUIWorker(WorkerInterface):
         Returns:
             True on success, False on error.
         """
-        try:
-            pyautogui.typewrite(text, interval=0.05)
-            logger.info(f"Text '{text}' typed successfully.")
+        # Delegate to WindowManager for potentially better text handling (ctypes/SendInput)
+        result = self.window_manager.send_text(text)
+        if result:
+            logger.info(f"Text '{text}' typed successfully (via WindowManager).")
             return True
-        except Exception as e:
-            logger.exception(f"enter_text: error typing text '{text}': {e}")
+        else:
+            logger.error(f"Failed to enter text '{text}' via WindowManager.")
             return False
 
     def capture_screenshot(self) -> Optional[Any]:
@@ -148,9 +146,14 @@ class PyAutoGUIWorker(WorkerInterface):
             Image object (PIL.Image) or None on error.
         """
         try:
-            screenshot = pyautogui.screenshot()
-            logger.info("Screenshot taken successfully.")
-            return screenshot
+            # Delegate to window manager (Strategy)
+            screenshot = self.window_manager.capture_screenshot()
+            if screenshot:
+                logger.info("Screenshot taken successfully (via WindowManager).")
+                return screenshot
+            else:
+                logger.error("Screenshot failed via WindowManager.")
+                return None
         except Exception as e:
             logger.exception(f"Error taking screenshot. Cause: {e}")
             return None
@@ -255,7 +258,8 @@ class PyAutoGUIWorker(WorkerInterface):
             region=(x, y, ancho, alto)
 
             # Take the screenshot of the window's region
-            captura = pyautogui.screenshot(region=region)
+            # Delegate to window manager
+            captura = self.window_manager.capture_screenshot(region=region)
             logger.info("Screenshot region ok")
             return captura, region
             
@@ -267,82 +271,9 @@ class PyAutoGUIWorker(WorkerInterface):
 
     def ensure_window_is_visible(self, title_substring: str) -> bool:
         """
-        Finds a window by its title and activates it using Windows API (ctypes) to avoid 
-        mouse interaction issues and FAILSAFE triggers.
+        Delegates to the Strategy WindowManager.
         """
-        logger.info(f"Ensuring window '{title_substring}' is visible...")
-        try:
-            # getWindowsWithTitle works well to find the object
-            windows = pyautogui.getWindowsWithTitle(title_substring)
-            
-            if not windows:
-                logger.info(f"No window found with title '{title_substring}'.")
-                return False
-
-            window = windows[0]
-            sanitized_title = window.title.replace('\u200b', '')
-            logger.info(f"Window found: '{sanitized_title}'")
-
-            # Try to get the HWND (Window Handle)
-            hwnd = getattr(window, '_hWnd', None)
-            if not hwnd:
-                 # Fallback for some pygetwindow versions/platforms
-                 logger.warning("Could not get HWND from window object. Using default activate.")
-                 window.activate()
-                 return True
-
-            # Use ctypes for robust handling
-            user32 = ctypes.windll.user32
-            
-            # 1. Restore if minimized using ShowWindow (SW_RESTORE = 9)
-            if user32.IsIconic(hwnd):
-                logger.info("Window is minimized. Restoring via User32...")
-                user32.ShowWindow(hwnd, 9)
-                time.sleep(0.5)
-
-            # 2. Check if already active
-            foreground_hwnd = user32.GetForegroundWindow()
-            if foreground_hwnd == hwnd:
-                logger.info("Window is already in foreground.")
-                return True
-
-            # 3. Force activation
-            logger.info("Activating window via User32...")
-            
-            # Try plain SetForegroundWindow
-            user32.SetForegroundWindow(hwnd)
-            time.sleep(0.2)
-            
-            # Double check
-            if user32.GetForegroundWindow() != hwnd:
-                logger.info("SetForegroundWindow failed. Trying SwitchToThisWindow...")
-                # SwitchToThisWindow(hwnd, TRUE) - The magic function
-                user32.SwitchToThisWindow(hwnd, True)
-                time.sleep(0.2)
-
-            # 4. Final verification
-            is_active = (user32.GetForegroundWindow() == hwnd)
-            if is_active:
-                logger.info(f"Window '{sanitized_title}' is now active (verified via HWND).")
-            else:
-                logger.warning(f"Could not force window '{sanitized_title}' to foreground.")
-                
-                # Ultimate fallback: Minimize and Restore (force focus steal)
-                logger.info("Attempting minimize/restore cycle to steal focus...")
-                user32.ShowWindow(hwnd, 6) # SW_MINIMIZE
-                time.sleep(0.1)
-                user32.ShowWindow(hwnd, 9) # SW_RESTORE
-                time.sleep(0.3)
-                is_active = (user32.GetForegroundWindow() == hwnd)
-
-            return is_active
-
-        except Exception as e:
-            logger.error(f"An error occurred while manipulating windows: {e}")
-            return False
-        finally:
-             if 'original_failsafe' in locals():
-                 pyautogui.FAILSAFE = original_failsafe
+        return self.window_manager.ensure_window_is_visible(title_substring)
         
 
     def press_enter(self) -> bool:
