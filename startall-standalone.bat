@@ -1,6 +1,7 @@
 @echo off
-REM Script para iniciar backend y frontend en modo standalone sin permisos de administrador
-REM Puentea la política de ejecución de PowerShell
+REM Script independiente para iniciar backend y frontend en modo standalone sin usar PowerShell
+REM Permite especificar una ruta personalizada de Node.js
+REM No requiere permisos de administrador
 REM Uso: startall-standalone.bat ["ruta\al\node.exe"]
 
 REM ============================================
@@ -28,8 +29,66 @@ if not exist "%NODE_PATH%" (
     echo   2. Proporciona la ruta correcta como argumento:
     echo      startall-standalone.bat "ruta\completa\al\node.exe"
     echo.
+    pause
     exit /b 1
 )
 
-echo Iniciando servidores en modo standalone con Node desde: %NODE_PATH%
-powershell.exe -ExecutionPolicy Bypass -File "%~dp0startall-standalone.ps1" -NodeExePath "%NODE_PATH%"
+REM Obtener el directorio del ejecutable de Node
+for %%I in ("%NODE_PATH%") do set "NODE_DIR=%%~dpI"
+REM Remover la barra final
+set "NODE_DIR=%NODE_DIR:~0,-1%"
+
+echo.
+echo ========================================
+echo Configurando entorno standalone
+echo ========================================
+echo Node.js directory: %NODE_DIR%
+echo.
+
+REM Agregar el directorio de Node al inicio del PATH para esta sesión
+set "PATH=%NODE_DIR%;%PATH%"
+
+REM Verificar versión de node y npm
+echo Verificando versiones...
+node --version
+if errorlevel 1 (
+    echo ERROR: No se pudo ejecutar node
+    pause
+    exit /b 1
+)
+
+npm --version
+if errorlevel 1 (
+    echo WARNING: No se pudo ejecutar npm
+    echo Asegurate de que npm este en la misma carpeta que node.exe
+)
+
+echo.
+echo ========================================
+echo Iniciando servidores en modo standalone
+echo ========================================
+echo.
+
+REM Definir rutas
+set "PROJECT_ROOT=%~dp0"
+
+echo Iniciando servidor de backend en una nueva ventana...
+start "Backend Server - Pehape (Standalone)" cmd /k "%PROJECT_ROOT%start-backend.bat"
+
+echo Iniciando servidor de frontend en una nueva ventana...
+REM El frontend heredará el PATH modificado con la ruta de Node personalizada
+start "Frontend Server - Pehape (Standalone)" cmd /k "set PATH=%NODE_DIR%;%PATH% && %PROJECT_ROOT%start-frontend.bat"
+
+echo.
+echo ========================================
+echo Ambos servidores se estan iniciando en ventanas separadas.
+echo Usando Node.js desde: %NODE_DIR%
+echo.
+echo Backend: http://localhost:5000
+echo Frontend: http://localhost:3000
+echo.
+echo Cierra las ventanas de los servidores para detenerlos.
+echo ========================================
+echo.
+echo Presiona cualquier tecla para cerrar esta ventana...
+pause >nul
