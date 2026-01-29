@@ -15,3 +15,4 @@ frontend/node_modules/
 frontend/dist/
 frontend/build/
 frontend/.npm-cache-local
+package_offline/
