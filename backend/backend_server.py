@@ -1438,20 +1438,99 @@ def serve_react_app(path):
     return send_from_directory(frontend_dist, 'index.html')
 
 if __name__ == '__main__':
+    import argparse
+    
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description='PeHaPe Backend Server')
+    parser.add_argument('--window', action='store_true', 
+                        help='Launch in native window mode (uses pywebview with Edge WebView2)')
+    parser.add_argument('--no-window', action='store_true', 
+                        help='Launch as server only for network access (default)')
+    parser.add_argument('--network', action='store_true',
+                        help='Alias for --no-window, launch as network server')
+    args = parser.parse_args()
+    
     # Cargar configuración desde JSON si existe
     config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'server_config.json')
-    host = '0.0.0.0'
+    
+    # Default to localhost for window mode, all interfaces for server mode
+    host = '127.0.0.1' if args.window else '0.0.0.0'
     port = 5000
     
     if os.path.exists(config_path):
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
                 config = json.load(f)
-                host = config.get('host', host)
+                # Only override host from config in server mode
+                if not args.window:
+                    host = config.get('host', host)
                 port = config.get('port', port)
                 print(f"Loaded configuration from {config_path}")
         except Exception as e:
             print(f"Error loading config: {e}. Using defaults.")
-
-    # Listen on all interfaces
-    app.run(host=host, port=port, debug=True)
+    
+    if args.window:
+        # ========================================
+        # NATIVE WINDOW MODE (pywebview)
+        # ========================================
+        print("=" * 50)
+        print("Starting PeHaPe in NATIVE WINDOW MODE")
+        print("=" * 50)
+        
+        try:
+            import webview
+        except ImportError:
+            print("\n" + "=" * 50)
+            print("ERROR: pywebview is not installed!")
+            print("=" * 50)
+            print("\nPlease install it with:")
+            print("  pip install pywebview")
+            print("\nOr reinstall all dependencies:")
+            print("  pip install -r requirements.txt")
+            print("\n" + "=" * 50)
+            sys.exit(1)
+        
+        # Start Flask in a background thread
+        def start_flask():
+            app.run(host='127.0.0.1', port=port, debug=False, use_reloader=False)
+        
+        flask_thread = threading.Thread(target=start_flask, daemon=True)
+        flask_thread.start()
+        
+        # Wait for Flask to start
+        print(f"Starting Flask server on http://127.0.0.1:{port}...")
+        import time
+        time.sleep(2)
+        
+        # Create native window
+        print(f"Creating native window...")
+        webview.create_window(
+            'PeHaPe - OCR Test Automation',
+            f'http://127.0.0.1:{port}',
+            width=1280,
+            height=800,
+            resizable=True,
+            fullscreen=False,
+            min_size=(800, 600)
+        )
+        
+        print("Launching application window...")
+        webview.start()
+        
+    else:
+        # ========================================
+        # SERVER MODE (network access)
+        # ========================================
+        print("=" * 50)
+        print("Starting PeHaPe in SERVER MODE")
+        print(f"Server will be accessible at http://{host}:{port}")
+        print("=" * 50)
+        print("\nOpen your browser and navigate to:")
+        print(f"  http://localhost:{port}")
+        if host == '0.0.0.0':
+            print(f"\nOr from other devices on the network:")
+            print(f"  http://<YOUR-IP>:{port}")
+        print("\n" + "=" * 50)
+        
+        # Listen on all interfaces (or configured host)
+        app.run(host=host, port=port, debug=True)
