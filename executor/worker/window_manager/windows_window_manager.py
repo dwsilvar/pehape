@@ -84,8 +84,11 @@ class WindowsWindowManager(AbstractWindowManager):
             # getWindowsWithTitle works well to find the object
             windows = pyautogui.getWindowsWithTitle(title_substring)
             
+            # Filtrar solo ventanas visibles para evitar procesos en segundo plano/hidden
+            windows = [w for w in windows if w.visible]
+            
             if not windows:
-                logger.info(f"No window found with title '{title_substring}'.")
+                logger.info(f"No visible window found with title '{title_substring}'.")
                 return False
 
             window = windows[0]
@@ -102,48 +105,69 @@ class WindowsWindowManager(AbstractWindowManager):
 
             # Use ctypes for robust handling
             user32 = ctypes.windll.user32
+            kernel32 = ctypes.windll.kernel32
+
+            # Get target PID and current PID/Thread
+            target_pid = ctypes.c_ulong()
+            target_thread_id = user32.GetWindowThreadProcessId(hwnd, ctypes.byref(target_pid))
+            current_thread_id = kernel32.GetCurrentThreadId()
             
-            # 1. Restore if minimized using ShowWindow (SW_RESTORE = 9)
+            # 1. Restore IF minimized (but avoid if possible for full-screen)
             if user32.IsIconic(hwnd):
-                logger.info("Window is minimized. Restoring via User32...")
-                user32.ShowWindow(hwnd, 9)
+                logger.info("Window is minimized. Showing normally...")
+                user32.ShowWindow(hwnd, 1) # SW_SHOWNORMAL instead of SW_RESTORE (9)
                 time.sleep(0.5)
 
-            # 2. Check if already active
+            # 2. Check if already active OR if active window belongs to SAME PROCESS (Java apps)
             foreground_hwnd = user32.GetForegroundWindow()
-            if foreground_hwnd == hwnd:
-                logger.info("Window is already in foreground.")
+            fore_pid = ctypes.c_ulong()
+            user32.GetWindowThreadProcessId(foreground_hwnd, ctypes.byref(fore_pid))
+            
+            if foreground_hwnd == hwnd or fore_pid.value == target_pid.value:
+                logger.info(f"Window (or its process {target_pid.value}) is already in foreground.")
                 return True
 
             # 3. Force activation
-            logger.info("Activating window via User32...")
+            logger.info("Activating window via User32 with Thread Attachment...")
             
-            # Try plain SetForegroundWindow
-            user32.SetForegroundWindow(hwnd)
-            time.sleep(0.2)
+            # Attach input thread to allow SetForegroundWindow
+            fore_thread_id = user32.GetWindowThreadProcessId(foreground_hwnd, None)
             
-            # Double check
-            if user32.GetForegroundWindow() != hwnd:
-                logger.info("SetForegroundWindow failed. Trying SwitchToThisWindow...")
-                # SwitchToThisWindow(hwnd, TRUE) - The magic function
-                user32.SwitchToThisWindow(hwnd, True)
-                time.sleep(0.2)
+            attached = False
+            if fore_thread_id != current_thread_id:
+                attached = user32.AttachThreadInput(current_thread_id, fore_thread_id, True)
+            
+            try:
+                user32.BringWindowToTop(hwnd)
+                user32.SetForegroundWindow(hwnd)
+                # For full-screen Java apps, sometimes ShowWindow is needed to force paint
+                user32.ShowWindow(hwnd, 5) # SW_SHOW
+            finally:
+                if attached:
+                    user32.AttachThreadInput(current_thread_id, fore_thread_id, False)
 
+            time.sleep(0.3)
+            
             # 4. Final verification
-            is_active = (user32.GetForegroundWindow() == hwnd)
+            foreground_hwnd = user32.GetForegroundWindow()
+            user32.GetWindowThreadProcessId(foreground_hwnd, ctypes.byref(fore_pid))
+            
+            is_active = (foreground_hwnd == hwnd or fore_pid.value == target_pid.value)
+            
             if is_active:
-                logger.info(f"Window '{sanitized_title}' is now active (verified via HWND).")
+                logger.info(f"Window '{sanitized_title}' is now active (verified via { 'HWND' if foreground_hwnd == hwnd else 'PID' }).")
             else:
-                logger.warning(f"Could not force window '{sanitized_title}' to foreground.")
+                logger.warning(f"Standard focus failed for '{sanitized_title}'. Attempting HW_TOPMOST non-intrusive trick...")
+                # HWND_TOPMOST trick (non-aggressive)
+                user32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0040) # HWND_TOPMOST
+                time.sleep(0.2)
+                user32.SetWindowPos(hwnd, -2, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0040) # HWND_NOTOPMOST
+                user32.SetForegroundWindow(hwnd)
                 
-                # Ultimate fallback: Minimize and Restore (force focus steal)
-                logger.info("Attempting minimize/restore cycle to steal focus...")
-                user32.ShowWindow(hwnd, 6) # SW_MINIMIZE
-                time.sleep(0.1)
-                user32.ShowWindow(hwnd, 9) # SW_RESTORE
-                time.sleep(0.3)
-                is_active = (user32.GetForegroundWindow() == hwnd)
-
+                # Check again
+                foreground_hwnd = user32.GetForegroundWindow()
+                user32.GetWindowThreadProcessId(foreground_hwnd, ctypes.byref(fore_pid))
+                is_active = (foreground_hwnd == hwnd or fore_pid.value == target_pid.value)
 
             return is_active
 

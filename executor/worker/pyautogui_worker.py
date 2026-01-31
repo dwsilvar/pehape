@@ -87,8 +87,22 @@ class PyAutoGUIWorker(WorkerInterface):
             True if the click was performed, False in case of an error.
         """
         try:
-            pyautogui.click(point)
-            logger.info(f"Successfully clicked at {point}.")
+            # Extraer coordenadas y asegurar que sean int puros (evitar np.int64)
+            if hasattr(point, 'x') and hasattr(point, 'y'):
+                x, y = int(point.x), int(point.y)
+            else:
+                x, y = int(point[0]), int(point[1])
+
+            logger.info(f"PyAutoGUI: Moving mouse to ({x}, {y}) for robust click...")
+            
+            # Mover antes de clickear para asegurar que el sistema registra el posicionamiento
+            pyautogui.moveTo(x, y, duration=0.1)
+            time.sleep(0.05) # Pausa mínima para que la App (Java) asimile el hover
+            
+            # Click con duración para simular pulsación real
+            pyautogui.click(x=x, y=y, duration=0.1)
+            
+            logger.info(f"Successfully clicked at ({x}, {y}).")
             return True
         except Exception as e:
             logger.exception(f"error clicking at {point}: {e}")
@@ -109,9 +123,7 @@ class PyAutoGUIWorker(WorkerInterface):
             logger.info(f"Searching for image '{image_path}'..." + (f" in region {region}" if region else ""))
             location = pyautogui.locateCenterOnScreen(image_path, confidence=(configurator.CONFIDENCE_THRESHOLD/100), region=region)
             if location is not None:
-                pyautogui.click(location)
-                logger.info(f"Successfully clicked at {location}.")
-                return True
+                return self.click_at(location)
             else:
                 logger.warning(f"Image '{image_path}' not found.")
                 return False
@@ -223,10 +235,10 @@ class PyAutoGUIWorker(WorkerInterface):
 
             location = pyautogui.locateCenterOnScreen(image_path, confidence=(configurator.CONFIDENCE_THRESHOLD/100), region=region)
             if location:
-                logger.info(f"PyAutoGUI: Image found at {location}.")
+                logger.info(f"✓ PyAutoGUI: Image '{os.path.basename(image_path)}' found at {location}.")
                 return location
             else:
-                logger.warning(f"PyAutoGUI: Image '{image_path}' not found.")
+                logger.warning(f"✗ PyAutoGUI: Image '{os.path.basename(image_path)}' not found on screen.")
                 return None
         except pyautogui.PyAutoGUIException as e:
             logger.exception(f"PyAutoGUI: Error searching for image '{image_path}'. Cause: {e}")

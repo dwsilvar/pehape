@@ -158,12 +158,12 @@ def get_image_path_from_feature_and_tag(feature_path_full: str, scenario_tags, t
     logger.info(f"Directorio del recurso a ubicar: {feature_dir_path}")
 
     
-    # Usamos el primer tag como identificador de la imagen
+    # Usamos el primer tag como identificador de la imagen, o 'untagged' si no hay tags
     if not scenario_tags:
-        raise ValueError("El Scenario debe tener al menos un tag para nombrar la imagen.")
-        
-    # El tag suele incluir el '@', lo limpiamos para usarlo como nombre de archivo
-    tag = scenario_tags[0].lstrip('@')
+        tag = "untagged"
+    else:
+        # El tag suele incluir el '@', lo limpiamos para usarlo como nombre de archivo
+        tag = scenario_tags[0].lstrip('@')
     
     # 3. Construir la Ruta Final
     # Concatenamos el directorio base de recursos + el nombre del feature + el nombre del tag + la extensión

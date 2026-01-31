@@ -76,15 +76,17 @@ class PyTesseractWorker:
         # First attempt: word startswith
         coords = self._find_word_startswith(data_ocr, text_to_find, coordinates_origin)
         if coords is not None:
+            logger.info(f"OCR: Match found via 'startswith' strategy for '{text_to_find}'")
             return coords
 
         # Second attempt: join words to match phrase
         coords = self._find_text_by_joined_words(data_ocr, text_to_find, coordinates_origin)
         if coords is not None:
+            logger.info(f"OCR: Match found via 'joined-words' strategy for '{text_to_find}'")
             return coords
 
         # Not found: optionally save screenshot and log words/confidences
-        logger.warning("Phrase not found: '%s'", text_to_find)
+        logger.warning(f"OCR: Text '{text_to_find}' not detected on screen.")
         if save_screenshot:
             try:
                 screenshot.save(screenshot_path)

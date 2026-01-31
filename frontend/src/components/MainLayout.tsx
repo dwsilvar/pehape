@@ -408,7 +408,9 @@ const MainLayout: React.FC = () => {
 
       if (data.type === 'report_ready' && data.reportUrl) {
         setLogs(prev => [...prev, '--- Reporte disponible. ---']);
-        window.open(data.reportUrl, '_blank');
+        // En lugar de window.open, navegamos a la seccion de reportes interna
+        // para evitar el uso de Internet Explorer en la PC destino.
+        navigate('/reports');
         return;
       }
 

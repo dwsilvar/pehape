@@ -18,7 +18,8 @@ $dirs = @(
     "$PackageDir\backend",
     "$PackageDir\config",
     "$PackageDir\resources",
-    "$PackageDir\util"
+    "$PackageDir\util",
+    "$PackageDir\reports"
 )
 foreach ($dir in $dirs) {
     New-Item -ItemType Directory -Path $dir -Force | Out-Null
@@ -32,7 +33,7 @@ connection and try again."
     exit 1
 }
 Write-Host "Downloading pip, setuptools, and wheel..."
-& .\.venv\Scripts\python.exe -m pip download pip setuptools wheel -d "$PackageDir\dependencies\python"
+& .\.venv\Scripts\python.exe -m pip download pip setuptools wheel allure-python-commons -d "$PackageDir\dependencies\python"
 if ($LASTEXITCODE -ne 0) {
     Write-Error "ERROR: Failed to download pip, setuptools, and wheel. Check your internet connection and try
 again."
@@ -90,12 +91,26 @@ if (Test-Path $tesseractExe) {
 else {
     Write-Warning "Tesseract OCR not found. Please manually include a copy in 'package_offline\tesseract-ocr'."
 }
+
+# 5.2 Include Allure Commandline if exists
+if (Test-Path "allure-commandline") {
+    Write-Host "Including Allure Commandline..."
+    Copy-Item -Recurse -Force "allure-commandline" "$PackageDir\"
+} else {
+    Write-Warning "allure-commandline folder not found. Reports might not work offline."
+}
+
 # 6. Copy Start Scripts (Modified for offline)
 Write-Host "Creating offline start scripts..."
 $startBackendOffline = @"
 @echo off
 set "PROJECT_ROOT=%~dp0"
 cd /d "%PROJECT_ROOT%"
+
+REM === CONFIGURACION MANUAL (OPCIONAL) ===
+REM Si Java no esta en el PATH, define su ruta aqui:
+REM set "JAVA_HOME=C:\Ruta\A\Java"
+REM if defined JAVA_HOME set "PATH=%JAVA_HOME%\bin;%PATH%"
 
 REM === Validar instalación previa ===
 if not exist install.ok (
@@ -136,6 +151,11 @@ $startAppWindow = @"
 @echo off
 REM Script para iniciar la aplicacion en modo ventana nativa con pywebview
 cd /d "%~dp0"
+
+REM === CONFIGURACION MANUAL (OPCIONAL) ===
+REM set "JAVA_HOME=C:\Ruta\A\Java"
+REM if defined JAVA_HOME set "PATH=%JAVA_HOME%\bin;%PATH%"
+
 REM === Validar instalacion previa ===
 if not exist install.ok (
  echo.
@@ -173,6 +193,11 @@ if not exist .venv (
  pause
  exit /b 1
 )
+REM Agregar Allure al PATH si existe
+if exist "%~dp0allure-commandline\bin\allure.bat" (
+ set "PATH=%~dp0allure-commandline\bin;%PATH%"
+ echo Allure-Commandline referenciado correctamente.
+)
 REM Agregar Tesseract-OCR al PATH temporalmente
 set "TESSERACT_DIR=%~dp0Tesseract-OCR"
 if exist "%TESSERACT_DIR%\tesseract.exe" (
@@ -200,6 +225,13 @@ if errorlevel 1 (
   )
 )
 
+REM --- Verificar Java para Allure ---
+where java >nul 2>nul
+if errorlevel 1 (
+  echo ADVERTENCIA: Java no encontrado en el PATH. Los reportes Allure no funcionaran.
+  echo Si tiene Java en una ruta especifica, configurela editando este archivo .bat (variable JAVA_HOME)
+)
+
 REM Activar entorno virtual y ejecutar backend con ventana nativa
 call .venv\Scripts\activate
 "%PYTHON_CMD%" backend\backend_server.py --window
@@ -214,6 +246,11 @@ $startAllOffline = @"
 REM Script para iniciar backend, frontend y asegurar referencia a Tesseract-OCR
 REM Cambiar a la carpeta donde está el script
 cd /d "%~dp0"
+
+REM === CONFIGURACION MANUAL (OPCIONAL) ===
+REM set "JAVA_HOME=C:\Ruta\A\Java"
+REM if defined JAVA_HOME set "PATH=%JAVA_HOME%\bin;%PATH%"
+
 REM === Validar instalación previa ===
 if not exist install.ok (
  echo.
@@ -350,20 +387,74 @@ $installScript = @"
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "Pehape Offline Installer" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
+
+# ============================================
+# CONFIGURACIÓN MANUAL DE PYTHON Y JAVA (OPCIONAL)
+# ============================================
+# Si deseas usar una ruta específica, descomenta y edita la siguiente línea:
+# `$MANUAL_PYTHON_PATH = "C:\Python312\python.exe"
+# `$MANUAL_JAVA_PATH = "C:\Program Files\Java\jdk-17\bin"
+
 # Detect Python command
 `$pythonCmd = ""
-`$cmdsToTry = @("py", "python")
-foreach (`$cmd in `$cmdsToTry) {
-    if (Get-Command `$cmd -ErrorAction SilentlyContinue) {
-        # Verify it's a real python and not the Microsoft Store mock
+
+# Verificar si se configuró una ruta manual de Java
+if (`$MANUAL_JAVA_PATH) {
+    if (Test-Path `$MANUAL_JAVA_PATH) {
+        Write-Host "Configurando Java manual en: `$MANUAL_JAVA_PATH" -ForegroundColor Green
+        `$javaBin = `$MANUAL_JAVA_PATH
+        if (-not `$javaBin.EndsWith("bin")) { `$javaBin = Join-Path `$javaBin "bin" }
+        
+        # Agregar al PATH del usuario para que sea permanente
+        `$currentPath = [Environment]::GetEnvironmentVariable("PATH", "User")
+        if (`$currentPath -notlike "*$javaBin*") {
+            [Environment]::SetEnvironmentVariable("PATH", `$javaBin + ";" + `$currentPath, "User")
+            Write-Host "Java agregado al PATH del Usuario." -ForegroundColor Gray
+        }
+        [Environment]::SetEnvironmentVariable("JAVA_HOME", (Split-Path `$javaBin), "User")
+        
+        # También para este proceso actual
+        [Environment]::SetEnvironmentVariable("PATH", `$javaBin + ";" + `$env:PATH, "Process")
+    } else {
+        Write-Host "ADVERTENCIA: La ruta manual de Java no existe: `$MANUAL_JAVA_PATH" -ForegroundColor Yellow
+    }
+}
+
+# Verificar si se configuró una ruta manual de Python
+if (`$MANUAL_PYTHON_PATH) {
+    if (Test-Path `$MANUAL_PYTHON_PATH) {
         try {
-            `$version = & `$cmd --version 2>&1
+            `$version = & "`$MANUAL_PYTHON_PATH" --version 2>&1
             if (`$LASTEXITCODE -eq 0) {
-                `$pythonCmd = `$cmd
-                Write-Host "Using '`$pythonCmd' as Python command (`$version)"
-                break
+                `$pythonCmd = `$MANUAL_PYTHON_PATH
+                Write-Host "Usando Python manual: `$pythonCmd (`$version)" -ForegroundColor Green
+            } else {
+                Write-Host "ADVERTENCIA: La ruta manual de Python no es válida. Buscando automáticamente..." -ForegroundColor Yellow
             }
-        } catch {}
+        } catch {
+            Write-Host "ADVERTENCIA: Error al verificar la ruta manual de Python. Buscando automáticamente..." -ForegroundColor Yellow
+        }
+    } else {
+        Write-Host "ADVERTENCIA: La ruta manual de Python no existe: `$MANUAL_PYTHON_PATH" -ForegroundColor Yellow
+        Write-Host "Buscando automáticamente..." -ForegroundColor Yellow
+    }
+}
+
+# Si no se configuró manualmente o falló, buscar automáticamente
+if (-not `$pythonCmd) {
+    `$cmdsToTry = @("py", "python")
+    foreach (`$cmd in `$cmdsToTry) {
+        if (Get-Command `$cmd -ErrorAction SilentlyContinue) {
+            # Verify it's a real python and not the Microsoft Store mock
+            try {
+                `$version = & `$cmd --version 2>&1
+                if (`$LASTEXITCODE -eq 0) {
+                    `$pythonCmd = `$cmd
+                    Write-Host "Using '`$pythonCmd' as Python command (`$version)"
+                    break
+                }
+            } catch {}
+        }
     }
 }
 
@@ -391,9 +482,20 @@ if (-not `$pythonCmd) {
 }
 
 # 1. Create Virtual Environment
+# Si se configuró una ruta manual y ya existe un venv, eliminarlo para evitar conflictos
+if (`$MANUAL_PYTHON_PATH -and (Test-Path ".venv")) {
+    Write-Host "Detectada configuración manual de Python. Eliminando venv anterior..." -ForegroundColor Yellow
+    Remove-Item -Recurse -Force ".venv"
+}
+
 if (-not (Test-Path ".venv")) {
     Write-Host "Creating virtual environment..."
     & `$pythonCmd -m venv .venv
+    if (`$LASTEXITCODE -ne 0) {
+        Write-Host "ERROR: Failed to create virtual environment." -ForegroundColor Red
+        pause
+        exit 1
+    }
 }
 # 2. Upgrade pip, setuptools, and wheel first
 Write-Host "Upgrading pip, setuptools, and wheel..."
@@ -402,15 +504,17 @@ Write-Host "Upgrading pip, setuptools, and wheel..."
 Write-Host "Installing Python dependencies from local files..."
 & .\.venv\Scripts\python.exe -m pip install --no-index --find-links="dependencies\python" -r requirements.txt
 if (`$LASTEXITCODE -ne 0) {
- Write-Host ""
- Write-Host "========================================" -ForegroundColor Red
- Write-Host "ERROR: Installation Failed!" -ForegroundColor Red
- Write-Host "========================================" -ForegroundColor Red
- Write-Host "Some dependencies could not be installed."
- Write-Host "Please check that all .whl files are present in dependencies\python folder."
- pause
- exit 1
+    Write-Host "Falla en instalación general. Intentando instalar componentes críticos individualmente..." -ForegroundColor Yellow
+    & .\.venv\Scripts\python.exe -m pip install --no-index --find-links="dependencies\python" behave allure-behave Flask flask-cors pywebview
 }
+
+# Verificar instalación de Allure
+Write-Host "Verificando librerías críticas..."
+& .\.venv\Scripts\python.exe -c "import allure_behave; print('Allure-behave: OK')" 2>&1 | Out-Null
+if (`$LASTEXITCODE -ne 0) {
+    Write-Host "ADVERTENCIA: La librería 'allure-behave' no se pudo instalar correctamente. Los reportes de Allure no estarán disponibles." -ForegroundColor Yellow
+}
+
 # 4. Configure Tesseract
 if (Test-Path "tesseract-ocr\tesseract.exe") {
  Write-Host "Configuring local Tesseract OCR..."
@@ -576,8 +680,16 @@ package_offline/
 Para más información, consulte la documentación principal del proyecto.
 "@
 $readmeContent | Out-File -FilePath "$PackageDir\README.md" -Encoding utf8
+
+# 9. Create ZIP Archive
+Write-Host "Creating ZIP archive of the package..."
+$ZipFile = Join-Path $ProjectRoot "pehape-package-offline-$(Get-Date -Format 'yyyyMMdd').zip"
+if (Test-Path $ZipFile) { Remove-Item $ZipFile }
+Compress-Archive -Path "$PackageDir\*" -DestinationPath $ZipFile -Force
+
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Green
 Write-Host "Offline Package Created Successfully!" -ForegroundColor Green
 Write-Host "Location: $PackageDir" -ForegroundColor Green
+Write-Host "ZIP Archive: $ZipFile" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green

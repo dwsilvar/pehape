@@ -7,18 +7,35 @@ from flask import Flask, jsonify, request, Response, send_from_directory, send_f
 import sys, signal
 import threading
 from queue import Queue
+
+# Add project root to sys.path before imports that depend on it
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from behave.parser import Parser
 from behave.model import Feature, Scenario, ScenarioOutline
-
 from flask_cors import CORS
 from PIL import Image, ImageDraw, ImageFont
 import glob
 import io
+import logging
+import mimetypes
+
+# Asegurar que mimetypes conoce .js y .json
+mimetypes.init()
+mimetypes.add_type('application/javascript', '.js')
+mimetypes.add_type('application/json', '.json')
+mimetypes.add_type('text/css', '.css')
+mimetypes.add_type('image/svg+xml', '.svg')
+mimetypes.add_type('image/png', '.png')
+mimetypes.add_type('image/x-icon', '.ico')
 
 from execution_plan_manager import ExecutionPlanManager
+import config.logging_config as logging_config
 
-# Add project root to sys.path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Configurar logging centralizado
+logging_config.setup_logging()
+logger = logging.getLogger(__name__)
+
 try:
     from util.system_utils import get_image_path_from_feature_and_tag
 except ImportError:
@@ -1071,6 +1088,17 @@ def _stream_process_output(process):
     def stream_reader(stream, is_stderr=False):
         for line in iter(stream.readline, ''):
             _reset_inactivity_timer()  # El proceso está vivo, reinicia el watchdog.
+            
+            # 1. Registrar la salida de behave en el log general (app.log)
+            # Esto asegura que app.log tenga tanto las trazas internas como la salida del test.
+            clean_line = line.strip()
+            if clean_line:
+                if is_stderr:
+                    logger.error(f"[BEHAVE-STDERR] {clean_line}")
+                else:
+                    logger.info(f"[BEHAVE-STDOUT] {clean_line}")
+
+            # 2. Enviar a la cola para el frontend (UI)
             log_queue.put(f"ERROR: {line}" if is_stderr else line)
         stream.close()
 
@@ -1105,7 +1133,8 @@ def stream_logs():
                 # Cuando la ejecución termina, generamos la URL del reporte
                 # y la enviamos al frontend con una señal especial.
                 # Paso 1: Enviar la URL del reporte como un evento separado.
-                report_url = "/api/report/index.html"
+                # Usar la ruta con slash al final para que los recursos relativos carguen bien
+                report_url = "/api/report/"
                 yield f"data: {json.dumps({'type': 'report_ready', 'reportUrl': report_url})}\n\n"
                 # Paso 2: Enviar la señal de finalización para que el frontend pueda cerrar la conexión.
                 yield f"data: {json.dumps({'log': '---EXECUTION_FINISHED---'})}\n\n"
@@ -1117,14 +1146,41 @@ def stream_logs():
             yield f"data: {json.dumps({'log': line_strip})}\n\n"
     return Response(generate(), mimetype='text/event-stream')
 
+@app.route('/api/report/')
+@app.route('/api/report/')
 @app.route('/api/report/<path:path>')
-def serve_allure_report(path):
+def serve_allure_report(path=None):
     """
     Sirve los archivos estáticos del reporte de Allure.
     """
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    report_dir = os.path.join(project_root, 'reports', 'allure-report')
-    return send_from_directory(report_dir, path)
+    report_dir = os.path.abspath(os.path.join(project_root, 'reports', 'allure-report'))
+    
+    if not os.path.exists(report_dir):
+        return jsonify({"error": "Directorio de reportes no encontrado."}), 404
+
+    # Si no hay path, servir index.html
+    if not path or path == "":
+        path = "index.html"
+    
+    response = send_from_directory(report_dir, path)
+    
+    # FORZAR MODOS MODERNOS Y EVITAR CACHE
+    # X-UA-Compatible indica a Edge que no use el modo de compatibilidad de IE
+    response.headers["X-UA-Compatible"] = "IE=edge,chrome=1"
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    
+    # Forzar MIME types si la PC tiene el registro corrupto
+    if path.endswith('.js'):
+        response.mimetype = 'application/javascript'
+    elif path.endswith('.json'):
+        response.mimetype = 'application/json'
+    elif path.endswith('.css'):
+        response.mimetype = 'text/css'
+        
+    return response
 
 @app.route('/api/reports/usage', methods=['GET'])
 def get_reports_usage():
@@ -1418,6 +1474,14 @@ def get_execution_status():
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/reports/allure-report/<path:path>')
+def serve_allure_report(path):
+    """
+    Sirve los archivos estáticos del reporte Allure.
+    """
+    allure_report_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'reports', 'allure-report')
+    return send_from_directory(allure_report_dir, path)
 
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')

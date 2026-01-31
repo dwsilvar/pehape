@@ -18,15 +18,15 @@ if ($env:VIRTUAL_ENV) {
         $venvPath = Join-Path $backendDir "venv"
     }
     
-    if (Test-Path (Join-Path $venvPath "Scripts" "Activate.ps1")) {
+    if (Test-Path "$venvPath\Scripts\Activate.ps1") {
         Write-Host "Activando entorno virtual local en: $venvPath..."
-        . (Join-Path $venvPath "Scripts" "Activate.ps1")
+        . "$venvPath\Scripts\Activate.ps1"
     } else {
         Write-Host "Entorno virtual no encontrado en root (.venv) ni backend (venv). Creándolo ahora en 'backend\venv'..."
         $venvPath = Join-Path $backendDir "venv"
         python -m venv venv
         Write-Host "Activando entorno virtual local..."
-        . (Join-Path $venvPath "Scripts" "Activate.ps1")
+        . "$venvPath\Scripts\Activate.ps1"
     }
 }
 

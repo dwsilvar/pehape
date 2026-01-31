@@ -9,7 +9,8 @@ import {
     Terminal as TerminalIcon,
     Assignment as AssignmentIcon,
     Image as ImageIcon,
-    Window as WindowIcon
+    Window as WindowIcon,
+    BarChart as BarChartIcon
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useLayout } from '../context/LayoutContext';
@@ -112,6 +113,15 @@ const Sidebar: React.FC = () => {
                         onClick={() => handleNavigation('/running-apps')}
                     >
                         <WindowIcon />
+                    </IconButton>
+                </Tooltip>
+
+                <Tooltip title="Reports" placement="right">
+                    <IconButton
+                        color={isActive('/reports') ? 'primary' : 'default'}
+                        onClick={() => handleNavigation('/reports')}
+                    >
+                        <BarChartIcon />
                     </IconButton>
                 </Tooltip>
             </Box>
@@ -224,6 +234,20 @@ const Sidebar: React.FC = () => {
                             <WindowIcon />
                         </ListItemIcon>
                         <ListItemText primary="Running Apps" />
+                    </ListItemButton>
+                </ListItem>
+
+                <Divider sx={{ my: 1 }} />
+
+                <ListItem disablePadding>
+                    <ListItemButton
+                        selected={isActive('/reports')}
+                        onClick={() => handleNavigation('/reports')}
+                    >
+                        <ListItemIcon>
+                            <BarChartIcon />
+                        </ListItemIcon>
+                        <ListItemText primary="Reports" />
                     </ListItemButton>
                 </ListItem>
             </List>

@@ -47,7 +47,14 @@ class BehaveRunJson:
 
         behave_args = list(self.extra_args)
         behave_args.extend(["-f", "plain", "-o", "-"])
-        behave_args.extend(["-f", "allure_behave.formatter:AllureFormatter", "-o", "reports/allure_results"])
+        
+        # Intentar usar Allure solo si la librería está disponible
+        try:
+            import allure_behave
+            behave_args.extend(["-f", "allure_behave.formatter:AllureFormatter", "-o", "reports/allure_results"])
+        except ImportError:
+            logger.warning("Librería 'allure-behave' no encontrada. Los resultados de Allure no se generarán.")
+            
         behave_args.extend(["--define", f"feature_id={feature_id}"])
 
         # Pass UI-configured tasks via a temporary JSON file

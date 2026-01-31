@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   CircularProgress,
@@ -676,6 +677,7 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
   onCancelSchedule,
   validationTexts = [],
 }) => {
+  const navigate = useNavigate();
   const { scenarioStatuses, scenarioGifs } = useLayout();
   // Necesitamos acceder al elemento activo para deshabilitar el SortableContext si no es un módulo.
   // Esto es un patrón avanzado para permitir que droppables externos funcionen dentro de un SortableContext.
@@ -1325,7 +1327,7 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
             color="secondary"
             size="small"
             sx={{ mr: 1 }}
-            onClick={() => window.open('/api/report/index.html', '_blank')}
+            onClick={() => navigate('/reports')}
           >
             <AssessmentIcon />
           </Button>

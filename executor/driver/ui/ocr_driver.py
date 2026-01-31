@@ -51,13 +51,18 @@ class OCRDriver(DriverAbstractUI):
             # Create screenshots folder if it doesn't exist
             screenshot_total_path = get_screenshot_path()          
             screenshot = self.pyAutoGUIWorker.capture_screenshot()
-            logger.info("Get coordinates screen absolute")
+            logger.info(f"--- Strategy 1: OCR Search for '{text_to_find}' ---")
             center_coordinates = self.tesseractWorker.find_text_coordinates(screenshot, screenshot_total_path, text_to_find)
 
-            if center_coordinates is None:
-                logger.info(f"Phrase '{text_to_find}' not found on the full screen")
-                if image_text_path is not None:                
-                    center_coordinates = self._get_element_coordinates_by_img(image_text_path, screenshot, screenshot_total_path)
+            if center_coordinates:
+                logger.info(f"✓ Found '{text_to_find}' via OCR at {center_coordinates}")
+                return center_coordinates
+            
+            logger.info(f"Phrase '{text_to_find}' not found via OCR. Trying Strategy 2: Image Search.")
+            if image_text_path is not None:                
+                center_coordinates = self._get_element_coordinates_by_img(image_text_path, screenshot, screenshot_total_path)
+                if center_coordinates:
+                    logger.info(f"✓ Found '{text_to_find}' via Image Search at {center_coordinates}")
 
             return center_coordinates
 
@@ -86,19 +91,27 @@ class OCRDriver(DriverAbstractUI):
 
             screenshot = self.pyAutoGUIWorker.get_screenshot_of_app(app_name)
             
-            logger.info("Getting coordinates from ABSOLUTE screen")
+            logger.info(f"--- Strategy 1: OCR Search for '{text_to_find}' inside '{app_name}' ---")
             center_coordinates = self.tesseractWorker.find_text_coordinates(screenshot, screenshot_total_path, text_to_find)
 
-            if center_coordinates is None:
-                logger.info("Getting coordinates from screen SECTION")
-                data_screenshoot= self.pyAutoGUIWorker.get_region_screenshot_window(app_name)
-                if data_screenshoot is not None:
-                    screenshot_region, region = data_screenshoot
-                    center_coordinates = self.tesseractWorker.find_text_coordinates(screenshot_region, screenshot_section_path, text_to_find,region)
-                    if center_coordinates is None:
-                        logger.info(f"Phrase '{text_to_find}' not found on the full screen or in the app's screen section '{app_name}'")
-                        if image_text_path is not None:                
-                            center_coordinates = self._get_element_coordinates_by_img(image_text_path, screenshot, screenshot_total_path, region=region)
+            if center_coordinates:
+                 logger.info(f"✓ Found '{text_to_find}' via OCR at {center_coordinates}")
+                 return center_coordinates
+
+            logger.info(f"Phrase '{text_to_find}' not found via OCR in '{app_name}'. Trying Strategy 2: Screen Section OCR.")
+            data_screenshoot= self.pyAutoGUIWorker.get_region_screenshot_window(app_name)
+            if data_screenshoot is not None:
+                screenshot_region, region = data_screenshoot
+                center_coordinates = self.tesseractWorker.find_text_coordinates(screenshot_region, screenshot_section_path, text_to_find,region)
+                if center_coordinates:
+                    logger.info(f"✓ Found '{text_to_find}' via Section OCR at {center_coordinates}")
+                    return center_coordinates
+                
+                logger.info(f"Phrase '{text_to_find}' not found via Section OCR. Trying Strategy 3: Image Search in Section.")
+                if image_text_path is not None:                
+                    center_coordinates = self._get_element_coordinates_by_img(image_text_path, screenshot, screenshot_total_path, region=region)
+                    if center_coordinates:
+                        logger.info(f"✓ Found '{text_to_find}' via Image Search in Section at {center_coordinates}")
 
  
             return center_coordinates
