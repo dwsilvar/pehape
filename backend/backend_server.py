@@ -1475,14 +1475,6 @@ def get_execution_status():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/reports/allure-report/<path:path>')
-def serve_allure_report(path):
-    """
-    Sirve los archivos estáticos del reporte Allure.
-    """
-    allure_report_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'reports', 'allure-report')
-    return send_from_directory(allure_report_dir, path)
-
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve_react_app(path):

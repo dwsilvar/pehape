@@ -5,7 +5,7 @@ import { BarChart as BarChartIcon, Refresh as RefreshIcon, OpenInNew as OpenInNe
 const ReportsPage: React.FC = () => {
     const [reportExists, setReportExists] = useState<boolean | null>(null);
     const [loading, setLoading] = useState(true);
-    const reportUrl = '/api/reports/allure-report/index.html';
+    const reportUrl = '/api/report/';
 
     const checkReport = async () => {
         setLoading(true);
@@ -38,17 +38,17 @@ const ReportsPage: React.FC = () => {
                     </Typography>
                 </Box>
                 <Box>
-                    <Button 
-                        startIcon={<RefreshIcon />} 
-                        onClick={checkReport} 
+                    <Button
+                        startIcon={<RefreshIcon />}
+                        onClick={checkReport}
                         sx={{ mr: 1 }}
                     >
                         Refresh status
                     </Button>
                     {reportExists && (
-                        <Button 
-                            variant="outlined" 
-                            startIcon={<OpenInNewIcon />} 
+                        <Button
+                            variant="outlined"
+                            startIcon={<OpenInNewIcon />}
                             onClick={handleOpenExternal}
                         >
                             Open in New Tab
@@ -68,9 +68,9 @@ const ReportsPage: React.FC = () => {
                         <Typography sx={{ mt: 2 }}>Checking report status...</Typography>
                     </Box>
                 ) : reportExists ? (
-                    <iframe 
-                        src={reportUrl} 
-                        style={{ border: 'none', width: '100%', height: '100%' }} 
+                    <iframe
+                        src={reportUrl}
+                        style={{ border: 'none', width: '100%', height: '100%' }}
                         title="Allure Report"
                     />
                 ) : (
