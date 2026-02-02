@@ -1,17 +1,64 @@
 # create-offline-package.ps1
 # This script bundles all dependencies and code for offline installation.
+
+# Auto-bypass execution policy if not already running with bypass
+$currentPolicy = Get-ExecutionPolicy -Scope Process
+if ($currentPolicy -ne 'Bypass' -and $currentPolicy -ne 'Unrestricted') {
+    Write-Host "Relanzando script con bypass de politica de ejecucion..." -ForegroundColor Yellow
+    $scriptPath = $MyInvocation.MyCommand.Path
+    Start-Process powershell.exe -ArgumentList "-ExecutionPolicy Bypass -File `"$scriptPath`"" -Wait -NoNewWindow
+    exit
+}
+
 $ErrorActionPreference = "Stop"
 $ProjectRoot = Get-Location
 $PackageDir = Join-Path $ProjectRoot "package_offline"
-Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "Creating Offline Package..." -ForegroundColor Cyan
-Write-Host "========================================" -ForegroundColor Cyan
+
+# Initialize logging
+$LogFile = Join-Path $ProjectRoot "package-creation-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
+$WarningCount = 0
+$ErrorCount = 0
+
+function Write-Log {
+    param(
+        [string]$Message,
+        [ValidateSet("INFO", "WARNING", "ERROR", "SUCCESS")]
+        [string]$Level = "INFO"
+    )
+    
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $logMessage = "[$timestamp] [$Level] $Message"
+    
+    # Write to log file
+    Add-Content -Path $LogFile -Value $logMessage
+    
+    # Write to console with color
+    switch ($Level) {
+        "INFO" { Write-Host $Message -ForegroundColor White }
+        "WARNING" { 
+            Write-Host "WARNING: $Message" -ForegroundColor Yellow
+            $script:WarningCount++
+        }
+        "ERROR" { 
+            Write-Host "ERROR: $Message" -ForegroundColor Red
+            $script:ErrorCount++
+        }
+        "SUCCESS" { Write-Host $Message -ForegroundColor Green }
+    }
+}
+
+Write-Log "========================================" "INFO"
+Write-Log "Creating Offline Package..." "INFO"
+Write-Log "========================================" "INFO"
+Write-Log "Log file: $LogFile" "INFO"
+Write-Log "Project root: $ProjectRoot" "INFO"
 # 1. Prepare Directory Structure
+Write-Log "Step 1: Preparing directory structure" "INFO"
 if (Test-Path $PackageDir) {
-    Write-Host "Cleaning up existing package directory..."
+    Write-Log "Cleaning up existing package directory..." "INFO"
     Remove-Item -Recurse -Force $PackageDir
 }
-Write-Host "Creating directory structure..."
+Write-Log "Creating directory structure..." "INFO"
 $dirs = @(
     "$PackageDir\dependencies\python",
     "$PackageDir\frontend\dist",
@@ -23,85 +70,138 @@ $dirs = @(
 )
 foreach ($dir in $dirs) {
     New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    Write-Log "Created: $dir" "INFO"
 }
 # 2. Download Python Dependencies
-Write-Host "Downloading Python dependencies (.whl files)..."
+Write-Log "Step 2: Downloading Python dependencies" "INFO"
+Write-Log "Downloading Python dependencies (.whl files)..." "INFO"
 & .\.venv\Scripts\python.exe -m pip download -r requirements.txt -d "$PackageDir\dependencies\python"
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "ERROR: Failed to download Python dependencies from requirements.txt. Check your internet
-connection and try again."
+    Write-Log "Failed to download Python dependencies from requirements.txt. Check your internet connection and try again." "ERROR"
     exit 1
 }
-Write-Host "Downloading pip, setuptools, and wheel..."
+Write-Log "Downloading pip, setuptools, and wheel..." "INFO"
 & .\.venv\Scripts\python.exe -m pip download pip setuptools wheel allure-python-commons -d "$PackageDir\dependencies\python"
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "ERROR: Failed to download pip, setuptools, and wheel. Check your internet connection and try
-again."
+    Write-Log "Failed to download pip, setuptools, and wheel. Check your internet connection and try again." "ERROR"
     exit 1
 }
 # Verificar que se descargaron archivos
 $downloadedFiles = Get-ChildItem "$PackageDir\dependencies\python" -Filter *.whl
 if ($downloadedFiles.Count -eq 0) {
-    Write-Error "ERROR: No .whl files were downloaded. The package creation has failed. Check your internet
-connection and try again."
+    Write-Log "No .whl files were downloaded. The package creation has failed. Check your internet connection and try again." "ERROR"
     exit 1
 }
-Write-Host "Successfully downloaded $($downloadedFiles.Count) dependency files." -ForegroundColor Green
+Write-Log "Successfully downloaded $($downloadedFiles.Count) dependency files." "SUCCESS"
 # 3. Build Frontend
-Write-Host "Building Frontend..."
+Write-Log "Step 3: Building Frontend" "INFO"
 Set-Location frontend
 & npm run build
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "Frontend build failed."
+    Write-Log "Frontend build failed." "ERROR"
+    Set-Location ..
+    exit 1
 }
 Set-Location ..
-Write-Host "Copying Frontend build artifacts..."
-Copy-Item -Recurse "frontend\dist\*" "$PackageDir\frontend\dist\"
+Write-Log "Copying Frontend build artifacts..." "INFO"
+if (Test-Path "frontend\dist") {
+    Copy-Item -Recurse "frontend\dist\*" "$PackageDir\frontend\dist\"
+    Write-Log "Frontend artifacts copied successfully." "SUCCESS"
+}
+else {
+    Write-Log "Frontend dist folder not found. Build may have failed." "WARNING"
+}
 # 4. Copy Backend Code
-Write-Host "Copying Backend code..."
-Copy-Item "backend\*.py" "$PackageDir\backend\"
-Copy-Item "backend\*.json" "$PackageDir\backend\"
+Write-Log "Step 4: Copying Backend code" "INFO"
+if (Test-Path "backend\*.py") {
+    Copy-Item "backend\*.py" "$PackageDir\backend\"
+    $backendPyCount = (Get-ChildItem "$PackageDir\backend\*.py").Count
+    Write-Log "Copied $backendPyCount Python files from backend." "SUCCESS"
+}
+else {
+    Write-Log "No Python files found in backend directory." "WARNING"
+}
+if (Test-Path "backend\*.json") {
+    Copy-Item "backend\*.json" "$PackageDir\backend\"
+    Write-Log "Copied JSON configuration files from backend." "SUCCESS"
+}
+else {
+    Write-Log "No JSON files found in backend directory." "WARNING"
+}
 # 5. Copy Core Automation Components
-Write-Host "Copying Core components..."
-Copy-Item -Recurse -Force "executor" "$PackageDir\"
-Copy-Item -Recurse -Force "behave_runner" "$PackageDir\"
-Copy-Item -Recurse -Force "features" "$PackageDir\"
-Copy-Item -Recurse -Force "util" "$PackageDir\"
-Copy-Item -Recurse -Force "config" "$PackageDir\"
-Copy-Item -Recurse -Force "resources" "$PackageDir\"
-Copy-Item "behave_master.py" "$PackageDir\"
-Copy-Item "requirements.txt" "$PackageDir\"
+Write-Log "Step 5: Copying Core automation components" "INFO"
+$coreComponents = @(
+    @{Name = "executor"; Path = "executor" },
+    @{Name = "behave_runner"; Path = "behave_runner" },
+    @{Name = "features"; Path = "features" },
+    @{Name = "util"; Path = "util" },
+    @{Name = "config"; Path = "config" },
+    @{Name = "resources"; Path = "resources" }
+)
+foreach ($component in $coreComponents) {
+    if (Test-Path $component.Path) {
+        Copy-Item -Recurse -Force $component.Path "$PackageDir\"
+        Write-Log "Copied component: $($component.Name)" "SUCCESS"
+    }
+    else {
+        Write-Log "Component not found: $($component.Name) at $($component.Path)" "WARNING"
+    }
+}
+if (Test-Path "behave_master.py") {
+    Copy-Item "behave_master.py" "$PackageDir\"
+    Write-Log "Copied behave_master.py" "SUCCESS"
+}
+else {
+    Write-Log "behave_master.py not found" "WARNING"
+}
+if (Test-Path "requirements.txt") {
+    Copy-Item "requirements.txt" "$PackageDir\"
+    Write-Log "Copied requirements.txt" "SUCCESS"
+}
+else {
+    Write-Log "requirements.txt not found" "WARNING"
+}
 # 5.1 Copy README if exists
 if (Test-Path "package_offline\README.md") {
-    Write-Host "Copying README.md..."
+    Write-Log "Copying README.md..." "INFO"
     Copy-Item "package_offline\README.md" "$PackageDir\"
+    Write-Log "Copied README.md" "SUCCESS"
 }
-# 5.1 Include Tesseract OCR
-Write-Host "Including Tesseract OCR copy..."
+# 5.2 Include Tesseract OCR
+Write-Log "Step 5.2: Including Tesseract OCR" "INFO"
 $tesseractExe = (Get-Content "config\config.py" | Select-String 'TESSERACT_CMD_PATH = r"(.*)"').Matches.Groups[1].Value
 if (-not $tesseractExe) {
     # Fallback to a common path if not found in config
     $tesseractExe = "C:\src\tesseract-ocr\tesseract.exe"
+    Write-Log "Tesseract path not found in config.py, using fallback: $tesseractExe" "INFO"
 }
 if (Test-Path $tesseractExe) {
     $tesseractDir = Split-Path $tesseractExe
-    Write-Host "Found Tesseract at $tesseractDir. Copying..."
-    Copy-Item -Recurse -Force $tesseractDir "$PackageDir\tesseract-ocr"
+    Write-Log "Found Tesseract at $tesseractDir. Copying to standardized folder name..." "INFO"
+    # Create the destination folder with standard name
+    $tesseractDest = "$PackageDir\Tesseract-OCR"
+    New-Item -ItemType Directory -Path $tesseractDest -Force | Out-Null
+    # Copy the contents (not the folder itself) to ensure standard naming
+    Copy-Item -Recurse -Force "$tesseractDir\*" $tesseractDest
+    Write-Log "Tesseract-OCR copied successfully to package." "SUCCESS"
 }
 else {
-    Write-Warning "Tesseract OCR not found. Please manually include a copy in 'package_offline\tesseract-ocr'."
+    Write-Log "Tesseract OCR not found at $tesseractExe. Please manually include a copy in 'package_offline\Tesseract-OCR'." "WARNING"
 }
 
-# 5.2 Include Allure Commandline if exists
+# 5.3 Include Allure Commandline if exists
+Write-Log "Step 5.3: Including Allure Commandline" "INFO"
 if (Test-Path "allure-commandline") {
-    Write-Host "Including Allure Commandline..."
+    Write-Log "Copying Allure Commandline..." "INFO"
     Copy-Item -Recurse -Force "allure-commandline" "$PackageDir\"
-} else {
-    Write-Warning "allure-commandline folder not found. Reports might not work offline."
+    Write-Log "Allure Commandline copied successfully." "SUCCESS"
+}
+else {
+    Write-Log "allure-commandline folder not found. Reports might not work offline." "WARNING"
 }
 
 # 6. Copy Start Scripts (Modified for offline)
-Write-Host "Creating offline start scripts..."
+Write-Log "Step 6: Creating offline start scripts" "INFO"
 $startBackendOffline = @"
 @echo off
 set "PROJECT_ROOT=%~dp0"
@@ -380,7 +480,7 @@ pause
 "@
 $startAllOffline | Out-File -FilePath "$PackageDir\start-all-offline.bat" -Encoding ascii
 # 7. Generate installation script for the target machine
-Write-Host "Generating install.ps1..."
+Write-Log "Step 7: Generating install.ps1" "INFO"
 $installScript = @"
 # install.ps1 - Offline Installer for Pehape
 `$ProjectRoot = Get-Location
@@ -516,9 +616,9 @@ if (`$LASTEXITCODE -ne 0) {
 }
 
 # 4. Configure Tesseract
-if (Test-Path "tesseract-ocr\tesseract.exe") {
+if (Test-Path "Tesseract-OCR\tesseract.exe") {
  Write-Host "Configuring local Tesseract OCR..."
-`$localTesseract = "`$ProjectRoot\tesseract-ocr\tesseract.exe"
+`$localTesseract = "`$ProjectRoot\Tesseract-OCR\tesseract.exe"
  # Update config.py to use the local path
 `$configFile = "config\config.py"
  (Get-Content `$configFile) | ForEach-Object {
@@ -537,8 +637,9 @@ Write-Host "2. Or run start-all-offline.bat to use browser mode."
 Write-Host "3. See README.md for more options and troubleshooting."
 "@
 $installScript | Out-File -FilePath "$PackageDir\install.ps1" -Encoding utf8
+Write-Log "install.ps1 generated successfully." "SUCCESS"
 # 8. Generate README.md with instructions
-Write-Host "Generating README.md..."
+Write-Log "Step 8: Generating README.md" "INFO"
 $readmeContent = @"
 # PeHaPe - Offline Package
 
@@ -680,16 +781,45 @@ package_offline/
 Para más información, consulte la documentación principal del proyecto.
 "@
 $readmeContent | Out-File -FilePath "$PackageDir\README.md" -Encoding utf8
+Write-Log "README.md generated successfully." "SUCCESS"
 
 # 9. Create ZIP Archive
-Write-Host "Creating ZIP archive of the package..."
+Write-Log "Step 9: Creating ZIP archive" "INFO"
 $ZipFile = Join-Path $ProjectRoot "pehape-package-offline-$(Get-Date -Format 'yyyyMMdd').zip"
-if (Test-Path $ZipFile) { Remove-Item $ZipFile }
-Compress-Archive -Path "$PackageDir\*" -DestinationPath $ZipFile -Force
+if (Test-Path $ZipFile) { 
+    Remove-Item $ZipFile 
+    Write-Log "Removed existing ZIP file: $ZipFile" "INFO"
+}
+try {
+    Compress-Archive -Path "$PackageDir\*" -DestinationPath $ZipFile -Force -ErrorAction Stop
+    Write-Log "ZIP archive created successfully: $ZipFile" "SUCCESS"
+}
+catch {
+    Write-Log "Failed to create ZIP archive: $($_.Exception.Message)" "ERROR"
+}
 
-Write-Host ""
-Write-Host "========================================" -ForegroundColor Green
-Write-Host "Offline Package Created Successfully!" -ForegroundColor Green
-Write-Host "Location: $PackageDir" -ForegroundColor Green
-Write-Host "ZIP Archive: $ZipFile" -ForegroundColor Green
-Write-Host "========================================" -ForegroundColor Green
+# 10. Final Summary
+Write-Log "" "INFO"
+Write-Log "========================================" "INFO"
+Write-Log "Package Creation Complete!" "SUCCESS"
+Write-Log "========================================" "INFO"
+Write-Log "Package Location: $PackageDir" "INFO"
+if (Test-Path $ZipFile) {
+    $zipSize = [math]::Round((Get-Item $ZipFile).Length / 1MB, 2)
+    Write-Log "ZIP Archive: $ZipFile ($zipSize MB)" "INFO"
+}
+Write-Log "Log File: $LogFile" "INFO"
+Write-Log "" "INFO"
+Write-Log "Summary:" "INFO"
+Write-Log "  - Warnings: $WarningCount" $(if ($WarningCount -gt 0) { "WARNING" } else { "INFO" })
+Write-Log "  - Errors: $ErrorCount" $(if ($ErrorCount -gt 0) { "ERROR" } else { "INFO" })
+if ($WarningCount -gt 0) {
+    Write-Log "" "INFO"
+    Write-Log "Please review the log file for warnings: $LogFile" "WARNING"
+}
+if ($ErrorCount -gt 0) {
+    Write-Log "" "INFO"
+    Write-Log "Package creation completed with errors. Please review the log file: $LogFile" "ERROR"
+    exit 1
+}
+Write-Log "========================================" "INFO"

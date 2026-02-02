@@ -15,5 +15,6 @@ frontend/node_modules/
 frontend/dist/
 frontend/build/
 frontend/.npm-cache-local
-package_offline/
+pehape-package-offline*/
+pehape-package-offline*
 allure-commandline/
