@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
-import { Box, Typography, Menu, MenuItem, Dialog, DialogTitle, DialogContent, TextField, DialogActions, Button, DialogContentText, Divider, useTheme, CircularProgress } from '@mui/material';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Box, Typography, Menu, MenuItem, Dialog, DialogTitle, DialogContent, TextField, DialogActions, Button, DialogContentText, Divider, useTheme, CircularProgress, InputAdornment, IconButton } from '@mui/material';
 import { SimpleTreeView } from '@mui/x-tree-view/SimpleTreeView';
 import { TreeItem, treeItemClasses } from '@mui/x-tree-view/TreeItem';
 import { styled, alpha } from '@mui/material/styles';
 import FolderIcon from '@mui/icons-material/Folder';
 import DescriptionIcon from '@mui/icons-material/Description';
+import ClearIcon from '@mui/icons-material/Clear';
+import SearchIcon from '@mui/icons-material/Search';
 
 import { useDraggable } from '@dnd-kit/core';
 import { useFileTree } from '../hooks/useFileTree';
@@ -184,6 +186,49 @@ const FileExplorerComponent: React.FC<FileExplorerProps> = ({ onFileSelect, font
 
   const [newItemName, setNewItemName] = useState('');
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; node: FileData | null }>({ open: false, node: null });
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // --- Search Logic ---
+  const filterFileTree = useCallback((nodes: FileData[], term: string): FileData[] => {
+    if (!term) return nodes;
+    const lowerTerm = term.toLowerCase();
+
+    return nodes.reduce((acc: FileData[], node) => {
+      const matches = node.name.toLowerCase().includes(lowerTerm);
+      let filteredChildren: FileData[] | undefined;
+
+      if (node.children) {
+        filteredChildren = filterFileTree(node.children, term);
+      }
+
+      if (matches || (filteredChildren && filteredChildren.length > 0)) {
+        acc.push({
+          ...node,
+          children: filteredChildren
+        });
+      }
+      return acc;
+    }, []);
+  }, []);
+
+  const filteredFiles = useMemo(() => filterFileTree(files, searchTerm), [files, searchTerm, filterFileTree]);
+
+  // Auto-expand everything when searching
+  useEffect(() => {
+    if (searchTerm) {
+      const allIds: string[] = [];
+      const collectIds = (nodes: FileData[]) => {
+        nodes.forEach(n => {
+          if (n.type === 'directory') {
+            allIds.push(n.path);
+            if (n.children) collectIds(n.children);
+          }
+        });
+      };
+      collectIds(filteredFiles);
+      setExpanded(allIds);
+    }
+  }, [searchTerm, filteredFiles, setExpanded]);
 
   // Manejo de Context Menu (sin cambios mayores)
   const handleContextMenu = (event: React.MouseEvent, node: FileData) => {
@@ -255,26 +300,55 @@ const FileExplorerComponent: React.FC<FileExplorerProps> = ({ onFileSelect, font
 
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <Typography
-        variant="caption"
-        sx={{
-          px: 2,
-          py: 1,
-          fontWeight: 'bold',
-          color: 'text.secondary',
-          textTransform: 'uppercase',
-          letterSpacing: 1,
-          display: 'block'
-        }}
-      >
-        Explorer
-      </Typography>
+      <Box sx={{ p: 1 }}>
+        <TextField
+          placeholder="Filter features..."
+          variant="outlined"
+          size="small"
+          fullWidth
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          autoComplete="off"
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon sx={{ fontSize: 16, color: 'text.secondary', opacity: 0.7 }} />
+              </InputAdornment>
+            ),
+            endAdornment: searchTerm && (
+              <InputAdornment position="end">
+                <IconButton
+                  size="small"
+                  onClick={() => setSearchTerm('')}
+                  sx={{ p: 0.5 }}
+                >
+                  <ClearIcon sx={{ fontSize: 16 }} />
+                </IconButton>
+              </InputAdornment>
+            ),
+          }}
+          sx={{
+            '& .MuiOutlinedInput-root': {
+              height: 28,
+              fontSize: '12px',
+              backgroundColor: alpha(theme.palette.action.active, 0.05),
+              '& fieldset': { border: 'none' },
+              '&:hover fieldset': { border: 'none' },
+              '&.Mui-focused fieldset': { border: `1px solid ${theme.palette.primary.main}` },
+              pl: 1, // Ajuste para el startAdornment
+            },
+            '& .MuiInputBase-input': {
+              py: 0.5,
+              px: 0.5,
+            }
+          }}
+        />
+      </Box>
 
       <Box sx={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
         {/* Usamos una animación de carga si estamos cargando */}
         {isLoading ? (
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 2 }}>
-            {/* Simulating a GIF loader with CircularProgress for now, as no GIF asset was found. */}
             <CircularProgress size={40} thickness={4} />
             <Typography variant="caption" color="text.secondary">Loading features...</Typography>
           </Box>
@@ -286,7 +360,7 @@ const FileExplorerComponent: React.FC<FileExplorerProps> = ({ onFileSelect, font
             // @ts-ignore - Propiedad clave para controlar la indentación base
             itemChildrenIndentation="12px"
           >
-            {renderTree(files, fontSize, handleContextMenu)}
+            {renderTree(filteredFiles, fontSize, handleContextMenu)}
           </SimpleTreeView>
         )}
       </Box>

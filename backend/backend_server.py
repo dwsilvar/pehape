@@ -364,7 +364,7 @@ def get_feature_content(filepath):
         # Aseguramos que el path es seguro y no sale del directorio de features
         full_path = os.path.abspath(os.path.join(FEATURES_DIR, filepath))
         if os.path.commonpath([full_path, os.path.abspath(FEATURES_DIR)]) == os.path.abspath(FEATURES_DIR):
-            with open(full_path, 'r', encoding='utf-8') as f:
+            with open(full_path, 'r', encoding='utf-8', newline='') as f:
                 content = f.read()
             return jsonify({"path": filepath, "content": content})
         else:
@@ -438,7 +438,7 @@ def save_feature_content(filepath):
         # Aseguramos que el path es seguro y no sale del directorio de features
         full_path = os.path.abspath(os.path.join(FEATURES_DIR, filepath))
         if os.path.commonpath([full_path, os.path.abspath(FEATURES_DIR)]) == os.path.abspath(FEATURES_DIR):
-            with open(full_path, 'w', encoding='utf-8') as f:
+            with open(full_path, 'w', encoding='utf-8', newline='') as f:
                 f.write(content)
             return jsonify({"message": f"File '{filepath}' saved successfully."})
         else:
@@ -495,7 +495,7 @@ def create_file():
 
         # Crear el archivo con contenido por defecto
         default_content = "Feature: Nuevo Feature\n\n  Scenario: Nuevo escenario\n    Given \n    When \n    Then "
-        with open(full_path, 'w', encoding='utf-8') as f:
+        with open(full_path, 'w', encoding='utf-8', newline='') as f:
             f.write(default_content)
         return jsonify({"message": f"Archivo '{path}' creado exitosamente.", "path": path}), 201
 

@@ -15,7 +15,7 @@ class ExecutionPlanManager:
         try:
             if not os.path.exists(self.run_list_path):
                 return {"execution_sequence": []}
-            with open(self.run_list_path, 'r', encoding='utf-8') as f:
+            with open(self.run_list_path, 'r', encoding='utf-8', newline='') as f:
                 data = json.load(f)
                 # Limpieza retroactiva: elimina el color si existe en los datos cargados.
                 for module in data.get('execution_sequence', []):
@@ -27,7 +27,7 @@ class ExecutionPlanManager:
     def _load_ui_settings(self):
         """Carga las configuraciones de UI desde su archivo JSON."""
         try:
-            with open(self.ui_settings_path, 'r', encoding='utf-8') as f:
+            with open(self.ui_settings_path, 'r', encoding='utf-8', newline='') as f:
                 return json.load(f)
         except (FileNotFoundError, json.JSONDecodeError):
             # Devuelve una estructura por defecto si el archivo no existe o está corrupto.
@@ -54,12 +54,12 @@ class ExecutionPlanManager:
                 feature.pop('scenarios', None)
                 # NOTA: NO eliminamos 'ui_tasks' porque queremos que persista.
 
-        with open(self.run_list_path, 'w', encoding='utf-8') as f:
+        with open(self.run_list_path, 'w', encoding='utf-8', newline='') as f:
             json.dump({"execution_sequence": data_to_save}, f, indent=2)
 
     def _save_ui_settings(self):
         """Guarda las configuraciones de UI en su archivo."""
-        with open(self.ui_settings_path, 'w', encoding='utf-8') as f:
+        with open(self.ui_settings_path, 'w', encoding='utf-8', newline='') as f:
             json.dump(self.ui_settings, f, indent=2)
 
     def get_sequence(self, parser_func=None):
