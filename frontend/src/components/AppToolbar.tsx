@@ -85,13 +85,26 @@ const AppToolbar: React.FC<AppToolbarProps> = ({ title, icon, showViewMenu = fal
 
                         {/* Language Selector Button */}
                         <Tooltip title={t('common.language')}>
-                            <IconButton
+                            <Box
                                 onClick={handleLanguageMenuClick}
-                                color="inherit"
-                                size="small"
+                                sx={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    cursor: 'pointer',
+                                    px: 1,
+                                    py: 0.5,
+                                    borderRadius: 1,
+                                    '&:hover': {
+                                        bgcolor: 'action.hover'
+                                    }
+                                }}
                             >
-                                <LanguageIcon />
-                            </IconButton>
+                                <LanguageIcon fontSize="small" />
+                                <Typography variant="caption" sx={{ fontSize: '0.65rem', mt: 0.25 }}>
+                                    {i18n.language === 'es' ? 'ES' : 'EN'}
+                                </Typography>
+                            </Box>
                         </Tooltip>
                     </Box>
                 </Toolbar>

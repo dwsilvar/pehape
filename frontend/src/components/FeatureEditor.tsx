@@ -1,5 +1,6 @@
 import { FC, useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import i18n from '../i18n';
 import { Box, Typography, Button, List, ListItem, ListItemText, IconButton, Chip, Paper, CircularProgress } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -47,6 +48,7 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
   const [compactCatalog, setCompactCatalog] = useState(true);
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const completionProviderRef = useRef<any>(null);
+  const menuActionsRef = useRef<any[]>([]);
 
   // Sincronizar estado local con props cuando cambian
   useEffect(() => {
@@ -217,25 +219,21 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
     }
   };
 
-  const handleEditorDidMount: OnMount = (editor, monaco) => {
-    const model = editor.getModel();
-    if (model) {
-      // Force language to gherkin if it's currently plaintext or something else
-      const currentLang = model.getLanguageId();
-      if (currentLang === 'plaintext' || currentLang === 'feature') {
-        monaco.editor.setModelLanguage(model, 'gherkin');
-      }
-    }
+  // Function to register context menu actions
+  const registerMenuActions = () => {
+    if (!editorInstance) return;
 
-    setMonacoInstance(monaco);
-    setEditorInstance(editor);
+    // Dispose existing actions
+    menuActionsRef.current.forEach(action => action?.dispose());
+    menuActionsRef.current = [];
 
-    editor.addAction({
+    // Register OCR upload action
+    const ocrAction = editorInstance.addAction({
       id: 'upload-ocr-image',
-      label: t('editor.validate'), // O un label específico para OCR si existe
+      label: t('editor.upload_ocr_image'),
       contextMenuGroupId: 'navigation',
       contextMenuOrder: 1.5,
-      run: (ed) => {
+      run: (ed: any) => {
         const model = ed.getModel();
         const selection = ed.getSelection();
         if (model && selection && !selection.isEmpty()) {
@@ -260,13 +258,13 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
       }
     });
 
-    // Add action for validation texts
-    editor.addAction({
+    // Register validation texts action
+    const validationAction = editorInstance.addAction({
       id: 'add-to-validation-texts',
-      label: t('editor.validation_texts'),
+      label: t('editor.add_to_validation'),
       contextMenuGroupId: 'navigation',
       contextMenuOrder: 1.6,
-      run: (ed) => {
+      run: (ed: any) => {
         const model = ed.getModel();
         const selection = ed.getSelection();
         if (model && selection && !selection.isEmpty()) {
@@ -277,16 +275,45 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
         }
       }
     });
+
+    menuActionsRef.current = [ocrAction, validationAction];
   };
 
-  const handleUploadImage = async (text: string, tag: string, file: File) => {
+  // Re-register menu actions when language changes
+  useEffect(() => {
+    if (editorInstance) {
+      registerMenuActions();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [i18n.language, editorInstance]);
+
+  const handleEditorDidMount: OnMount = (editor, monaco) => {
+    const model = editor.getModel();
+    if (model) {
+      // Force language to gherkin if it's currently plaintext or something else
+      const currentLang = model.getLanguageId();
+      if (currentLang === 'plaintext' || currentLang === 'feature') {
+        monaco.editor.setModelLanguage(model, 'gherkin');
+      }
+    }
+
+    setMonacoInstance(monaco);
+    setEditorInstance(editor);
+  };
+
+  const handleUploadImage = async (text: string, tag: string, file: File, isGeneric: boolean) => {
     if (!selectedFile) return;
 
     const formData = new FormData();
-    formData.append('feature_path', selectedFile.path); // Relative path from features root
-    formData.append('tag', tag);
     formData.append('text', text);
     formData.append('file', file);
+    formData.append('is_generic', isGeneric.toString());
+
+    // Only add feature_path and tag if not generic
+    if (!isGeneric) {
+      formData.append('feature_path', selectedFile.path); // Relative path from features root
+      formData.append('tag', tag);
+    }
 
     const response = await fetch('/api/images/upload', {
       method: 'POST',

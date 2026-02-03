@@ -378,46 +378,67 @@ def get_feature_content(filepath):
 def upload_image():
     """
     Endpoint para subir una imagen de fallback OCR.
+    Soporta dos modos:
+    1. Generic: Guarda en resources/images/features/generic/{text}.png
+    2. Tag-specific: Guarda en la estructura de feature/tag específica
     """
     try:
         if 'file' not in request.files:
             return jsonify({"error": "No file part"}), 400
         
         file = request.files['file']
-        feature_path_rel = request.form.get('feature_path')
-        tag = request.form.get('tag')
         text = request.form.get('text')
+        is_generic = request.form.get('is_generic', 'false').lower() == 'true'
 
-        if not file or not feature_path_rel or not tag or not text:
-            return jsonify({"error": "Missing required fields"}), 400
+        # Validate common required fields
+        if not file or not text:
+            return jsonify({"error": "Missing required fields: file and text"}), 400
 
-        # Construct absolute path to feature file
-        # feature_path_rel comes as 'features/path/to/file.feature' or similar from frontend
-        # We need to make sure we map it correctly using FEATURES_DIR
-        # Use simple join, frontend typically sends path relative to 'features' if we set it up that way.
-        # But 'selectedFile.path' in frontend is usually relative to features root.
-        
-        # We need the full absolute path to the feature file for the utility function
-        # FEATURES_DIR is .../pehape/features
-        # feature_path_rel should be relative to FEATURES_DIR
-        
-        full_feature_path = os.path.join(FEATURES_DIR, feature_path_rel)
-        
-        # Ensure tag has @
-        if not tag.startswith('@'):
-            tag = f"@{tag}"
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+        if is_generic:
+            # Generic image upload - save to generic folder
+            generic_dir = os.path.join(project_root, 'resources', 'images', 'features', 'generic')
+            os.makedirs(generic_dir, exist_ok=True)
+            target_path = os.path.join(generic_dir, f"{text}.png")
             
-        # Get target image path
-        # Pass tag as a list as expected by the utility
-        target_path = get_image_path_from_feature_and_tag(full_feature_path, [tag], text)
-        
-        # Ensure directory exists
-        os.makedirs(os.path.dirname(target_path), exist_ok=True)
-        
-        # Save file
-        file.save(target_path)
-        
-        return jsonify({"message": f"Image saved successfully at {target_path}", "path": target_path})
+            # Save file
+            file.save(target_path)
+            
+            return jsonify({
+                "message": f"Generic image saved successfully at {target_path}", 
+                "path": target_path,
+                "is_generic": True
+            })
+        else:
+            # Tag-specific image upload - existing logic
+            feature_path_rel = request.form.get('feature_path')
+            tag = request.form.get('tag')
+
+            if not feature_path_rel or not tag:
+                return jsonify({"error": "Missing required fields for tag-specific image: feature_path and tag"}), 400
+
+            # Construct absolute path to feature file
+            full_feature_path = os.path.join(FEATURES_DIR, feature_path_rel)
+            
+            # Ensure tag has @
+            if not tag.startswith('@'):
+                tag = f"@{tag}"
+                
+            # Get target image path
+            target_path = get_image_path_from_feature_and_tag(full_feature_path, [tag], text)
+            
+            # Ensure directory exists
+            os.makedirs(os.path.dirname(target_path), exist_ok=True)
+            
+            # Save file
+            file.save(target_path)
+            
+            return jsonify({
+                "message": f"Image saved successfully at {target_path}", 
+                "path": target_path,
+                "is_generic": False
+            })
 
     except Exception as e:
         print(f"Error uploading image: {e}")
