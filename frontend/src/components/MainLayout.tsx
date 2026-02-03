@@ -771,10 +771,10 @@ const MainLayout: React.FC = () => {
                         sx={{ minHeight: '48px', '& .MuiTab-root': { textTransform: 'none' } }}
                       >
                         <Tab
-                          label={isDirty ? `${selectedFile?.name || 'Editor'} *` : (selectedFile?.name || 'Feature Editor')}
+                          label={isDirty ? `1. ${selectedFile?.name || 'Editor'} *` : (`1. ${selectedFile?.name || 'Feature Editor'}`)}
                           id="editor-tab-0"
                         />
-                        <Tab label="Review Modules" id="editor-tab-1" />
+                        <Tab label="2. Review Modules" id="editor-tab-1" />
                       </Tabs>
                     </Box>
 

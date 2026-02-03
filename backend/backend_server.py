@@ -816,6 +816,155 @@ def parse_feature_file_with_behave(file_path):
         "scenarios": scenario_names
     }
 
+@app.route('/api/steps/catalog', methods=['GET'])
+def get_steps_catalog():
+    """
+    Endpoint para obtener todos los pasos (Given, When, Then) registrados en el proyecto.
+    """
+    from behave.step_registry import registry
+    import importlib.util
+    
+    steps_dir = os.path.join(FEATURES_DIR, 'steps')
+    if not os.path.exists(steps_dir):
+        return jsonify([])
+
+    # Aseguramos que el directorio de features esté en el path para las importaciones
+    if FEATURES_DIR not in sys.path:
+        sys.path.append(FEATURES_DIR)
+
+    # Cargar dinámicamente todos los archivos de steps si aún no se han cargado por completo
+    # Nota: En un entorno de producción, esto debería hacerse una vez al inicio.
+    for root, _, files in os.walk(steps_dir):
+        for file in files:
+            if file.endswith('.py') and file != '__init__.py':
+                file_path = os.path.join(root, file)
+                module_name = f"steps.{os.path.relpath(file_path, steps_dir).replace(os.sep, '.')[:-3]}"
+                if module_name not in sys.modules:
+                    try:
+                        spec = importlib.util.spec_from_file_location(module_name, file_path)
+                        module = importlib.util.module_from_spec(spec)
+                        sys.modules[module_name] = module
+                        spec.loader.exec_module(module)
+                    except Exception as e:
+                        logger.warning(f"No se pudo cargar el módulo de steps {module_name}: {e}")
+
+    steps_data = []
+    for step_type in ['given', 'when', 'then']:
+        definitions = registry.steps.get(step_type, [])
+        for step in definitions:
+            steps_data.append({
+                "type": step_type,
+                "pattern": step.string,
+                "location": f"{os.path.relpath(step.location.filename, FEATURES_DIR)}:{step.location.line}"
+            })
+    
+    return jsonify(steps_data)
+
+@app.route('/api/features/validate', methods=['POST'])
+def validate_feature():
+    """
+    Valida un archivo .feature usando behave --dry-run para encontrar pasos no definidos.
+    """
+    try:
+        data = request.json
+        rel_path = data.get('path')
+        if not rel_path:
+            return jsonify({"error": "Path required"}), 400
+
+        full_path = os.path.abspath(os.path.join(FEATURES_DIR, rel_path))
+        if not full_path.startswith(os.path.abspath(FEATURES_DIR)):
+             return jsonify({"error": "Access denied"}), 403
+
+        # Intentar localizar el ejecutable de python del venv
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        venv_python = os.path.join(project_root, '.venv', 'Scripts', 'python.exe')
+        if not os.path.exists(venv_python):
+            venv_python = sys.executable # Fallback al actual
+
+        # Usar la ruta absoluta para evitar ambigüedades
+        cmd = [venv_python, "-m", "behave", "--dry-run", "-f", "json", full_path]
+        
+        logger.info(f"Running validation command: {' '.join(cmd)}")
+        # Ejecutar en el directorio raiz
+        result = subprocess.run(cmd, cwd=project_root, capture_output=True, text=True, encoding='utf-8')
+        
+        output = result.stdout
+        error_output = result.stderr
+        
+        logger.debug(f"Behave output: {output[:200]}...")
+        if error_output:
+            logger.debug(f"Behave error output: {error_output[:200]}...")
+        
+        undefined_steps = []
+        snippets = []
+        is_valid = True
+        parse_error = None
+        report_data = None
+        
+        # Intentar extraer el JSON de stdout
+        # Behave --dry-run suele imprimir texto antes ([USING RUNNER]) y después (snippets) del JSON
+        json_start = output.find('[')
+        json_end = output.rfind(']')
+        
+        if json_start != -1 and json_end != -1 and json_end > json_start:
+            try:
+                report_json = output[json_start:json_end+1]
+                report = json.loads(report_json)
+                report_data = report
+                for feature in report:
+                    if feature.get('status') == 'error':
+                        is_valid = False
+                    for element in feature.get('elements', []):
+                        if element.get('status') == 'error':
+                            is_valid = False
+                        for step in element.get('steps', []):
+                            # En dry-run, el resultado puede ser 'undefined' o 'untested'
+                            status = step.get('result', {}).get('status')
+                            if status == 'undefined':
+                                is_valid = False
+                                undefined_steps.append({
+                                    "keyword": step.get('keyword', '').strip(),
+                                    "name": step.get('name', '')
+                                })
+                            elif not status and (element.get('status') == 'error' or feature.get('status') == 'error'):
+                                # Si no hay status pero el escenario/feature tiene error, 
+                                # es probable que este sea el paso problema
+                                undefined_steps.append({
+                                    "keyword": step.get('keyword', '').strip(),
+                                    "name": step.get('name', ''),
+                                    "note": "Potencialmente no definido"
+                                })
+            except Exception as e:
+                parse_error = str(e)
+                logger.error(f"Error parsing behave JSON output from matches: {e}")
+        else:
+            # Si no hay JSON estructurado, chequeamos si hay errores críticos en stderr
+            if result.returncode != 0 and not snippets:
+                is_valid = False
+
+        # Extraer snippets del output (stdout o stderr)
+        # Los snippets empiezan con @given, @when, @then
+        import re
+        snippet_pattern = re.compile(r"(@(?:given|when|then)\(u?'.*?'\)\s+def step_impl\(context\):.*?)(?=@|$)", re.DOTALL)
+        
+        all_output = output + "\n" + error_output
+        found_snippets = snippet_pattern.findall(all_output)
+        snippets = [s.strip() for s in found_snippets]
+
+        # Si encontramos snippets, definitivamente no es válido
+        if snippets:
+            is_valid = False
+
+        return jsonify({
+            "valid": is_valid,
+            "undefined_steps": undefined_steps,
+            "snippets": snippets,
+            "raw_output": all_output if not is_valid else ""
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/modules/<string:module_name>/features/tasks', methods=['POST'])
 def add_task_to_feature(module_name):
     """
