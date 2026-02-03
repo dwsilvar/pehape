@@ -1,11 +1,12 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { Box, Paper, Tabs, Tab, MenuItem, AppBar, Toolbar, Button, Menu, ThemeProvider, CssBaseline, Badge, IconButton, Tooltip, Divider, Typography, CircularProgress } from '@mui/material';
+import { Box, Paper, Tabs, Tab, MenuItem, AppBar, Toolbar, Button, Menu, ThemeProvider, CssBaseline, Badge, IconButton, Tooltip, Divider, Typography, CircularProgress, useTheme } from '@mui/material';
 import { useLocation, useNavigate } from 'react-router-dom';
 import CodeIcon from '@mui/icons-material/Code';
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import TerminalIcon from '@mui/icons-material/Terminal';
 import CloseIcon from '@mui/icons-material/Close';
 import { DndContext, closestCenter, DragOverlay, Active, useSensor, useSensors, PointerSensor, TouchSensor, pointerWithin, rectIntersection } from '@dnd-kit/core';
+import { styled, alpha } from '@mui/material/styles';
 import { arrayMove } from '@dnd-kit/sortable';
 import FileExplorer, { DraggableTreeItemPreview } from './FileExplorer';
 import { FeatureEditor } from './FeatureEditor';
@@ -44,17 +45,18 @@ function TabPanel(props: TabPanelProps) {
 }
 
 const MainLayout: React.FC = () => {
+  const theme = useTheme();
   const [selectedFile, setSelectedFile] = useState<FileData | null>(null);
   const [editorContent, setEditorContent] = useState<string>('');
   const [isDirty, setIsDirty] = useState(false); // Estado para rastrear cambios
-  const [fontSize] = useState(14);
-  const [themeName, setThemeName] = useState<string>(() => {
-    return localStorage.getItem('editorTheme') || 'monokai';
-  });
   const [isModifiedByDrag, setIsModifiedByDrag] = useState(false);
+  const [fontSize] = useState(14);
   const { modules, setModules, isLoading: isModulesLoading, refetch } = useExecutionOrder();
   const [tabValue, setTabValue] = useState(0);
   const modulesRef = useRef(modules);
+  useEffect(() => {
+    modulesRef.current = modules;
+  }, [modules]);
   const [focusedModule, setFocusedModule] = useState<string | null>(null);
   const [validationTexts, setValidationTexts] = useState<string[]>([]); // Estado para textos a validar
 
@@ -67,7 +69,8 @@ const MainLayout: React.FC = () => {
     runningFeatureId, setRunningFeatureId,
     scheduledExecutionTime, setScheduledExecutionTime,
     taskStatuses, setTaskStatuses,
-    scenarioGifs, setScenarioGifs
+    scenarioGifs, setScenarioGifs,
+    themeName, setThemeName
   } = useLayout();
 
   const [orchestratorTab, setOrchestratorTab] = useState(0); // 0: ExecutionOrder, 1: Modules
@@ -216,22 +219,12 @@ const MainLayout: React.FC = () => {
 
   const availableThemes = {
     'vs-light': 'VS Light',
-    'monokai': 'Monokai',
     'vs-dark': 'VS Dark',
-    'solarized-dark': 'Solarized Dark',
-    'dracula': 'Dracula',
-    'cobalt': 'Cobalt',
   };
-
-  useEffect(() => {
-    localStorage.setItem('editorTheme', themeName);
-  }, [themeName]);
 
   useEffect(() => {
     runningFeatureIdRef.current = runningFeatureId;
   }, [runningFeatureId]);
-
-  const muiTheme = useMemo(() => getAppTheme(themeName), [themeName]);
 
   useEffect(() => {
     if (isModifiedByDrag) {
@@ -570,15 +563,14 @@ const MainLayout: React.FC = () => {
   );
 
   return (
-    <ThemeProvider theme={muiTheme}>
-      <CssBaseline /> {/* Aplica estilos base como el color de fondo del body */}
+    <>
       {/* Ajustamos el Box principal para dejar espacio para la barra de estado */}
       <Box sx={{
         display: 'flex', flexDirection: 'column',
         height: '100vh', pb: '24px' /* Padding-bottom para no solapar con la barra */
       }}>
         {/* Barra de Menú Superior */}
-        <AppBar position="static" elevation={1} color="default">
+        <AppBar position="static" elevation={0} color="default" sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Toolbar variant="dense">
             <Button color="inherit" onClick={handleViewMenuClick}>View</Button>
             {/* Aquí se pueden agregar más menús como "File", "Edit", etc. */}
@@ -713,7 +705,7 @@ const MainLayout: React.FC = () => {
                     const response = await fetch(`/api/modules/${encodeURIComponent(moduleName)}/features/reorder`, {
                       method: 'PUT',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ features: featuresToSave }),
+                      body: JSON.stringify(featuresToSave),
                     });
                     if (!response.ok) setModules(originalModules);
                   } catch (e) {
@@ -726,14 +718,14 @@ const MainLayout: React.FC = () => {
             }
           }}
         >
-          <Box sx={{ display: 'flex', flexDirection: 'row', height: '100vh', overflow: 'hidden', bgcolor: 'background.default' }}>
-
+          <Box sx={{ display: 'flex', flexDirection: 'row', height: '100%', overflow: 'hidden', bgcolor: 'background.default' }}>
             {/* 2. SIDEBAR (File Explorer) - Only visible in Editor Mode */}
             {activePerspective === 'editor' && (
               <>
                 <Paper
-                  elevation={1}
-                  sx={{ width: fileExplorerWidth, minWidth: '150px', overflow: 'auto', display: 'flex', flexDirection: 'column' }}
+                  elevation={0}
+                  square
+                  sx={{ width: fileExplorerWidth, minWidth: '150px', overflow: 'auto', display: 'flex', flexDirection: 'column', borderRight: 1, borderColor: 'divider', bgcolor: 'background.paper' }}
                 >
                   <Box sx={{ p: 1, borderBottom: 1, borderColor: 'divider', fontWeight: 'bold' }}>Explorer</Box>
                   {isReady ? (
@@ -824,7 +816,7 @@ const MainLayout: React.FC = () => {
                   </Box>
                 ) : (
                   // --- ORCHESTRATOR VIEW (Execution Flow Only) ---
-                  <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', p: 0, bgcolor: '#f5f5f5', overflow: 'hidden' }}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', p: 0, bgcolor: 'background.default', overflow: 'hidden' }}>
                     <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
                       {isReady && !isModulesLoading ? (
                         <ExecutionOrder
@@ -897,14 +889,47 @@ const MainLayout: React.FC = () => {
             )}
           </DragOverlay>
         </DndContext>
-        {/* Renderizar la barra de estado en la parte inferior */}
+        {/* Renderizar la barra de toggle de consola justo encima de la barra de estado - Solo en Orquestrador */}
+        {activePerspective === 'orchestrator' && (
+          <Box sx={{
+            display: 'flex',
+            alignItems: 'center',
+            height: '24px',
+            bgcolor: 'background.paper',
+            borderTop: 1,
+            borderColor: 'divider',
+            px: 1,
+            gap: 1
+          }}>
+            <Button
+              size="small"
+              onClick={toggleConsole}
+              startIcon={<TerminalIcon sx={{ fontSize: '14px !important' }} />}
+              sx={{
+                height: '100%',
+                fontSize: '10px',
+                textTransform: 'none',
+                px: 1,
+                borderRadius: 0,
+                color: isConsoleOpen ? 'primary.main' : 'text.secondary',
+                backgroundColor: isConsoleOpen ? alpha(theme.palette.primary.main, 0.1) : 'transparent',
+                '&:hover': {
+                  backgroundColor: alpha(theme.palette.primary.main, 0.2),
+                }
+              }}
+            >
+              Console
+            </Button>
+          </Box>
+        )}
+
         <StatusBar
           message={status?.text || ''}
           isLoading={isModulesLoading}
           statusType={status?.type || 'info'}
         />
       </Box >
-    </ThemeProvider >
+    </>
   );
 };
 

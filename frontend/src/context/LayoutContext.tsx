@@ -24,6 +24,10 @@ interface LayoutContextProps {
     setTaskStatuses: React.Dispatch<React.SetStateAction<Record<string, Record<number, { status: string, error?: string }>>>>;
     scenarioGifs: Record<string, string>;
     setScenarioGifs: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+
+    // Theme state
+    themeName: string;
+    setThemeName: (theme: string) => void;
 }
 
 const LayoutContext = createContext<LayoutContextProps | undefined>(undefined);
@@ -41,6 +45,10 @@ export const LayoutProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const [taskStatuses, setTaskStatuses] = useState<Record<string, Record<number, { status: string, error?: string }>>>({});
     const [scenarioGifs, setScenarioGifs] = useState<Record<string, string>>({});
 
+    const [themeName, setThemeName] = useState<string>(() => {
+        return localStorage.getItem('editorTheme') || 'vs-dark';
+    });
+
     const toggleConsole = () => setIsConsoleOpen(prev => !prev);
 
     return (
@@ -52,7 +60,8 @@ export const LayoutProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             runningFeatureId, setRunningFeatureId,
             scheduledExecutionTime, setScheduledExecutionTime,
             taskStatuses, setTaskStatuses,
-            scenarioGifs, setScenarioGifs
+            scenarioGifs, setScenarioGifs,
+            themeName, setThemeName
         }}>
             {children}
         </LayoutContext.Provider>

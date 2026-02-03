@@ -11,7 +11,25 @@ import RunningAppsPage from './pages/RunningAppsPage';
 import ReportsPage from './pages/ReportsPage';
 import { useExecutionOrder } from './hooks/useExecutionOrder';
 
-import { LayoutProvider } from './context/LayoutContext';
+import { LayoutProvider, useLayout } from './context/LayoutContext';
+import { ThemeProvider, CssBaseline } from '@mui/material';
+import { getAppTheme } from './theme';
+
+const ThemeWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { themeName } = useLayout();
+  const muiTheme = React.useMemo(() => getAppTheme(themeName), [themeName]);
+
+  React.useEffect(() => {
+    localStorage.setItem('editorTheme', themeName);
+  }, [themeName]);
+
+  return (
+    <ThemeProvider theme={muiTheme}>
+      <CssBaseline />
+      {children}
+    </ThemeProvider>
+  );
+};
 
 const AppLayout: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
@@ -120,8 +138,10 @@ const AppLayout: React.FC = () => {
 const App: React.FC = () => {
   return (
     <BrowserRouter>
-      <LayoutProvider> {/* Wrapped AppLayout with LayoutProvider */}
-        <AppLayout />
+      <LayoutProvider>
+        <ThemeWrapper>
+          <AppLayout />
+        </ThemeWrapper>
       </LayoutProvider>
     </BrowserRouter>
   );

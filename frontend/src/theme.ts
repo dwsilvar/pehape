@@ -33,5 +33,5 @@ const lightTheme = createTheme({
 });
 
 export const getAppTheme = (themeName: string): Theme => {
-  return themeName.includes('dark') || themeName === 'monokai' || themeName === 'dracula' || themeName === 'cobalt' ? darkTheme : lightTheme;
+  return themeName === 'vs-dark' || themeName.includes('dark') || themeName === 'monokai' || themeName === 'dracula' || themeName === 'cobalt' ? darkTheme : lightTheme;
 };

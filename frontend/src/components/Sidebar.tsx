@@ -36,7 +36,8 @@ const Sidebar: React.FC = () => {
             <Box sx={{
                 width: 60,
                 height: '100%',
-                borderRight: '1px solid #ddd',
+                borderRight: '1px solid',
+                borderColor: 'divider',
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
@@ -64,17 +65,6 @@ const Sidebar: React.FC = () => {
                         onClick={() => handleNavigation('/', 'orchestrator')}
                     >
                         <AccountTreeIcon />
-                    </IconButton>
-                </Tooltip>
-
-                <Divider sx={{ width: '80%', my: 1 }} />
-
-                <Tooltip title="Toggle Console" placement="right">
-                    <IconButton
-                        color={isConsoleOpen ? 'secondary' : 'default'}
-                        onClick={toggleConsole}
-                    >
-                        <TerminalIcon />
                     </IconButton>
                 </Tooltip>
 
@@ -135,7 +125,8 @@ const Sidebar: React.FC = () => {
             height: '100%',
             display: 'flex',
             flexDirection: 'column',
-            borderRight: '1px solid #ddd',
+            borderRight: '1px solid',
+            borderColor: 'divider',
             bgcolor: 'background.paper',
             zIndex: 1300
         }}>
@@ -167,17 +158,6 @@ const Sidebar: React.FC = () => {
                             <AccountTreeIcon />
                         </ListItemIcon>
                         <ListItemText primary="Execution Order" />
-                    </ListItemButton>
-                </ListItem>
-
-                <Divider sx={{ my: 1 }} />
-
-                <ListItem disablePadding>
-                    <ListItemButton onClick={toggleConsole}>
-                        <ListItemIcon>
-                            <TerminalIcon color={isConsoleOpen ? 'secondary' : 'inherit'} />
-                        </ListItemIcon>
-                        <ListItemText primary={isConsoleOpen ? "Hide Console" : "Show Console"} />
                     </ListItemButton>
                 </ListItem>
 

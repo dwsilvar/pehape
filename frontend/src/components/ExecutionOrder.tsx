@@ -58,12 +58,13 @@ import AssignmentIcon from '@mui/icons-material/Assignment';
 import SettingsIcon from '@mui/icons-material/Settings';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
+import TerminalIcon from '@mui/icons-material/Terminal';
+import { useLayout } from '../context/LayoutContext';
 import { useSortable, SortableContext, verticalListSortingStrategy, } from '@dnd-kit/sortable';
 import { arrayMove } from '@dnd-kit/sortable';
 import { useDroppable, useDndContext, Active } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { Module, FeatureItem, ScenarioStatusMap } from '../types';
-import { useLayout } from '../context/LayoutContext';
 
 const DEFAULT_FEATURE_COLOR = '#4db6ac';
 
@@ -133,7 +134,7 @@ const HookItem: React.FC<HookItemProps> = ({ hook, onDelete, onNavigate }) => {
   );
 };
 
-const CollapsibleSection: React.FC<{ title: string, count: number, children: React.ReactNode, onAddModule?: () => void, isOpen: boolean, onToggle: () => void }> = ({ title, count, children, onAddModule, isOpen, onToggle }) => {
+const CollapsibleSection: React.FC<{ title: string, count: number, children: React.ReactNode, onAddModule?: (event?: React.MouseEvent) => void, isOpen: boolean, onToggle: () => void }> = ({ title, count, children, onAddModule, isOpen, onToggle }) => {
   return (
     <Box sx={{ mb: 1 }}>
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
@@ -173,9 +174,9 @@ interface ExecutionItemProps {
   isRunning: boolean;
   isFirst: boolean;
   isLast: boolean;
-  onAddTask: (moduleName: string, item: FeatureItem) => void;
+  onAddTask: (moduleName: string, item: FeatureItem, event?: React.MouseEvent) => void;
   onDeleteTask: (moduleName: string, item: FeatureItem, taskIndex: number) => void;
-  onEditTask: (moduleName: string, item: FeatureItem, task: any, index: number) => void;
+  onEditTask: (moduleName: string, item: FeatureItem, task: any, index: number, event?: React.MouseEvent) => void;
   moduleName: string;
 }
 
@@ -444,7 +445,7 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
                         clickable
                         onClick={(e) => {
                           e.stopPropagation();
-                          onEditTask(moduleName, item, task, index);
+                          onEditTask(moduleName, item, task, index, e);
                         }}
                         label={`${task.name} (${task.scope}${task.scenario_name ? ':' + task.scenario_name : ''})`}
                         size="small"
@@ -678,7 +679,7 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
   validationTexts = [],
 }) => {
   const navigate = useNavigate();
-  const { scenarioStatuses, scenarioGifs } = useLayout();
+  const { scenarioStatuses, scenarioGifs, toggleConsole, isConsoleOpen } = useLayout();
   // Necesitamos acceder al elemento activo para deshabilitar el SortableContext si no es un módulo.
   // Esto es un patrón avanzado para permitir que droppables externos funcionen dentro de un SortableContext.
   const { active } = useDndContext();
@@ -750,7 +751,10 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
     setNewTaskConfig({ ...newTaskConfig, name: taskName, args: initialArgs });
   };
 
-  const handleOpenTaskDialog = async (moduleName: string, item: FeatureItem) => {
+  const handleOpenTaskDialog = async (moduleName: string, item: FeatureItem, event?: React.MouseEvent) => {
+    if (event?.currentTarget instanceof HTMLElement) {
+      event.currentTarget.blur();
+    }
     setSelectedFeatureForTask({ moduleName, item });
     setTaskDialogOpen(true);
 
@@ -768,7 +772,10 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
     }
   };
 
-  const handleOpenEditTaskDialog = async (moduleName: string, item: FeatureItem, task: any, index: number) => {
+  const handleOpenEditTaskDialog = async (moduleName: string, item: FeatureItem, task: any, index: number, event?: React.MouseEvent) => {
+    if (event?.currentTarget instanceof HTMLElement) {
+      event.currentTarget.blur();
+    }
     setSelectedFeatureForTask({ moduleName, item });
     setEditingTaskIndex(index);
     setTaskDialogOpen(true);
@@ -878,7 +885,10 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
   const [scheduleDialogOpen, setScheduleDialogOpen] = React.useState(false);
   const [scheduledTime, setScheduledTime] = React.useState('');
 
-  const handleOpenScheduleDialog = () => {
+  const handleOpenScheduleDialog = (event?: React.MouseEvent) => {
+    if (event?.currentTarget instanceof HTMLElement) {
+      event.currentTarget.blur();
+    }
     setScheduleDialogOpen(true);
     // Set default time to 5 minutes from now for convenience
     const now = new Date();
@@ -903,7 +913,10 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
 
 
 
-  const handleOpenDialog = () => {
+  const handleOpenDialog = (event?: React.MouseEvent) => {
+    if (event?.currentTarget instanceof HTMLElement) {
+      event.currentTarget.blur();
+    }
     // Filtra los módulos que no están activos para mostrarlos en el diálogo
     const inactiveModules = modules.filter(m => !m.active);
     setAvailableModules(inactiveModules);
@@ -915,7 +928,10 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
     setDialogOpen(false);
   };
 
-  const handleOpenHookDialog = (targetModuleName: string, hookType: 'setup' | 'teardown') => {
+  const handleOpenHookDialog = (targetModuleName: string, hookType: 'setup' | 'teardown', event?: React.MouseEvent) => {
+    if (event?.currentTarget instanceof HTMLElement) {
+      event.currentTarget.blur();
+    }
     const targetModule = modules.find(m => m.module_name === targetModuleName);
     if (!targetModule) return;
 
@@ -1291,7 +1307,7 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
         <Typography variant="subtitle1" flex={1} sx={{ fontSize: `${fontSize}px` }}>
           Execution Order
         </Typography>
-        <Button variant="outlined" size="small" sx={{ mr: 1 }} onClick={handleOpenDialog}>
+        <Button variant="outlined" size="small" sx={{ mr: 1 }} onClick={(e) => handleOpenDialog(e)}>
           Agregar Módulo
         </Button>
         <Tooltip title="Sincronizar Scenarios y Tags desde archivos .feature">
@@ -1300,26 +1316,30 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
           </Button>
         </Tooltip>
         <Tooltip title={isExecuting ? "Detener Ejecución" : "Ejecutar Plan de Pruebas"}>
-          <Button
-            variant="contained"
-            color={isExecuting ? "error" : "primary"}
-            size="small" sx={{ mr: 1 }}
-            onClick={isExecuting ? onStopTests : onRunTests}
-            disabled={(isExecuting && modules.length === 0) || !!scheduledExecutionTime} // Deshabilita si está ejecutando o programado
-          >
-            {isExecuting ? <StopIcon /> : <PlayArrowIcon />}
-          </Button>
+          <span>
+            <Button
+              variant="contained"
+              color={isExecuting ? "error" : "primary"}
+              size="small" sx={{ mr: 1 }}
+              onClick={isExecuting ? onStopTests : onRunTests}
+              disabled={(isExecuting && (modules?.length || 0) === 0) || !!scheduledExecutionTime} // Deshabilita si está ejecutando o programado
+            >
+              {isExecuting ? <StopIcon /> : <PlayArrowIcon />}
+            </Button>
+          </span>
         </Tooltip>
         <Tooltip title={scheduledExecutionTime ? "Ya existe una ejecución programada" : "Programar Ejecución"}>
-          <Button
-            variant="outlined"
-            color="primary"
-            size="small"
-            onClick={handleOpenScheduleDialog}
-            disabled={isExecuting || modules.length === 0 || !!scheduledExecutionTime}
-          >
-            <AccessTimeIcon />
-          </Button>
+          <span>
+            <Button
+              variant="outlined"
+              color="primary"
+              size="small"
+              onClick={(e) => handleOpenScheduleDialog(e)}
+              disabled={isExecuting || (modules?.length || 0) === 0 || !!scheduledExecutionTime}
+            >
+              <AccessTimeIcon />
+            </Button>
+          </span>
         </Tooltip>
         <Tooltip title="Ver Último Reporte">
           <Button
@@ -1397,7 +1417,7 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
                       count={(module.setup || []).length}
                       isOpen={!collapsedSections.has(`${module.module_name}::setup`)}
                       onToggle={() => handleToggleSectionCollapse(module.module_name, 'setup')}
-                      onAddModule={() => handleOpenHookDialog(module.module_name, 'setup')}
+                      onAddModule={(e) => { handleOpenHookDialog(module.module_name, 'setup', e); }}
                     >
                       {(module.setup || []).map((hook, index) => (
                         <HookItem
@@ -1426,17 +1446,17 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
                               const fullPath = [item.feature_dir, item.feature_file].filter(Boolean).join('/');
                               onFeatureSelect(fullPath);
                             }}
-                            onToggleActivity={() => handleToggleFeatureActivity(module.module_name, feature)}
-                            onDelete={() => handleDeleteFeature(module.module_name, feature)}
+                            onToggleActivity={(item) => { handleToggleFeatureActivity(module.module_name, item); }}
+                            onDelete={(item) => { handleDeleteFeature(module.module_name, item); }}
                             onMoveUp={() => handleMoveFeature(module.module_name, feature, 'up')}
                             onMoveDown={() => handleMoveFeature(module.module_name, feature, 'down')}
                             onTagClick={(featureId, tag) => handleTagToggle(module.module_name, featureId, tag)}
                             isRunning={feature.id === runningFeatureId}
                             isFirst={index === 0}
                             isLast={index === module.features.length - 1}
-                            onAddTask={handleOpenTaskDialog}
+                            onAddTask={(moduleName, item, e) => { handleOpenTaskDialog(moduleName, item, e); }}
                             onDeleteTask={handleDeleteTask}
-                            onEditTask={handleOpenEditTaskDialog}
+                            onEditTask={(moduleName, item, task, index, e) => { handleOpenEditTaskDialog(moduleName, item, task, index, e); }}
                             moduleName={module.module_name}
                           />
                         ))}
@@ -1451,7 +1471,7 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
                       count={(module.teardown || []).length}
                       isOpen={!collapsedSections.has(`${module.module_name}::teardown`)}
                       onToggle={() => handleToggleSectionCollapse(module.module_name, 'teardown')}
-                      onAddModule={() => handleOpenHookDialog(module.module_name, 'teardown')}
+                      onAddModule={(e) => { handleOpenHookDialog(module.module_name, 'teardown', e); }}
                     >
                       {(module.teardown || []).map((hook, index) => (
                         <HookItem

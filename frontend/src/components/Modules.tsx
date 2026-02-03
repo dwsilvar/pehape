@@ -71,7 +71,7 @@ const HookItem: React.FC<{ hook: Module | string, onNavigate: (moduleName: strin
   );
 };
 
-const CollapsibleSection: React.FC<{ title: string, count: number, children: React.ReactNode, onAddModule?: () => void, isOpen: boolean, onToggle: () => void }> = ({ title, count, children, onAddModule, isOpen, onToggle }) => {
+const CollapsibleSection: React.FC<{ title: string, count: number, children: React.ReactNode, onAddModule?: (event?: React.MouseEvent) => void, isOpen: boolean, onToggle: () => void }> = ({ title, count, children, onAddModule, isOpen, onToggle }) => {
   return (
     <Box sx={{ mb: 1 }}>
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
@@ -570,7 +570,10 @@ const Modules: React.FC<ExecutionOrderProps> = ({
   const [newModuleName, setNewModuleName] = React.useState('');
   const [newModuleOrder, setNewModuleOrder] = React.useState('');
 
-  const handleOpenDialog = () => {
+  const handleOpenDialog = (event?: React.MouseEvent) => {
+    if (event?.currentTarget instanceof HTMLElement) {
+      event.currentTarget.blur();
+    }
     setDialogOpen(true);
   };
 
@@ -894,7 +897,7 @@ const Modules: React.FC<ExecutionOrderProps> = ({
         <Typography variant="subtitle1" flex={1} sx={{ fontSize: `${fontSize}px` }}>
           Execution Order
         </Typography>
-        <Button variant="outlined" size="small" sx={{ mr: 1 }} onClick={handleOpenDialog} id="create-module-button">
+        <Button variant="outlined" size="small" sx={{ mr: 1 }} onClick={(e) => handleOpenDialog(e)} id="create-module-button">
           Crear Módulo
         </Button>
         <Tooltip title="Sincronizar Scenarios y Tags desde archivos .feature">
