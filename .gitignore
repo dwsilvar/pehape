@@ -13,6 +13,8 @@ frontend/node_modules/
 
 # Offline package
 offline-package/
+package-offline/
+package_offline/
 
 # Frontend build artifacts
 frontend/dist/
