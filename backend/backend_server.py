@@ -1709,8 +1709,11 @@ if __name__ == '__main__':
         
         # Create native window
         print(f"Creating native window...")
-        webview.create_window(
-            'PeHaPe - OCR Test Automation',
+        
+        # Note: Icon support in pywebview varies by version and platform
+        # The favicon in index.html will be used automatically by the browser engine
+        window = webview.create_window(
+            'PeHaPe - Automation Framework',
             f'http://127.0.0.1:{port}',
             width=1280,
             height=800,
