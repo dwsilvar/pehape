@@ -1,4 +1,5 @@
 import { FC, useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Box, Typography, Button, List, ListItem, ListItemText, IconButton, Chip, Paper, CircularProgress } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -26,6 +27,7 @@ interface FeatureEditorProps {
 }
 
 export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorContent, onEditorChange, theme, onSave, isDirty, isResizing, validationTexts = [], onValidationTextsChange }) => {
+  const { t } = useTranslation();
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [selectedText, setSelectedText] = useState('');
   const [detectedTag, setDetectedTag] = useState<string | null>(null);
@@ -230,7 +232,7 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
 
     editor.addAction({
       id: 'upload-ocr-image',
-      label: 'Upload OCR Image',
+      label: t('editor.validate'), // O un label específico para OCR si existe
       contextMenuGroupId: 'navigation',
       contextMenuOrder: 1.5,
       run: (ed) => {
@@ -261,7 +263,7 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
     // Add action for validation texts
     editor.addAction({
       id: 'add-to-validation-texts',
-      label: 'Agregar a Textos a Validar',
+      label: t('editor.validation_texts'),
       contextMenuGroupId: 'navigation',
       contextMenuOrder: 1.6,
       run: (ed) => {
@@ -329,7 +331,7 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
               if (lines[i].includes(step.name)) {
                 markers.push({
                   severity: monacoInstance.MarkerSeverity.Error,
-                  message: `Paso no definido: ${step.keyword} ${step.name}`,
+                  message: `${t('editor.undefined_step')}: ${step.keyword} ${step.name}`,
                   startLineNumber: i + 1,
                   startColumn: lines[i].indexOf(step.name) + 1,
                   endLineNumber: i + 1,
@@ -378,7 +380,7 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
             disabled={isValidating}
             sx={{ mr: 1 }}
           >
-            Validar
+            {t('editor.validate')}
           </Button>
           <Button
             variant="outlined"
@@ -387,7 +389,7 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
             onClick={() => setShowCatalog(!showCatalog)}
             sx={{ mr: 1 }}
           >
-            {showCatalog ? 'Ocultar Pasos' : 'Catálogo de Pasos'}
+            {showCatalog ? t('editor.hide_steps') : t('editor.step_catalog')}
           </Button>
           <Button
             variant="contained"
@@ -396,14 +398,14 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
             onClick={onSave}
             disabled={!isDirty}
           >
-            Guardar
+            {t('common.save')}
           </Button>
         </Box>
       )}
       <Box sx={{ flex: 1, minHeight: 0 }}> {/* minHeight: 0 is crucial for child's scroll */}
         <MonacoEditor
           height="100%"
-          value={selectedFile ? editorContent : '-- Select a file to view its content --'}
+          value={selectedFile ? editorContent : `-- ${t('editor.placeholder')} --`}
           onChange={onEditorChange}
           options={{
             minimap: { enabled: true },
@@ -441,7 +443,7 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                 <CheckCircleIcon sx={{ mr: 1, color: 'success.main' }} />
                 <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-                  Textos a Validar ({currentValidationTexts.length})
+                  {t('editor.validation_texts')} ({currentValidationTexts.length})
                 </Typography>
               </Box>
               <List dense sx={{ maxHeight: 150, overflow: 'auto' }}>
@@ -459,7 +461,7 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
                         edge="end"
                         size="small"
                         onClick={() => handleRemoveValidationText(idx)}
-                        title="Eliminar"
+                        title={t('common.delete')}
                       >
                         <DeleteIcon fontSize="small" />
                       </IconButton>
@@ -476,7 +478,7 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
                 ))}
               </List>
               <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                Estos textos se pre-cargarán al agregar la tarea "verificar_texto_archivo"
+                {t('editor.validation_texts_hint')}
               </Typography>
             </Paper>
           )}
@@ -487,7 +489,7 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
               <Box sx={{ display: 'flex', alignItems: 'center' }}>
                 <ErrorOutlineIcon sx={{ mr: 1 }} />
                 <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
-                  La validación ha fallado. Se detectaron {validationResult.undefined_steps.length} pasos no definidos o errores.
+                  {t('editor.validation_failed', { count: validationResult.undefined_steps.length })}
                 </Typography>
                 <Box sx={{ flexGrow: 1 }} />
                 <IconButton size="small" color="inherit" onClick={() => setValidationResult(null)}>
@@ -503,11 +505,11 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1.5 }}>
                 <RuleIcon sx={{ mr: 1, color: 'error.main' }} />
                 <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: 'error.main' }}>
-                  Snippets para implementar pasos ({validationResult.snippets.length})
+                  {t('editor.step_catalog')} ({validationResult.snippets.length})
                 </Typography>
               </Box>
               <Typography variant="caption" sx={{ mb: 2, display: 'block' }}>
-                Copia estos snippets en tu archivo de steps para definir el comportamiento de los nuevos pasos:
+                {t('editor.steps_snippet_hint')}
               </Typography>
               <Box sx={{ maxHeight: 150, overflow: 'auto' }}>
                 {validationResult.snippets.map((snippet, idx) => (
@@ -534,7 +536,7 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
               <Box sx={{ display: 'flex', alignItems: 'center' }}>
                 <CheckCircleIcon sx={{ mr: 1 }} />
                 <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
-                  Validación exitosa: Todos los pasos están correctamente definidos.
+                  {t('editor.validation_success')}
                 </Typography>
                 <Box sx={{ flexGrow: 1 }} />
                 <IconButton size="small" color="inherit" onClick={() => setValidationResult(null)}>
@@ -561,7 +563,7 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
           <Box sx={{ p: 1.5, display: 'flex', alignItems: 'center', borderBottom: 1, borderColor: 'divider', bgcolor: 'primary.dark', color: 'white' }}>
             <RuleIcon sx={{ mr: 1 }} />
             <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mr: 2 }}>
-              Pasos ({stepCatalog.length})
+              {t('editor.step_catalog')} ({stepCatalog.length})
             </Typography>
 
             <Box sx={{ display: 'flex', gap: 1 }}>

@@ -1,0 +1,150 @@
+{
+    "common": {
+        "explorer": "Explorer",
+        "editor": "Feature Editor",
+        "modules": "Review Modules",
+        "orchestrator": "Orchestrator (Execution)",
+        "save": "Save",
+        "loading": "Loading...",
+        "error": "Error",
+        "delete": "Delete",
+        "cancel": "Cancel",
+        "confirm": "Confirm",
+        "active": "Activate",
+        "inactive": "Deactivate",
+        "running": "Running",
+        "finished": "Finished",
+        "stopped": "Stopped",
+        "view": "View",
+        "theme": "Theme",
+        "language": "Language",
+        "console": "Console",
+        "file_explorer": "File Explorer",
+        "review_modules": "Review Modules",
+        "execution_order": "Execution Order"
+    },
+    "editor": {
+        "tabs": {
+            "code": "Code",
+            "modules": "Modules"
+        },
+        "feature_editor": "Feature Editor",
+        "dirty_marker": "* (Unsaved)",
+        "loading_file": "Loading {{path}}...",
+        "error_loading": "Error loading {{path}}.",
+        "placeholder": "Select a file from the explorer to edit",
+        "validate": "Validate",
+        "step_catalog": "Step Catalog",
+        "hide_steps": "Hide Steps",
+        "validation_texts": "Validation Texts",
+        "undefined_step": "Undefined Step",
+        "validation_failed": "Validation failed. Detected {{count}} undefined steps or errors.",
+        "validation_success": "Validation successful: All steps are correctly defined.",
+        "copy_snippet": "Copy snippet",
+        "insert_in_editor": "Insert in editor",
+        "clean_filters": "Clean filters",
+        "no_steps_found": "No defined steps found",
+        "validation_texts_hint": "These texts will be pre-loaded when adding the \"verificar_texto_archivo\" task",
+        "steps_snippet_hint": "Copy these snippets into your steps file to define the behavior of the new steps:"
+    },
+    "orchestrator": {
+        "title": "Execution Plan",
+        "run_tests": "Run Tests",
+        "stop_tests": "Stop Tests",
+        "schedule": "Schedule",
+        "no_modules": "No modules in the execution plan. Start by adding a module or dragging a feature to this area.",
+        "sections": {
+            "setup": "Setup",
+            "teardown": "Teardown",
+            "execution": "Execution Sequence"
+        },
+        "hooks": {
+            "add_hook": "Add Hook"
+        },
+        "tasks": {
+            "associated_tasks": "Associated Tasks:",
+            "add_task": "Add Task",
+            "edit_task": "Edit Task"
+        },
+        "connecting_logs": "Connecting to log stream...",
+        "watchdog_terminated": "Execution terminated by Watchdog",
+        "starting_execution": "Starting execution..."
+    },
+    "modules": {
+        "title": "Module Management",
+        "create_module": "Create Module",
+        "refresh": "Sync Scenarios and Tags",
+        "refreshing": "Refreshing modules...",
+        "add_module": "Add Module"
+    },
+    "statusBar": {
+        "ready": "Ready",
+        "executing": "Executing...",
+        "loading": "Updating..."
+    },
+    "pages": {
+        "runningApps": {
+            "title": "Running Tools",
+            "subtitle": "Active windows detected by PyAutoGUI/PyGetWindow (Windows Only).",
+            "refresh": "Refresh List",
+            "columns": {
+                "title": "Window Title",
+                "handle": "Handle",
+                "state": "State",
+                "geometry": "Geometry (x, y, w, h)"
+            },
+            "states": {
+                "active": "Active",
+                "minimized": "Minimized",
+                "maximized": "Maximized"
+            },
+            "loading": "Loading running applications...",
+            "noApps": "No running applications detected."
+        },
+        "reports": {
+            "title": "Test Execution Reports",
+            "subtitle": "View detailed Allure reports for the latest test executions.",
+            "refresh": "Refresh",
+            "openNewTab": "Open in New Tab",
+            "loading": "Checking report status...",
+            "noReport": "No report available yet. Run tests to generate a report."
+        },
+        "maintenance": {
+            "title": "System Maintenance",
+            "refresh": "Refresh",
+            "diskUsage": "Disk Usage",
+            "results": "Test Results",
+            "reports": "Allure Reports",
+            "screenshots": "Screenshots",
+            "videos": "Videos",
+            "cleanAll": "Clean All Data",
+            "cleanDirectory": "Clean Directory",
+            "confirmTitle": "Confirm Deletion",
+            "confirmMessage": "Are you sure you want to delete this data? This action cannot be undone.",
+            "confirmAll": "Are you sure you want to delete ALL test data? This action cannot be undone.",
+            "loading": "Loading disk usage..."
+        },
+        "tasks": {
+            "title": "Tasks and Tools",
+            "tabExecute": "Execute Tasks",
+            "tabDocs": "Hooks Documentation",
+            "availableTasks": "Available Tasks",
+            "description": "Description",
+            "parameters": "Parameters",
+            "literalSearch": "Literal Search Tool",
+            "searchPlaceholder": "Enter text to search...",
+            "searchButton": "Search",
+            "searchResults": "Search Results",
+            "noResults": "No occurrences found.",
+            "loading": "Loading tasks..."
+        },
+        "ocrResources": {
+            "title": "OCR Image Resources",
+            "subtitle": "Fallback images used when OCR text recognition fails.",
+            "totalImages": "Total Images",
+            "editFeature": "Edit Feature",
+            "loading": "Loading OCR images...",
+            "noImages": "No OCR images found."
+        }
+    }
+}

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Box, List, ListItem, ListItemButton, ListItemIcon, ListItemText, IconButton, Tooltip, Divider } from '@mui/material';
+import { Box, List, ListItem, ListItemButton, ListItemIcon, ListItemText, IconButton, Tooltip, Divider, Typography } from '@mui/material';
 import {
     Home as HomeIcon,
     Build as BuildIcon,
@@ -10,7 +10,8 @@ import {
     Assignment as AssignmentIcon,
     Image as ImageIcon,
     Window as WindowIcon,
-    BarChart as BarChartIcon
+    BarChart as BarChartIcon,
+    Person as PersonIcon
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useLayout } from '../context/LayoutContext';
@@ -114,6 +115,36 @@ const Sidebar: React.FC = () => {
                         <BarChartIcon />
                     </IconButton>
                 </Tooltip>
+
+                {/* Developer Branding - Collapsed */}
+                <Box sx={{ mt: 'auto', mb: 2, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <Tooltip title="Developed by dwsr" placement="right">
+                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
+                            <img
+                                src="/chavin-head.png"
+                                alt="Chavín Head"
+                                style={{
+                                    width: '32px',
+                                    height: '32px',
+                                    opacity: 0.5,
+                                    filter: 'grayscale(100%)'
+                                }}
+                            />
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    color: 'text.disabled',
+                                    fontSize: '0.65rem',
+                                    fontWeight: 300,
+                                    textAlign: 'center',
+                                    display: 'block'
+                                }}
+                            >
+                                dwsr
+                            </Typography>
+                        </Box>
+                    </Tooltip>
+                </Box>
             </Box>
         );
     }
@@ -231,6 +262,32 @@ const Sidebar: React.FC = () => {
                     </ListItemButton>
                 </ListItem>
             </List>
+
+            {/* Developer Branding - Expanded */}
+            <Box sx={{ mt: 'auto', p: 2, borderTop: 1, borderColor: 'divider' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
+                    <img
+                        src="/chavin-head.png"
+                        alt="Chavín Head"
+                        style={{
+                            width: '28px',
+                            height: '28px',
+                            opacity: 0.5,
+                            filter: 'grayscale(100%)'
+                        }}
+                    />
+                    <Typography
+                        variant="caption"
+                        sx={{
+                            color: 'text.disabled',
+                            fontSize: '0.7rem',
+                            fontWeight: 300
+                        }}
+                    >
+                        Developed by <strong>dwsr</strong>
+                    </Typography>
+                </Box>
+            </Box>
         </Box>
     );
 };

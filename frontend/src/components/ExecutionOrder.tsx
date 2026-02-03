@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -135,6 +136,7 @@ const HookItem: React.FC<HookItemProps> = ({ hook, onDelete, onNavigate }) => {
 };
 
 const CollapsibleSection: React.FC<{ title: string, count: number, children: React.ReactNode, onAddModule?: (event?: React.MouseEvent) => void, isOpen: boolean, onToggle: () => void }> = ({ title, count, children, onAddModule, isOpen, onToggle }) => {
+  const { t } = useTranslation();
   return (
     <Box sx={{ mb: 1 }}>
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
@@ -147,7 +149,7 @@ const CollapsibleSection: React.FC<{ title: string, count: number, children: Rea
         </Button>
         {isOpen && onAddModule && (
           <Button onClick={onAddModule} size="small" variant="outlined" sx={{ ml: 1 }}>
-            Añadir Hook
+            {t('orchestrator.hooks.add_hook')}
           </Button>
         )}
       </Box>
@@ -197,6 +199,7 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
   onEditTask,
   moduleName,
 }) => {
+  const { t } = useTranslation();
   const { scenarioStatuses, taskStatuses, scenarioGifs } = useLayout();
   const {
     attributes,
@@ -678,6 +681,7 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
   onCancelSchedule,
   validationTexts = [],
 }) => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { scenarioStatuses, scenarioGifs, toggleConsole, isConsoleOpen } = useLayout();
   // Necesitamos acceder al elemento activo para deshabilitar el SortableContext si no es un módulo.
@@ -1305,17 +1309,17 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
     <Box ref={setGlobalDroppableRef} sx={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', p: 1 }}>
       <Box display="flex" alignItems="center" mb={1}>
         <Typography variant="subtitle1" flex={1} sx={{ fontSize: `${fontSize}px` }}>
-          Execution Order
+          {t('orchestrator.title')}
         </Typography>
         <Button variant="outlined" size="small" sx={{ mr: 1 }} onClick={(e) => handleOpenDialog(e)}>
-          Agregar Módulo
+          {t('modules.add_module')}
         </Button>
-        <Tooltip title="Sincronizar Scenarios y Tags desde archivos .feature">
+        <Tooltip title={t('modules.refresh')}>
           <Button variant="outlined" size="small" sx={{ mr: 1 }} onClick={handleRefreshFeatures}>
             <SyncIcon />
           </Button>
         </Tooltip>
-        <Tooltip title={isExecuting ? "Detener Ejecución" : "Ejecutar Plan de Pruebas"}>
+        <Tooltip title={isExecuting ? t('orchestrator.stop_tests') : t('orchestrator.run_tests')}>
           <span>
             <Button
               variant="contained"
@@ -1328,7 +1332,7 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
             </Button>
           </span>
         </Tooltip>
-        <Tooltip title={scheduledExecutionTime ? "Ya existe una ejecución programada" : "Programar Ejecución"}>
+        <Tooltip title={scheduledExecutionTime ? t('orchestrator.schedule') : t('orchestrator.schedule')}>
           <span>
             <Button
               variant="outlined"
@@ -1413,7 +1417,7 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
                 {module.active && (
                   <>
                     <CollapsibleSection
-                      title="Setup"
+                      title={t('orchestrator.sections.setup')}
                       count={(module.setup || []).length}
                       isOpen={!collapsedSections.has(`${module.module_name}::setup`)}
                       onToggle={() => handleToggleSectionCollapse(module.module_name, 'setup')}
@@ -1431,7 +1435,7 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
                     </CollapsibleSection>
                   </>
                 )}
-                <CollapsibleSection title="Features" count={module.features.length} isOpen={!collapsedSections.has(`${module.module_name}::features`)} onToggle={() => handleToggleSectionCollapse(module.module_name, 'features')}>
+                <CollapsibleSection title={t('orchestrator.sections.execution')} count={module.features.length} isOpen={!collapsedSections.has(`${module.module_name}::features`)} onToggle={() => handleToggleSectionCollapse(module.module_name, 'features')}>
                   {!collapsedSections.has(`${module.module_name}::features`) && (
                     <SortableContext
                       id={module.module_name}
@@ -1467,7 +1471,7 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
                 {module.active && (
                   <>
                     <CollapsibleSection
-                      title="Teardown"
+                      title={t('orchestrator.sections.teardown')}
                       count={(module.teardown || []).length}
                       isOpen={!collapsedSections.has(`${module.module_name}::teardown`)}
                       onToggle={() => handleToggleSectionCollapse(module.module_name, 'teardown')}
@@ -1628,19 +1632,19 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
             </List>
           ) : (
             <Typography sx={{ p: 2, textAlign: 'center', color: 'text.secondary' }}>
-              No hay módulos disponibles para agregar como hook.
+              {t('orchestrator.no_modules')}
             </Typography>
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseHookDialog}>Cancelar</Button>
-          <Button onClick={handleConfirmAddHook} disabled={!selectedHookModule}>Agregar</Button>
+          <Button onClick={handleCloseHookDialog}>{t('common.cancel')}</Button>
+          <Button onClick={handleConfirmAddHook} disabled={!selectedHookModule}>{t('common.confirm')}</Button>
         </DialogActions>
       </Dialog>
 
       {/* Diálogo para añadir tarea */}
       <Dialog open={taskDialogOpen} onClose={handleCloseTaskDialog} fullWidth maxWidth="sm">
-        <DialogTitle>{editingTaskIndex !== null ? `Editar Tarea: ${newTaskConfig.name}` : `Asociar Tarea a: ${selectedFeatureForTask?.item.feature_file}`}</DialogTitle>
+        <DialogTitle>{editingTaskIndex !== null ? `${t('orchestrator.tasks.edit_task')}: ${newTaskConfig.name}` : `${t('orchestrator.tasks.add_task')} ${selectedFeatureForTask?.item.feature_file}`}</DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
             <FormControl fullWidth>
@@ -1731,9 +1735,14 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = ({
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseTaskDialog}>Cancelar</Button>
-          <Button onClick={handleConfirmAddTask} variant="contained" color="primary" disabled={!newTaskConfig.name || (newTaskConfig.scope === 'scenario' && !newTaskConfig.scenario_name)}>
-            {editingTaskIndex !== null ? 'Actualizar Tarea' : 'Asociar Tarea'}
+          <Button onClick={handleCloseTaskDialog}>{t('common.cancel')}</Button>
+          <Button
+            onClick={handleConfirmAddTask}
+            variant="contained"
+            color="primary"
+            disabled={!newTaskConfig.name || (newTaskConfig.scope === 'scenario' && !newTaskConfig.scenario_name)}
+          >
+            {editingTaskIndex !== null ? t('common.save') : t('common.confirm')}
           </Button>
         </DialogActions>
       </Dialog>

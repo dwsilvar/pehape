@@ -1,0 +1,150 @@
+{
+    "common": {
+        "explorer": "Explorador",
+        "editor": "Editor de Feature",
+        "modules": "Revisar Módulos",
+        "orchestrator": "Orquestrador (Ejecución)",
+        "save": "Guardar",
+        "loading": "Cargando...",
+        "error": "Error",
+        "delete": "Eliminar",
+        "cancel": "Cancelar",
+        "confirm": "Confirmar",
+        "active": "Activar",
+        "inactive": "Desactivar",
+        "running": "En ejecución",
+        "finished": "Finalizado",
+        "stopped": "Detenido",
+        "view": "Vista",
+        "theme": "Tema",
+        "language": "Idioma",
+        "console": "Consola",
+        "file_explorer": "Explorador de Archivos",
+        "review_modules": "Revisar Módulos",
+        "execution_order": "Orden de Ejecución"
+    },
+    "editor": {
+        "tabs": {
+            "code": "Código",
+            "modules": "Módulos"
+        },
+        "feature_editor": "Editor de Feature",
+        "dirty_marker": "* (Sin guardar)",
+        "loading_file": "Cargando {{path}}...",
+        "error_loading": "Error al cargar {{path}}.",
+        "placeholder": "Seleccione un archivo del explorador para editar",
+        "validate": "Validar",
+        "step_catalog": "Catálogo de Pasos",
+        "hide_steps": "Ocultar Pasos",
+        "validation_texts": "Textos a Validar",
+        "undefined_step": "Paso no definido",
+        "validation_failed": "La validación ha fallado. Se detectaron {{count}} pasos no definidos o errores.",
+        "validation_success": "Validación exitosa: Todos los pasos están correctamente definidos.",
+        "copy_snippet": "Copiar snippet",
+        "insert_in_editor": "Insertar en editor",
+        "clean_filters": "Limpiar filtros",
+        "no_steps_found": "No se encontraron pasos definidos",
+        "validation_texts_hint": "Estos textos se pre-cargarán al agregar la tarea \"verificar_texto_archivo\"",
+        "steps_snippet_hint": "Copia estos snippets en tu archivo de steps para definir el comportamiento de los nuevos pasos:"
+    },
+    "orchestrator": {
+        "title": "Plan de Ejecución",
+        "run_tests": "Ejecutar Pruebas",
+        "stop_tests": "Detener Pruebas",
+        "schedule": "Programar",
+        "no_modules": "No hay módulos en el plan de ejecución. Comience agregando un módulo o arrastrando un feature a esta área.",
+        "sections": {
+            "setup": "Configuración (Setup)",
+            "teardown": "Limpieza (Teardown)",
+            "execution": "Secuencia de Ejecución"
+        },
+        "hooks": {
+            "add_hook": "Añadir Hook"
+        },
+        "tasks": {
+            "associated_tasks": "Tareas Asociadas:",
+            "add_task": "Añadir Tarea",
+            "edit_task": "Editar Tarea"
+        },
+        "connecting_logs": "Conectando al flujo de logs...",
+        "watchdog_terminated": "Ejecución terminada por el Watchdog",
+        "starting_execution": "Iniciando ejecución..."
+    },
+    "modules": {
+        "title": "Gestión de Módulos",
+        "create_module": "Crear Módulo",
+        "refresh": "Sincronizar Scenarios y Tags",
+        "refreshing": "Refrescando módulos...",
+        "add_module": "Añadir Módulo"
+    },
+    "statusBar": {
+        "ready": "Listo",
+        "executing": "Ejecutando...",
+        "loading": "Actualizando..."
+    },
+    "pages": {
+        "runningApps": {
+            "title": "Herramientas en Ejecución",
+            "subtitle": "Ventanas activas detectadas por PyAutoGUI/PyGetWindow (Solo Windows).",
+            "refresh": "Actualizar Lista",
+            "columns": {
+                "title": "Título de Ventana",
+                "handle": "Identificador",
+                "state": "Estado",
+                "geometry": "Geometría (x, y, w, h)"
+            },
+            "states": {
+                "active": "Activa",
+                "minimized": "Minimizada",
+                "maximized": "Maximizada"
+            },
+            "loading": "Cargando aplicaciones en ejecución...",
+            "noApps": "No se detectaron aplicaciones en ejecución."
+        },
+        "reports": {
+            "title": "Reportes de Ejecución de Pruebas",
+            "subtitle": "Ver reportes detallados de Allure de las últimas ejecuciones de pruebas.",
+            "refresh": "Actualizar",
+            "openNewTab": "Abrir en Nueva Pestaña",
+            "loading": "Verificando estado del reporte...",
+            "noReport": "No hay reporte disponible aún. Ejecute pruebas para generar un reporte."
+        },
+        "maintenance": {
+            "title": "Mantenimiento del Sistema",
+            "refresh": "Actualizar",
+            "diskUsage": "Uso de Disco",
+            "results": "Resultados de Pruebas",
+            "reports": "Reportes Allure",
+            "screenshots": "Capturas de Pantalla",
+            "videos": "Videos",
+            "cleanAll": "Limpiar Todos los Datos",
+            "cleanDirectory": "Limpiar Directorio",
+            "confirmTitle": "Confirmar Eliminación",
+            "confirmMessage": "¿Está seguro de que desea eliminar estos datos? Esta acción no se puede deshacer.",
+            "confirmAll": "¿Está seguro de que desea eliminar TODOS los datos de prueba? Esta acción no se puede deshacer.",
+            "loading": "Cargando uso de disco..."
+        },
+        "tasks": {
+            "title": "Tareas y Herramientas",
+            "tabExecute": "Ejecutar Tareas",
+            "tabDocs": "Documentación de Hooks",
+            "availableTasks": "Tareas Disponibles",
+            "description": "Descripción",
+            "parameters": "Parámetros",
+            "literalSearch": "Herramienta de Búsqueda Literal",
+            "searchPlaceholder": "Ingrese texto a buscar...",
+            "searchButton": "Buscar",
+            "searchResults": "Resultados de Búsqueda",
+            "noResults": "No se encontraron ocurrencias.",
+            "loading": "Cargando tareas..."
+        },
+        "ocrResources": {
+            "title": "Recursos de Imágenes OCR",
+            "subtitle": "Imágenes de respaldo utilizadas cuando falla el reconocimiento de texto OCR.",
+            "totalImages": "Total de Imágenes",
+            "editFeature": "Editar Feature",
+            "loading": "Cargando imágenes OCR...",
+            "noImages": "No se encontraron imágenes OCR."
+        }
+    }
+}

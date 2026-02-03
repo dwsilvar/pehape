@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Box,
   CircularProgress,
@@ -72,6 +73,7 @@ const HookItem: React.FC<{ hook: Module | string, onNavigate: (moduleName: strin
 };
 
 const CollapsibleSection: React.FC<{ title: string, count: number, children: React.ReactNode, onAddModule?: (event?: React.MouseEvent) => void, isOpen: boolean, onToggle: () => void }> = ({ title, count, children, onAddModule, isOpen, onToggle }) => {
+  const { t } = useTranslation();
   return (
     <Box sx={{ mb: 1 }}>
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
@@ -84,7 +86,7 @@ const CollapsibleSection: React.FC<{ title: string, count: number, children: Rea
         </Button>
         {isOpen && onAddModule && (
           <Button onClick={onAddModule} size="small" variant="outlined" sx={{ ml: 1 }}>
-            Añadir Módulo
+            {t('modules.add_module')}
           </Button>
         )}
       </Box>
@@ -128,6 +130,7 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
   isFirst,
   isLast,
 }) => {
+  const { t } = useTranslation();
   const {
     attributes,
     listeners,
@@ -279,7 +282,7 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
         <IconButton key={`${item.id}-down`} edge="end" onClick={() => onMoveFeature(moduleName, item, 'down')} size="small" disabled={isLast}>
           <ArrowDownwardIcon />
         </IconButton>
-        <Tooltip title="Eliminar feature">
+        <Tooltip title={t('common.delete')}>
           <IconButton edge="end" onClick={handleDelete} size="small" sx={{ ml: 1 }}>
             <DeleteIcon fontSize="small" />
           </IconButton>
@@ -295,9 +298,9 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
             : undefined
         }
       >
-        <MenuItem onClick={handleOpenInEditor}>Abrir en editor</MenuItem>
-        <MenuItem onClick={handleToggle}>{item.active ? 'Desactivar' : 'Activar'}</MenuItem>
-        <MenuItem onClick={handleDelete}>Eliminar</MenuItem>
+        <MenuItem onClick={handleOpenInEditor}>{t('editor.feature_editor')}</MenuItem>
+        <MenuItem onClick={handleToggle}>{item.active ? t('common.inactive') : t('common.active')}</MenuItem>
+        <MenuItem onClick={handleDelete}>{t('common.delete')}</MenuItem>
       </Menu>
     </>
     // ... (rest of render logic for ExecutionItem)
@@ -314,6 +317,7 @@ const SortableModule = React.forwardRef<HTMLDivElement, {
   onToggleHook: (moduleName: string, isHook: boolean) => void;
   children: React.ReactNode;
 }>((props, ref) => {
+  const { t } = useTranslation();
   const { module, isCollapsed, onToggleCollapse, onColorChange, onDeleteModule, onToggleHook, children } = props;
   const {
     attributes,
@@ -425,12 +429,12 @@ const SortableModule = React.forwardRef<HTMLDivElement, {
             </Typography>
           </Box>
           <Box display="flex" alignItems="center">
-            <Tooltip title={isCollapsed ? "Mostrar contenido" : "Ocultar contenido"}>
+            <Tooltip title={isCollapsed ? t('common.view') : t('common.view')}>
               <IconButton onClick={() => onToggleCollapse(module.module_name)} size="small">
                 {isCollapsed ? <ExpandMoreIcon /> : <ExpandLessIcon />}
               </IconButton>
             </Tooltip>
-            <Tooltip title="Cambiar color del módulo">
+            <Tooltip title={t('common.theme')}>
               <IconButton size="small" component="label" sx={{ mr: 1 }}>
                 <Box
                   sx={{
@@ -457,7 +461,7 @@ const SortableModule = React.forwardRef<HTMLDivElement, {
                 <WebhookIcon fontSize="small" />
               </IconButton>
             </Tooltip>
-            <Tooltip title="Eliminar módulo">
+            <Tooltip title={t('common.delete')}>
               <IconButton onClick={() => onDeleteModule(module.module_name)} size="small">
                 <DeleteIcon fontSize="small" />
               </IconButton>
@@ -471,11 +475,11 @@ const SortableModule = React.forwardRef<HTMLDivElement, {
 });
 const MemoizedSortableModule = React.memo(SortableModule);
 
-interface ExecutionOrderProps {
+interface ModulesProps {
   fontSize: number;
   onFeatureSelect: (path: string) => void;
-  modules: Module[]; // Usar el tipo Module
-  setModules: React.Dispatch<React.SetStateAction<Module[]>>; // Usar el tipo Module
+  modules: Module[];
+  setModules: React.Dispatch<React.SetStateAction<Module[]>>;
   scenarioStatuses: ScenarioStatusMap;
   setScenarioStatuses: React.Dispatch<React.SetStateAction<ScenarioStatusMap>>;
   isExecuting: boolean;
@@ -487,10 +491,10 @@ interface ExecutionOrderProps {
   focusedModule: string | null;
   onStopTests: () => void;
   navigateToModule: (moduleName: string) => void;
-  onFocusConsumed: () => void; // Nueva prop para notificar que el foco ha sido consumido.
+  onFocusConsumed: () => void;
 }
 
-const Modules: React.FC<ExecutionOrderProps> = ({
+const Modules: React.FC<ModulesProps> = ({
   fontSize,
   onFeatureSelect,
   modules,
@@ -508,6 +512,7 @@ const Modules: React.FC<ExecutionOrderProps> = ({
   navigateToModule,
   onFocusConsumed,
 }) => {
+  const { t } = useTranslation();
   // Necesitamos acceder al elemento activo para deshabilitar el SortableContext si no es un módulo.
   // Esto es un patrón avanzado para permitir que droppables externos funcionen dentro de un SortableContext.
   const { active } = useDndContext();
@@ -895,14 +900,14 @@ const Modules: React.FC<ExecutionOrderProps> = ({
     <Box ref={setGlobalDroppableRef} sx={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', p: 1 }}>
       <Box display="flex" alignItems="center" mb={1}>
         <Typography variant="subtitle1" flex={1} sx={{ fontSize: `${fontSize}px` }}>
-          Execution Order
+          {t('modules.title')}
         </Typography>
-        <Button variant="outlined" size="small" sx={{ mr: 1 }} onClick={(e) => handleOpenDialog(e)} id="create-module-button">
-          Crear Módulo
+        <Button variant="outlined" size="small" sx={{ mr: 1 }} onClick={handleOpenDialog} id="create-module-button">
+          {t('modules.create_module')}
         </Button>
-        <Tooltip title="Sincronizar Scenarios y Tags desde archivos .feature">
-          <Button variant="outlined" size="small" sx={{ mr: 1 }} onClick={handleRefreshFeatures}>
-            <SyncIcon />
+        <Tooltip title={t('modules.refresh')}>
+          <Button variant="outlined" size="small" sx={{ mr: 1 }} onClick={handleRefreshFeatures} disabled={isRefreshing}>
+            {isRefreshing ? <CircularProgress size={20} /> : <SyncIcon />}
           </Button>
         </Tooltip>
       </Box>
@@ -978,7 +983,7 @@ const Modules: React.FC<ExecutionOrderProps> = ({
       </Box>
 
       <Dialog open={dialogOpen} onClose={handleCloseDialog}>
-        <DialogTitle>Agregar Nuevo Módulo</DialogTitle>
+        <DialogTitle>{t('modules.create_module')}</DialogTitle>
         <DialogContent>
           <TextField
             autoFocus
@@ -1005,8 +1010,10 @@ const Modules: React.FC<ExecutionOrderProps> = ({
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDialog}>Cancelar</Button>
-          <Button onClick={handleConfirmAddModule}>Confirmar</Button>
+          <Button onClick={handleCloseDialog}>{t('common.cancel')}</Button>
+          <Button onClick={handleConfirmAddModule} variant="contained" color="primary">
+            {t('common.confirm')}
+          </Button>
         </DialogActions>
       </Dialog>
     </Box >

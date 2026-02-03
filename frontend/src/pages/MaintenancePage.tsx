@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Typography, Card, CardContent, Button, CircularProgress, Alert, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from '@mui/material';
 
-import { Delete as DeleteIcon, Refresh as RefreshIcon } from '@mui/icons-material';
+import { Delete as DeleteIcon, Refresh as RefreshIcon, Build as BuildIcon } from '@mui/icons-material';
+import AppToolbar from '../components/AppToolbar';
+import { useTranslation } from 'react-i18next';
 
 interface ReportUsage {
     results_size: number;
@@ -11,6 +13,7 @@ interface ReportUsage {
 }
 
 const MaintenancePage: React.FC = () => {
+    const { t } = useTranslation();
     const [usage, setUsage] = useState<ReportUsage | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -60,137 +63,137 @@ const MaintenancePage: React.FC = () => {
     };
 
     return (
-        <Box sx={{ p: 4 }}>
-            <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
-                <Typography variant="h4" component="h1">
-                    System Maintenance
-                </Typography>
-                <Button startIcon={<RefreshIcon />} onClick={fetchUsage} variant="outlined">
-                    Refresh
-                </Button>
-            </Box>
-
-            {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-
-            {loading && !usage ? (
-                <CircularProgress />
-            ) : (
-                <Box sx={{
-                    display: 'grid',
-                    gridTemplateColumns: {
-                        xs: '1fr',
-                        md: '1fr 1fr',
-                        lg: 'repeat(4, 1fr)'
-                    },
-                    gap: 3
-                }}>
-                    <Card>
-                        <CardContent>
-                            <Typography color="textSecondary" gutterBottom>
-                                Allure Raw Results
-                            </Typography>
-                            <Typography variant="h5" component="div">
-                                {usage ? formatBytes(usage.results_size) : '-'}
-                            </Typography>
-                            <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                                Create in reports/allure_results
-                            </Typography>
-                            <Button
-                                variant="contained"
-                                color="error"
-                                startIcon={<DeleteIcon />}
-                                onClick={() => setConfirmDialog({ open: true, target: 'results', title: 'Delete Raw Results?' })}
-                            >
-                                Clean Results
-                            </Button>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardContent>
-                            <Typography color="textSecondary" gutterBottom>
-                                Generated Report
-                            </Typography>
-                            <Typography variant="h5" component="div">
-                                {usage ? formatBytes(usage.report_size) : '-'}
-                            </Typography>
-                            <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                                Static site in reports/allure-report
-                            </Typography>
-                            <Button
-                                variant="contained"
-                                color="warning"
-                                startIcon={<DeleteIcon />}
-                                onClick={() => setConfirmDialog({ open: true, target: 'report', title: 'Delete Generated Report?' })}
-                            >
-                                Clean Report
-                            </Button>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardContent>
-                            <Typography color="textSecondary" gutterBottom>
-                                Screenshots
-                            </Typography>
-                            <Typography variant="h5" component="div">
-                                {usage ? formatBytes(usage.screenshots_size) : '-'}
-                            </Typography>
-                            <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                                Images in reports/screenshots
-                            </Typography>
-                            <Button
-                                variant="contained"
-                                color="warning"
-                                startIcon={<DeleteIcon />}
-                                onClick={() => setConfirmDialog({ open: true, target: 'screenshots', title: 'Delete Screenshots?' })}
-                            >
-                                Clean Screens
-                            </Button>
-                        </CardContent>
-                    </Card>
-
-                    <Card sx={{ bgcolor: 'action.hover' }}>
-                        <CardContent>
-                            <Typography color="textSecondary" gutterBottom>
-                                Total Usage
-                            </Typography>
-                            <Typography variant="h4" component="div" color="primary">
-                                {usage ? formatBytes(usage.total_size) : '-'}
-                            </Typography>
-                            <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                                Total disk space used by Allure
-                            </Typography>
-                            <Button
-                                variant="outlined"
-                                color="error"
-                                onClick={() => setConfirmDialog({ open: true, target: 'all', title: 'Delete EVERYTHING?' })}
-                            >
-                                Clean All
-                            </Button>
-                        </CardContent>
-                    </Card>
-                </Box>
-            )}
-
-            {/* Confirmation Dialog */}
-            <Dialog
-                open={confirmDialog?.open || false}
-                onClose={() => setConfirmDialog(null)}
-            >
-                <DialogTitle>{confirmDialog?.title}</DialogTitle>
-                <DialogContent>
-                    <DialogContentText>
-                        This action cannot be undone. Are you sure you want to delete these files?
-                    </DialogContentText>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setConfirmDialog(null)}>Cancel</Button>
-                    <Button onClick={() => confirmDialog && handleClean(confirmDialog.target)} color="error" autoFocus>
-                        Confirm Delete
+        <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            <AppToolbar title={t('pages.maintenance.title')} icon={<BuildIcon sx={{ fontSize: 32 }} />} />
+            <Box sx={{ p: 4, flex: 1, overflow: 'auto' }}>
+                <Box display="flex" justifyContent="flex-end" alignItems="center" mb={4}>
+                    <Button startIcon={<RefreshIcon />} onClick={fetchUsage} variant="outlined">
+                        {t('pages.maintenance.refresh')}
                     </Button>
-                </DialogActions>
-            </Dialog>
+                </Box>
+
+                {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+
+                {loading && !usage ? (
+                    <CircularProgress />
+                ) : (
+                    <Box sx={{
+                        display: 'grid',
+                        gridTemplateColumns: {
+                            xs: '1fr',
+                            md: '1fr 1fr',
+                            lg: 'repeat(4, 1fr)'
+                        },
+                        gap: 3
+                    }}>
+                        <Card>
+                            <CardContent>
+                                <Typography color="textSecondary" gutterBottom>
+                                    {t('pages.maintenance.results')}
+                                </Typography>
+                                <Typography variant="h5" component="div">
+                                    {usage ? formatBytes(usage.results_size) : '-'}
+                                </Typography>
+                                <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                                    Create in reports/allure_results
+                                </Typography>
+                                <Button
+                                    variant="contained"
+                                    color="error"
+                                    startIcon={<DeleteIcon />}
+                                    onClick={() => setConfirmDialog({ open: true, target: 'results', title: t('pages.maintenance.confirmTitle') })}
+                                >
+                                    {t('pages.maintenance.cleanDirectory')}
+                                </Button>
+                            </CardContent>
+                        </Card>
+
+                        <Card>
+                            <CardContent>
+                                <Typography color="textSecondary" gutterBottom>
+                                    {t('pages.maintenance.reports')}
+                                </Typography>
+                                <Typography variant="h5" component="div">
+                                    {usage ? formatBytes(usage.report_size) : '-'}
+                                </Typography>
+                                <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                                    Static site in reports/allure-report
+                                </Typography>
+                                <Button
+                                    variant="contained"
+                                    color="warning"
+                                    startIcon={<DeleteIcon />}
+                                    onClick={() => setConfirmDialog({ open: true, target: 'report', title: t('pages.maintenance.confirmTitle') })}
+                                >
+                                    {t('pages.maintenance.cleanDirectory')}
+                                </Button>
+                            </CardContent>
+                        </Card>
+
+                        <Card>
+                            <CardContent>
+                                <Typography color="textSecondary" gutterBottom>
+                                    {t('pages.maintenance.screenshots')}
+                                </Typography>
+                                <Typography variant="h5" component="div">
+                                    {usage ? formatBytes(usage.screenshots_size) : '-'}
+                                </Typography>
+                                <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                                    Images in reports/screenshots
+                                </Typography>
+                                <Button
+                                    variant="contained"
+                                    color="warning"
+                                    startIcon={<DeleteIcon />}
+                                    onClick={() => setConfirmDialog({ open: true, target: 'screenshots', title: t('pages.maintenance.confirmTitle') })}
+                                >
+                                    {t('pages.maintenance.cleanDirectory')}
+                                </Button>
+                            </CardContent>
+                        </Card>
+
+                        <Card sx={{ bgcolor: 'action.hover' }}>
+                            <CardContent>
+                                <Typography color="textSecondary" gutterBottom>
+                                    Total Usage
+                                </Typography>
+                                <Typography variant="h4" component="div" color="primary">
+                                    {usage ? formatBytes(usage.total_size) : '-'}
+                                </Typography>
+                                <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                                    Total disk space used by Allure
+                                </Typography>
+                                <Button
+                                    variant="outlined"
+                                    color="error"
+                                    onClick={() => setConfirmDialog({ open: true, target: 'all', title: 'Delete EVERYTHING?' })}
+                                >
+                                    Clean All
+                                </Button>
+                            </CardContent>
+                        </Card>
+                    </Box>
+                )}
+
+                {/* Confirmation Dialog */}
+                <Dialog open={confirmDialog?.open || false} onClose={() => setConfirmDialog(null)}>
+                    <DialogTitle>{confirmDialog?.title}</DialogTitle>
+                    <DialogContent>
+                        <DialogContentText>
+                            {confirmDialog?.target === 'all'
+                                ? t('pages.maintenance.confirmAll')
+                                : t('pages.maintenance.confirmMessage')
+                            }
+                        </DialogContentText>
+                    </DialogContent>
+                    <DialogActions>
+                        <Button onClick={() => setConfirmDialog(null)}>{t('common.cancel')}</Button>
+                        <Button onClick={() => handleClean(confirmDialog?.target || '')} color="error" variant="contained">
+                            {t('common.delete')}
+                        </Button>
+                    </DialogActions>
+                </Dialog>
+            </Box>
         </Box>
     );
 };

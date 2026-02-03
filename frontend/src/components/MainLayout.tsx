@@ -1,10 +1,17 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Box, Paper, Tabs, Tab, MenuItem, AppBar, Toolbar, Button, Menu, ThemeProvider, CssBaseline, Badge, IconButton, Tooltip, Divider, Typography, CircularProgress, useTheme } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import CodeIcon from '@mui/icons-material/Code';
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import TerminalIcon from '@mui/icons-material/Terminal';
 import CloseIcon from '@mui/icons-material/Close';
+import Brightness4Icon from '@mui/icons-material/Brightness4';
+import Brightness7Icon from '@mui/icons-material/Brightness7';
+import LanguageIcon from '@mui/icons-material/Language';
+import CheckIcon from '@mui/icons-material/Check';
+import FolderIcon from '@mui/icons-material/Folder';
+import AppToolbar from './AppToolbar';
 import { DndContext, closestCenter, DragOverlay, Active, useSensor, useSensors, PointerSensor, TouchSensor, pointerWithin, rectIntersection } from '@dnd-kit/core';
 import { styled, alpha } from '@mui/material/styles';
 import { arrayMove } from '@dnd-kit/sortable';
@@ -45,6 +52,7 @@ function TabPanel(props: TabPanelProps) {
 }
 
 const MainLayout: React.FC = () => {
+  const { t, i18n } = useTranslation();
   const theme = useTheme();
   const [selectedFile, setSelectedFile] = useState<FileData | null>(null);
   const [editorContent, setEditorContent] = useState<string>('');
@@ -185,6 +193,8 @@ const MainLayout: React.FC = () => {
   type LocalStatusType = 'success' | 'error' | 'info' | null;
   const status: { text: string; type: LocalStatusType } = { text: '', type: 'info' };
   const [viewMenuAnchorEl, setViewMenuAnchorEl] = useState<null | HTMLElement>(null);
+  const [languageMenuAnchorEl, setLanguageMenuAnchorEl] = useState<null | HTMLElement>(null);
+
 
   // Estados levantados desde ExecutionOrder para persistencia entre pestañas
   // y para ser gestionados por el layout principal.
@@ -241,9 +251,13 @@ const MainLayout: React.FC = () => {
     setViewMenuAnchorEl(null);
   };
 
-  const handleThemeChange = (theme: string) => {
-    setThemeName(theme);
-    handleViewMenuClose();
+  const handleLanguageMenuClose = () => {
+    setLanguageMenuAnchorEl(null);
+  };
+
+  const handleLanguageChange = (lng: string) => {
+    i18n.changeLanguage(lng);
+    handleLanguageMenuClose();
   };
 
   // Configurar sensores para distinguir entre click y drag
@@ -270,7 +284,7 @@ const MainLayout: React.FC = () => {
     const name = path.split('/').pop() || path;
 
     setSelectedFile({ name, path, type: 'file' });
-    setEditorContent(`-- Loading ${path}...`);
+    setEditorContent(t('editor.loading_file', { path }));
 
     try {
       const response = await fetch(`/api/features/${encodeURIComponent(path)}`);
@@ -281,7 +295,7 @@ const MainLayout: React.FC = () => {
       setTabValue(0); // Switch to editor tab on file select
     } catch (error) {
       console.error("Error loading file:", error);
-      setEditorContent(`-- Error loading ${path}.`);
+      setEditorContent(t('editor.error_loading', { path }));
       setIsDirty(false);
     }
   }, [setEditorContent, setSelectedFile, setTabValue]);
@@ -360,7 +374,7 @@ const MainLayout: React.FC = () => {
   // --- Lógica de ejecución de pruebas, ahora en el layout principal ---
   // Refactorizar la lógica de conexión a logs en una función reutilizable
   const connectToLogStream = useCallback(() => {
-    setLogs(prev => [...prev, 'Conectando al flujo de logs...']);
+    setLogs(prev => [...prev, t('orchestrator.connecting_logs')]);
     const eventSource = new EventSource('/api/stream-logs');
 
     eventSource.onmessage = (event) => {
@@ -400,7 +414,7 @@ const MainLayout: React.FC = () => {
       }
 
       if (data.type === 'report_ready' && data.reportUrl) {
-        setLogs(prev => [...prev, '--- Reporte disponible. ---']);
+        setLogs(prev => [...prev, `--- ${t('common.finished')} (Report URL available) ---`]);
         // En lugar de window.open, navegamos a la seccion de reportes interna
         // para evitar el uso de Internet Explorer en la PC destino.
         navigate('/reports');
@@ -408,17 +422,17 @@ const MainLayout: React.FC = () => {
       }
 
       if (data.log === '---EXECUTION_FINISHED---') {
-        setLogs(prev => [...prev, '--- Ejecución finalizada. ---']);
+        setLogs(prev => [...prev, `--- ${t('common.finished')} ---`]);
         setIsExecuting(false);
         eventSource.close();
         setRunningFeatureId(null);
       } else if (data.log === '---EXECUTION_STOPPED_BY_USER---') {
-        setLogs(prev => [...prev, '--- Ejecución detenida por el usuario. ---']);
+        setLogs(prev => [...prev, `--- ${t('orchestrator.stop_tests')} ---`]);
         setRunningFeatureId(null);
         setIsExecuting(false);
         eventSource.close();
       } else if (data.log === '---EXECUTION_KILLED_BY_WATCHDOG---') {
-        setLogs(prev => [...prev, '--- Ejecución terminada por el Watchdog ---']);
+        setLogs(prev => [...prev, `--- ${t('orchestrator.watchdog_terminated')} ---`]);
         setRunningFeatureId(null);
         setIsExecuting(false);
         eventSource.close();
@@ -439,7 +453,7 @@ const MainLayout: React.FC = () => {
     if (isExecuting) return;
 
     setIsExecuting(true);
-    setLogs(['Iniciando ejecución...']);
+    setLogs([t('orchestrator.starting_execution')]);
     setScenarioStatuses({});
     setTaskStatuses({});
     setScenarioGifs({});
@@ -570,23 +584,44 @@ const MainLayout: React.FC = () => {
         height: '100vh', pb: '24px' /* Padding-bottom para no solapar con la barra */
       }}>
         {/* Barra de Menú Superior */}
-        <AppBar position="static" elevation={0} color="default" sx={{ borderBottom: 1, borderColor: 'divider' }}>
-          <Toolbar variant="dense">
-            <Button color="inherit" onClick={handleViewMenuClick}>View</Button>
-            {/* Aquí se pueden agregar más menús como "File", "Edit", etc. */}
-          </Toolbar>
-        </AppBar>
+        <AppToolbar
+          title="Pehape - Automation Framework"
+          icon={<CodeIcon sx={{ fontSize: 32 }} />}
+          showViewMenu={true}
+        />
+
+        {/* View Menu (simplified - no theme/language) */}
         <Menu
           anchorEl={viewMenuAnchorEl}
           open={Boolean(viewMenuAnchorEl)}
           onClose={handleViewMenuClose}
         >
-          <MenuItem disabled>Select Theme</MenuItem>
-          {Object.entries(availableThemes).map(([key, name]) => (
-            <MenuItem key={key} onClick={() => handleThemeChange(key)} selected={key === themeName}>
-              {name}
-            </MenuItem>
-          ))}
+          <MenuItem disabled>{t('common.view')}</MenuItem>
+          <MenuItem onClick={handleViewMenuClose}>
+            <Typography variant="caption" color="text.secondary">
+              {t('common.view')} options
+            </Typography>
+          </MenuItem>
+        </Menu>
+
+        {/* Language Selection Menu */}
+        <Menu
+          anchorEl={languageMenuAnchorEl}
+          open={Boolean(languageMenuAnchorEl)}
+          onClose={handleLanguageMenuClose}
+        >
+          <MenuItem onClick={() => handleLanguageChange('en')}>
+            <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+              <Box sx={{ flexGrow: 1 }}>English</Box>
+              {i18n.language === 'en' && <CheckIcon fontSize="small" color="primary" />}
+            </Box>
+          </MenuItem>
+          <MenuItem onClick={() => handleLanguageChange('es')}>
+            <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+              <Box sx={{ flexGrow: 1 }}>Español</Box>
+              {i18n.language === 'es' && <CheckIcon fontSize="small" color="primary" />}
+            </Box>
+          </MenuItem>
         </Menu>
 
         <DndContext
@@ -727,7 +762,7 @@ const MainLayout: React.FC = () => {
                   square
                   sx={{ width: fileExplorerWidth, minWidth: '150px', overflow: 'auto', display: 'flex', flexDirection: 'column', borderRight: 1, borderColor: 'divider', bgcolor: 'background.paper' }}
                 >
-                  <Box sx={{ p: 1, borderBottom: 1, borderColor: 'divider', fontWeight: 'bold' }}>Explorer</Box>
+                  <Box sx={{ p: 1, borderBottom: 1, borderColor: 'divider', fontWeight: 'bold' }}>{t('common.explorer')}</Box>
                   {isReady ? (
                     <FileExplorer onFileSelect={handleFileSelect} fontSize={fontSize} />
                   ) : (
@@ -763,10 +798,10 @@ const MainLayout: React.FC = () => {
                         sx={{ minHeight: '48px', '& .MuiTab-root': { textTransform: 'none' } }}
                       >
                         <Tab
-                          label={isDirty ? `1. ${selectedFile?.name || 'Editor'} *` : (`1. ${selectedFile?.name || 'Feature Editor'}`)}
+                          label={isDirty ? `1. ${selectedFile?.name || t('common.editor')} ${t('editor.dirty_marker')}` : (`1. ${selectedFile?.name || t('common.editor')}`)}
                           id="editor-tab-0"
                         />
-                        <Tab label="2. Review Modules" id="editor-tab-1" />
+                        <Tab label={`2. ${t('common.modules')}`} id="editor-tab-1" />
                       </Tabs>
                     </Box>
 
@@ -918,7 +953,7 @@ const MainLayout: React.FC = () => {
                 }
               }}
             >
-              Console
+              {t('common.console')}
             </Button>
           </Box>
         )}
