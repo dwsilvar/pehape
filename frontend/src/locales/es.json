@@ -8,6 +8,7 @@
         "loading": "Cargando...",
         "error": "Error",
         "delete": "Eliminar",
+        "rename": "Renombrar",
         "cancel": "Cancelar",
         "confirm": "Confirmar",
         "active": "Activar",
@@ -21,7 +22,20 @@
         "console": "Consola",
         "file_explorer": "Explorador de Archivos",
         "review_modules": "Revisar Módulos",
-        "execution_order": "Orden de Ejecución"
+        "execution_order": "Orden de Ejecución",
+        "rename_success": "¡Renombrado exitosamente!",
+        "rename_success_with_images": "¡Renombrado exitosamente!\\n\\n{{count}} imagen(es) OCR migrada(s) a la nueva ubicación.",
+        "rename_success_with_modules": "¡Renombrado exitosamente!\\n\\n{{count}} referencia(s) de feature actualizada(s) en módulo(s): {{modules}}",
+        "rename_success_complete": "¡Renombrado exitosamente!\\n\\n{{imageCount}} imagen(es) OCR migrada(s) a la nueva ubicación.\\n\\n{{moduleCount}} referencia(s) de feature actualizada(s) en módulo(s): {{modules}}",
+        "rename_warning": "Renombrado exitosamente, pero con advertencias:\\n\\n{{warnings}}",
+        "rename_error": "Error al renombrar recurso",
+        "move_success": "¡Movido exitosamente!",
+        "move_success_with_images": "¡Movido exitosamente!\\n\\n{{count}} imagen(es) OCR migrada(s) a la nueva ubicación.",
+        "move_success_with_modules": "¡Movido exitosamente!\\n\\n{{count}} referencia(s) de feature actualizada(s) en módulo(s): {{modules}}",
+        "move_success_complete": "¡Movido exitosamente!\\n\\n{{imageCount}} imagen(es) OCR migrada(s).\\n\\n{{moduleCount}} referencia(s) de feature actualizada(s) en módulo(s): {{modules}}",
+        "move_error": "Error al mover recurso",
+        "move_error_conflict": "Ya existe un recurso con ese nombre en el destino",
+        "move_error_invalid": "No se puede mover una carpeta dentro de sí misma o sus hijos"
     },
     "editor": {
         "tabs": {

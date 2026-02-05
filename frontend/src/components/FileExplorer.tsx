@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Box, Typography, Menu, MenuItem, Dialog, DialogTitle, DialogContent, TextField, DialogActions, Button, DialogContentText, Divider, useTheme, CircularProgress, InputAdornment, IconButton } from '@mui/material';
+import { Box, Typography, Menu, MenuItem, Dialog, DialogTitle, DialogContent, TextField, DialogActions, Button, DialogContentText, Divider, useTheme, CircularProgress, InputAdornment, IconButton, Snackbar, Alert } from '@mui/material';
 import { SimpleTreeView } from '@mui/x-tree-view/SimpleTreeView';
 import { TreeItem, treeItemClasses } from '@mui/x-tree-view/TreeItem';
 import { styled, alpha } from '@mui/material/styles';
@@ -8,13 +8,15 @@ import DescriptionIcon from '@mui/icons-material/Description';
 import ClearIcon from '@mui/icons-material/Clear';
 import SearchIcon from '@mui/icons-material/Search';
 
-import { useDraggable } from '@dnd-kit/core';
+import { useDraggable, useDroppable, useDndMonitor } from '@dnd-kit/core';
 import { useFileTree } from '../hooks/useFileTree';
 import { FileData } from '../types';
+import { useTranslation } from 'react-i18next';
 
 interface FileExplorerProps {
   onFileSelect: (path: string) => void;
   fontSize: number;
+  onRefreshModules?: () => Promise<void>;
 }
 
 // --- styled-components definiendo la estética VS Code ---
@@ -69,9 +71,6 @@ const StyledTreeItem = styled(TreeItem)(({ theme }) => ({
 
 // --------------------------------------------------------
 
-/**
- * Elemento arrastrable que usa nuestro StyledTreeItem
- */
 const DraggableTreeItem: React.FC<{
   node: FileData;
   fontSize: number;
@@ -80,37 +79,52 @@ const DraggableTreeItem: React.FC<{
   const isFile = node.type === 'file';
   const theme = useTheme();
 
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+  // Drag config
+  const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({
     id: `file-explorer-${node.path}`,
     data: {
       type: 'file-explorer-feature',
       path: node.path,
+      resourceType: node.type,
     },
-    disabled: !isFile,
+  });
+
+  // Drop config (folders only)
+  const { setNodeRef: setDropRef, isOver } = useDroppable({
+    id: `file-explorer-drop-${node.path}`,
+    data: {
+      type: 'file-explorer-folder',
+      path: node.path,
+    },
+    disabled: isFile,
   });
 
   const style = {
     opacity: isDragging ? 0.5 : 1,
+    backgroundColor: isOver ? alpha(theme.palette.primary.main, 0.1) : 'transparent',
+    outline: isOver ? `1px dashed ${theme.palette.primary.main}` : 'none',
   };
 
-  // Si es un archivo, aplicamos los listeners al contenedor del label.
-  // Si es carpeta, no adjuntamos nada (no es draggable por ahora).
-  const dragProps = isFile ? { ref: setNodeRef, ...listeners, ...attributes } : {};
+  const setCombinedRef = (element: HTMLElement | null) => {
+    setDragRef(element);
+    if (!isFile) setDropRef(element);
+  };
 
   return (
     <StyledTreeItem
-      style={style}
+      sx={style}
       key={node.path}
       itemId={node.path}
       label={
         <Box
-          {...dragProps}
+          ref={setCombinedRef}
+          {...listeners}
+          {...attributes}
           sx={{
             display: 'flex',
             alignItems: 'center',
             py: 0,
-            cursor: isFile ? 'grab' : 'default',
-            // Asegurar que ocupe todo el espacio para facilitar el arrastre
+            cursor: 'grab',
             width: '100%'
           }}
           onContextMenu={(e) => onContextMenu(e, node)}
@@ -127,7 +141,7 @@ const DraggableTreeItem: React.FC<{
               fontSize: 'inherit',
               fontFamily: 'inherit',
               flexGrow: 1,
-              userSelect: 'none' // Evitar selección de texto al arrastrar
+              userSelect: 'none'
             }}
           >
             {node.name}
@@ -148,7 +162,7 @@ const renderTree = (nodes: FileData[], fontSize: number, onContextMenu: (event: 
 /**
  * Preview para el drag and drop
  */
-export const DraggableTreeItemPreview: React.FC<{ path: string }> = ({ path }) => {
+export const DraggableTreeItemPreview: React.FC<{ path: string, type?: 'file' | 'directory' }> = ({ path, type = 'file' }) => {
   const fileName = path.split('/').pop() || path;
   return (
     <Box sx={{
@@ -162,13 +176,17 @@ export const DraggableTreeItemPreview: React.FC<{ path: string }> = ({ path }) =
       borderRadius: 1,
       boxShadow: 2
     }}>
-      <DescriptionIcon sx={{ mr: 1, color: 'info.main', fontSize: 16 }} />
+      {type === 'file' ? (
+        <DescriptionIcon sx={{ mr: 1, color: 'info.main', fontSize: 16 }} />
+      ) : (
+        <FolderIcon sx={{ mr: 1, color: '#FFCA28', fontSize: 16 }} />
+      )}
       <Typography variant="body2" sx={{ fontSize: '13px', fontFamily: 'Consolas, monospace' }}>{fileName}</Typography>
     </Box>
   );
 };
 
-const FileExplorerComponent: React.FC<FileExplorerProps> = ({ onFileSelect, fontSize }) => {
+const FileExplorerComponent: React.FC<FileExplorerProps> = ({ onFileSelect, fontSize, onRefreshModules }) => {
   const { files, expanded, setExpanded, refreshFileTree, isLoading } = useFileTree();
   const theme = useTheme();
 
@@ -186,104 +204,320 @@ const FileExplorerComponent: React.FC<FileExplorerProps> = ({ onFileSelect, font
 
   const [newItemName, setNewItemName] = useState('');
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; node: FileData | null }>({ open: false, node: null });
+  const [renameDialog, setRenameDialog] = useState<{ open: boolean; node: FileData | null }>({ open: false, node: null });
+  const [renameValue, setRenameValue] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'info' | 'warning' | 'error';
+  }>({ open: false, message: '', severity: 'info' });
+
+  const { t } = useTranslation();
+
+  // --- Move Resource Logic (DndMonitor) ---
+  useDndMonitor({
+    onDragEnd: async (event) => {
+      const { active, over } = event;
+      if (!over) return;
+
+      const isExplorerDrag = active.data.current?.type === 'file-explorer-feature';
+      const isExplorerDropTarget = over.data.current?.type === 'file-explorer-folder';
+
+      if (isExplorerDrag && isExplorerDropTarget) {
+        const sourcePath = active.data.current?.path;
+        const targetDirPath = over.data.current?.path;
+
+        if (sourcePath && targetDirPath !== undefined) {
+          // Prevent moving to the same directory
+          const currentDir = sourcePath.includes('/') ? sourcePath.substring(0, sourcePath.lastIndexOf('/')) : '';
+          if (currentDir === targetDirPath) return;
+
+          try {
+            const response = await fetch(`/api/resource/${encodeURIComponent(sourcePath)}/move`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ destination_dir: targetDirPath }),
+            });
+
+            if (!response.ok) {
+              const errorData = await response.json();
+              throw new Error(errorData.error || t('common.move_error'));
+            }
+
+            const result = await response.json();
+
+            // Determine notification message
+            let notificationKey = '';
+            let interpolationParams: any = {};
+
+            if (result.images_migrated && result.modules_updated) {
+              notificationKey = 'common.move_success_complete';
+              interpolationParams = {
+                imageCount: result.images_migrated.count,
+                moduleCount: result.modules_updated.count,
+                modules: result.modules_updated.modules.join(', ')
+              };
+            } else if (result.images_migrated) {
+              notificationKey = 'common.move_success_with_images';
+              interpolationParams = { count: result.images_migrated.count };
+            } else if (result.modules_updated) {
+              notificationKey = 'common.move_success_with_modules';
+              interpolationParams = {
+                count: result.modules_updated.count,
+                modules: result.modules_updated.modules.join(', ')
+              };
+            } else {
+              notificationKey = 'common.move_success';
+            }
+
+            setSnackbar({
+              open: true,
+              message: String(t(notificationKey, interpolationParams)),
+              severity: 'success'
+            });
+
+            // Refresh tree and modules
+            await refreshFileTree();
+            if (onRefreshModules) await onRefreshModules();
+
+          } catch (error) {
+            console.error('Error moving resource:', error);
+            setSnackbar({
+              open: true,
+              message: error instanceof Error ? error.message : String(t('common.move_error')),
+              severity: 'error'
+            });
+          }
+        }
+      }
+    }
+  });
+
+  // Root droppable config
+  const { setNodeRef: setRootDropRef, isOver: isOverRoot } = useDroppable({
+    id: 'file-explorer-root',
+    data: {
+      type: 'file-explorer-folder',
+      path: '', // Root path
+    }
+  });
 
   // --- Search Logic ---
   const filterFileTree = useCallback((nodes: FileData[], term: string): FileData[] => {
     if (!term) return nodes;
     const lowerTerm = term.toLowerCase();
 
-    return nodes.reduce((acc: FileData[], node) => {
-      const matches = node.name.toLowerCase().includes(lowerTerm);
-      let filteredChildren: FileData[] | undefined;
-
-      if (node.children) {
-        filteredChildren = filterFileTree(node.children, term);
-      }
-
-      if (matches || (filteredChildren && filteredChildren.length > 0)) {
-        acc.push({
-          ...node,
-          children: filteredChildren
-        });
-      }
-      return acc;
-    }, []);
+    return nodes
+      .map(node => {
+        if (node.type === 'file') {
+          return node.name.toLowerCase().includes(lowerTerm) ? node : null;
+        }
+        const filteredChildren = filterFileTree(node.children || [], term);
+        if (filteredChildren.length > 0 || node.name.toLowerCase().includes(lowerTerm)) {
+          return { ...node, children: filteredChildren };
+        }
+        return null;
+      })
+      .filter((node): node is FileData => node !== null);
   }, []);
 
   const filteredFiles = useMemo(() => filterFileTree(files, searchTerm), [files, searchTerm, filterFileTree]);
 
-  // Auto-expand everything when searching
+  // Expand folders that contain matches
   useEffect(() => {
-    if (searchTerm) {
-      const allIds: string[] = [];
-      const collectIds = (nodes: FileData[]) => {
-        nodes.forEach(n => {
-          if (n.type === 'directory') {
-            allIds.push(n.path);
-            if (n.children) collectIds(n.children);
+    if (searchTerm && filteredFiles.length > 0) {
+      const getPatsToExpand = (nodes: FileData[]): string[] => {
+        let paths: string[] = [];
+        nodes.forEach(node => {
+          if (node.type === 'directory' && node.children && node.children.length > 0) {
+            paths.push(node.path);
+            paths = [...paths, ...getPatsToExpand(node.children)];
           }
         });
+        return paths;
       };
-      collectIds(filteredFiles);
-      setExpanded(allIds);
+      setExpanded(getPatsToExpand(filteredFiles));
     }
   }, [searchTerm, filteredFiles, setExpanded]);
 
-  // Manejo de Context Menu (sin cambios mayores)
+  // --- Handlers ---
   const handleContextMenu = (event: React.MouseEvent, node: FileData) => {
     event.preventDefault();
-    setContextMenu({ mouseX: event.clientX - 2, mouseY: event.clientY - 4, node });
+    setContextMenu({
+      mouseX: event.clientX,
+      mouseY: event.clientY,
+      node,
+    });
   };
-  const handleCloseContextMenu = () => setContextMenu(null);
 
-  // Manejo de Diálogos (sin cambios mayores)
+  const handleCloseContextMenu = () => {
+    setContextMenu(null);
+  };
+
   const handleOpenNewItemDialog = (type: 'file' | 'folder') => {
     if (!contextMenu) return;
-    const basePath = contextMenu.node.type === 'directory'
-      ? contextMenu.node.path
-      : contextMenu.node.path.substring(0, contextMenu.node.path.lastIndexOf('/'));
+    const node = contextMenu.node;
+    const basePath = node.type === 'directory' ? node.path : (node.path.includes('/') ? node.path.substring(0, node.path.lastIndexOf('/')) : '');
+
     setDialog({ open: true, type, basePath });
+    setNewItemName('');
     handleCloseContextMenu();
   };
-  const handleCloseDialog = () => { setDialog(null); setNewItemName(''); };
 
-  const handleOpenDeleteDialog = () => {
-    if (!contextMenu) return;
-    setDeleteDialog({ open: true, node: contextMenu.node });
-    handleCloseContextMenu();
+  const handleCloseDialog = () => {
+    setDialog(null);
   };
-  const handleCloseDeleteDialog = () => setDeleteDialog({ open: false, node: null });
 
-  // Funciones de API (Create/Delete)
   const handleConfirmNewItem = async () => {
-    if (!newItemName || !dialog) return;
-    const fullPath = dialog.basePath ? `${dialog.basePath}/${newItemName}` : newItemName;
-    const endpoint = dialog.type === 'folder' ? '/api/directories' : '/api/files';
+    if (!dialog || !newItemName) return;
+
     try {
-      const response = await fetch(endpoint, {
+      const url = dialog.type === 'file' ? '/api/files' : '/api/folders';
+      const path = dialog.basePath ? `${dialog.basePath}/${newItemName}` : newItemName;
+
+      const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: fullPath }),
+        body: JSON.stringify({ path }),
       });
-      if (!response.ok) throw new Error(`Failed to create ${dialog.type}`);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create item');
+      }
+
       await refreshFileTree();
-    } catch (e) { console.error(e); } finally { handleCloseDialog(); }
+      handleCloseDialog();
+    } catch (e) {
+      console.error(e);
+      alert(e instanceof Error ? e.message : 'Error creating item');
+    }
+  };
+
+  const handleOpenDeleteDialog = () => {
+    if (contextMenu) {
+      setDeleteDialog({ open: true, node: contextMenu.node });
+    }
+    handleCloseContextMenu();
+  };
+
+  const handleCloseDeleteDialog = () => {
+    setDeleteDialog({ open: false, node: null });
   };
 
   const handleConfirmDelete = async () => {
     if (!deleteDialog.node) return;
+
     try {
-      const response = await fetch(`/api/resource/${encodeURIComponent(deleteDialog.node.path)}`, { method: 'DELETE' });
-      if (!response.ok) throw new Error(`Failed to delete`);
+      const response = await fetch(`/api/resource/${encodeURIComponent(deleteDialog.node.path)}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete item');
+      }
+
       await refreshFileTree();
-    } catch (e) { console.error(e); } finally { handleCloseDeleteDialog(); }
+      handleCloseDeleteDialog();
+    } catch (e) {
+      console.error(e);
+      alert(e instanceof Error ? e.message : 'Error deleting item');
+    }
   };
 
-  const handleExpandedChange = (event: React.SyntheticEvent | null, ids: string[]) => setExpanded(ids);
+  const handleOpenRenameDialog = () => {
+    if (contextMenu) {
+      const node = contextMenu.node;
+      setRenameDialog({ open: true, node });
+      const name = node.type === 'file' && node.name.endsWith('.feature')
+        ? node.name.slice(0, -8)
+        : node.name;
+      setRenameValue(name);
+    }
+    handleCloseContextMenu();
+  };
 
-  const handleItemClick = (event: React.MouseEvent, itemId: string) => {
-    // Buscar nodo y notificar selección
+  const handleCloseRenameDialog = () => {
+    setRenameDialog({ open: false, node: null });
+  };
+
+  const handleConfirmRename = async () => {
+    if (!renameDialog.node || !renameValue) return;
+
+    try {
+      const response = await fetch(`/api/resource/${encodeURIComponent(renameDialog.node.path)}/rename`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ new_name: renameValue }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to rename');
+      }
+      const result = await response.json();
+
+      let notificationKey = '';
+      let interpolationParams: any = {};
+
+      if (result.images_migrated && result.modules_updated) {
+        notificationKey = 'common.rename_success_complete';
+        interpolationParams = {
+          imageCount: result.images_migrated.count,
+          moduleCount: result.modules_updated.count,
+          modules: result.modules_updated.modules.join(', ')
+        };
+      } else if (result.images_migrated) {
+        notificationKey = 'common.rename_success_with_images';
+        interpolationParams = { count: result.images_migrated.count };
+      } else if (result.modules_updated) {
+        notificationKey = 'common.rename_success_with_modules';
+        interpolationParams = {
+          count: result.modules_updated.count,
+          modules: result.modules_updated.modules.join(', ')
+        };
+      } else {
+        notificationKey = 'common.rename_success';
+      }
+
+      if (notificationKey) {
+        setSnackbar({
+          open: true,
+          message: String(t(notificationKey, interpolationParams)),
+          severity: 'success'
+        });
+      }
+
+      if (result.migration_warnings && result.migration_warnings.length > 0) {
+        const warnings = result.migration_warnings.join('\n');
+        setSnackbar({
+          open: true,
+          message: String(t('common.rename_warning', { warnings })),
+          severity: 'warning'
+        });
+      }
+
+      await refreshFileTree();
+      if (onRefreshModules) await onRefreshModules();
+    } catch (e) {
+      console.error(e);
+      setSnackbar({
+        open: true,
+        message: e instanceof Error ? e.message : String(t('common.rename_error')),
+        severity: 'error'
+      });
+    } finally {
+      handleCloseRenameDialog();
+    }
+  };
+
+  const handleExpandedChange = (event: React.SyntheticEvent | null, itemIds: string[]) => {
+    setExpanded(itemIds);
+  };
+
+  const handleItemClick = (event: React.SyntheticEvent, itemId: string) => {
     const findNode = (nodes: FileData[], path: string): FileData | null => {
       for (const node of nodes) {
         if (node.path === path) return node;
@@ -300,28 +534,22 @@ const FileExplorerComponent: React.FC<FileExplorerProps> = ({ onFileSelect, font
 
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <Box sx={{ p: 1 }}>
+      <Box sx={{ p: 1, borderBottom: 1, borderColor: 'divider', display: 'flex', alignItems: 'center', gap: 1 }}>
         <TextField
-          placeholder="Filter features..."
-          variant="outlined"
-          size="small"
           fullWidth
+          size="small"
+          placeholder="Search features..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          autoComplete="off"
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
-                <SearchIcon sx={{ fontSize: 16, color: 'text.secondary', opacity: 0.7 }} />
+                <SearchIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
               </InputAdornment>
             ),
-            endAdornment: searchTerm && (
+            endAdornment: (
               <InputAdornment position="end">
-                <IconButton
-                  size="small"
-                  onClick={() => setSearchTerm('')}
-                  sx={{ p: 0.5 }}
-                >
+                <IconButton size="small" onClick={() => setSearchTerm('')} disabled={!searchTerm}>
                   <ClearIcon sx={{ fontSize: 16 }} />
                 </IconButton>
               </InputAdornment>
@@ -335,7 +563,7 @@ const FileExplorerComponent: React.FC<FileExplorerProps> = ({ onFileSelect, font
               '& fieldset': { border: 'none' },
               '&:hover fieldset': { border: 'none' },
               '&.Mui-focused fieldset': { border: `1px solid ${theme.palette.primary.main}` },
-              pl: 1, // Ajuste para el startAdornment
+              pl: 1,
             },
             '& .MuiInputBase-input': {
               py: 0.5,
@@ -345,8 +573,17 @@ const FileExplorerComponent: React.FC<FileExplorerProps> = ({ onFileSelect, font
         />
       </Box>
 
-      <Box sx={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-        {/* Usamos una animación de carga si estamos cargando */}
+      <Box
+        ref={setRootDropRef}
+        sx={{
+          flex: 1,
+          overflowY: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          backgroundColor: isOverRoot ? alpha(theme.palette.primary.main, 0.05) : 'transparent',
+          outline: isOverRoot ? `2px dashed ${theme.palette.primary.main}` : 'none',
+        }}
+      >
         {isLoading ? (
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 2 }}>
             <CircularProgress size={40} thickness={4} />
@@ -357,7 +594,7 @@ const FileExplorerComponent: React.FC<FileExplorerProps> = ({ onFileSelect, font
             expandedItems={expanded}
             onExpandedItemsChange={handleExpandedChange}
             onItemClick={handleItemClick}
-            // @ts-ignore - Propiedad clave para controlar la indentación base
+            // @ts-ignore
             itemChildrenIndentation="12px"
           >
             {renderTree(filteredFiles, fontSize, handleContextMenu)}
@@ -365,7 +602,7 @@ const FileExplorerComponent: React.FC<FileExplorerProps> = ({ onFileSelect, font
         )}
       </Box>
 
-      {/* Menús y Diálogos (copiados logicamente igual) */}
+      {/* Menus and Dialogs */}
       <Menu
         open={contextMenu !== null}
         onClose={handleCloseContextMenu}
@@ -375,6 +612,8 @@ const FileExplorerComponent: React.FC<FileExplorerProps> = ({ onFileSelect, font
         <MenuItem onClick={() => handleOpenNewItemDialog('folder')}>New Folder</MenuItem>
         <MenuItem onClick={() => handleOpenNewItemDialog('file')}>New Feature File</MenuItem>
         <Divider />
+        <MenuItem onClick={handleOpenRenameDialog}>Rename</MenuItem>
+        <Divider />
         <MenuItem onClick={handleOpenDeleteDialog} sx={{ color: 'error.main' }}>Delete</MenuItem>
       </Menu>
 
@@ -382,8 +621,6 @@ const FileExplorerComponent: React.FC<FileExplorerProps> = ({ onFileSelect, font
         <DialogTitle>Create {dialog?.type === 'folder' ? 'Folder' : 'File'}</DialogTitle>
         <DialogContent>
           <TextField
-            id="new-item-name-field"
-            name="new-item-name-field"
             autoFocus margin="dense" label="Name" fullWidth variant="outlined" size="small"
             value={newItemName} onChange={(e) => setNewItemName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleConfirmNewItem()}
@@ -405,6 +642,38 @@ const FileExplorerComponent: React.FC<FileExplorerProps> = ({ onFileSelect, font
           <Button onClick={handleConfirmDelete} color="error" variant="contained">Delete</Button>
         </DialogActions>
       </Dialog>
+
+      <Dialog open={renameDialog.open} onClose={handleCloseRenameDialog}>
+        <DialogTitle>Rename {renameDialog.node?.type === 'file' ? 'File' : 'Folder'}</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus margin="dense" label="New Name" fullWidth variant="outlined" size="small"
+            value={renameValue} onChange={(e) => setRenameValue(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleConfirmRename()}
+            helperText={renameDialog.node?.type === 'file' ? 'Extension .feature will be added automatically' : ''}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseRenameDialog}>Cancel</Button>
+          <Button onClick={handleConfirmRename} variant="contained" disabled={!renameValue}>Rename</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+          severity={snackbar.severity}
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

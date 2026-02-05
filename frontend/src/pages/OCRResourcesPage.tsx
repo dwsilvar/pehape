@@ -170,6 +170,23 @@ const OCRResourcesPage: React.FC = () => {
                                                 <Typography variant="subtitle2" noWrap title={img.key_text} sx={{ fontWeight: 'bold' }}>
                                                     "{img.key_text}"
                                                 </Typography>
+
+                                                {/* Storage Path */}
+                                                <Typography
+                                                    variant="caption"
+                                                    sx={{
+                                                        mt: 1,
+                                                        display: 'block',
+                                                        color: 'text.secondary',
+                                                        fontFamily: 'monospace',
+                                                        fontSize: '0.7rem',
+                                                        wordBreak: 'break-all'
+                                                    }}
+                                                    title={`resources/images/${img.relative_path}`}
+                                                >
+                                                    📁 resources/images/{img.relative_path}
+                                                </Typography>
+
                                                 <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                                                     {/* Show hierarchy tags */}
                                                     {img.full_path_parts.slice(0, -1).map((part, idx) => (

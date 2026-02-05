@@ -304,27 +304,37 @@ const MainLayout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
+  // Ref to track the last file opened from URL to prevent double opening
+  const lastOpenedFileRef = useRef<string | null>(null);
+
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const fileToOpen = params.get('openFile');
 
     if (fileToOpen) {
+      // Prevent opening the same file twice
+      if (lastOpenedFileRef.current === fileToOpen) {
+        return;
+      }
+
       // Ensure we are in the editor view
       if (activePerspective !== 'editor') {
         setActiveView('editor');
       }
 
-      // If file is already selected, don't re-fetch unless it's different
-      if (selectedFile?.path !== fileToOpen) {
-        console.log("Auto-opening file from URL:", fileToOpen);
-        handleFileSelect(fileToOpen);
-      }
+      // Open the file
+      console.log("Auto-opening file from URL:", fileToOpen);
+      lastOpenedFileRef.current = fileToOpen;
+      handleFileSelect(fileToOpen);
 
       // Optional: Clear the param so refreshing doesn't force-reopen or to leave URL clean
       // But keep it clean for now to see it works
       // navigate('/', { replace: true }); 
+    } else {
+      // Reset the ref when there's no file in URL
+      lastOpenedFileRef.current = null;
     }
-  }, [location.search, handleFileSelect, selectedFile, navigate, activePerspective, setActiveView]);
+  }, [location.search, activePerspective, setActiveView, handleFileSelect]);
 
   const handleEditorChange = useCallback((value: string | undefined) => {
     if (value !== undefined) {
@@ -370,6 +380,15 @@ const MainLayout: React.FC = () => {
   const clearFocusedModule = useCallback(() => {
     setFocusedModule(null);
   }, []);
+
+  // Función para refrescar módulos después de renombrar archivos/carpetas
+  const handleRefreshModules = useCallback(async () => {
+    try {
+      await refetch(); // Usa la función refetch del hook useExecutionOrder
+    } catch (error) {
+      console.error('Error refreshing modules after rename:', error);
+    }
+  }, [refetch]);
 
   // --- Lógica de ejecución de pruebas, ahora en el layout principal ---
   // Refactorizar la lógica de conexión a logs en una función reutilizable
@@ -764,7 +783,11 @@ const MainLayout: React.FC = () => {
                 >
                   <Box sx={{ p: 1, borderBottom: 1, borderColor: 'divider', fontWeight: 'bold' }}>{t('common.explorer')}</Box>
                   {isReady ? (
-                    <FileExplorer onFileSelect={handleFileSelect} fontSize={fontSize} />
+                    <FileExplorer
+                      onFileSelect={handleFileSelect}
+                      fontSize={fontSize}
+                      onRefreshModules={handleRefreshModules}
+                    />
                   ) : (
                     <Typography variant="body2" sx={{ p: 2, color: 'text.secondary' }}>Loading explorer...</Typography>
                   )}
@@ -919,6 +942,7 @@ const MainLayout: React.FC = () => {
               <Paper elevation={4} sx={{ p: 1, display: 'flex', alignItems: 'center', backgroundColor: 'primary.light' }}>
                 <DraggableTreeItemPreview
                   path={activeDragItem.data.current.path}
+                  type={activeDragItem.data.current.resourceType}
                 />
               </Paper>
             )}

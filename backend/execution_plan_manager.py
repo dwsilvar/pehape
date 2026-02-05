@@ -507,3 +507,113 @@ class ExecutionPlanManager:
             raise ValueError("Índice de tarea fuera de rango.")
             
         return self.get_sequence()
+
+    def update_feature_paths_after_rename(self, old_rel_path: str, new_rel_path: str, is_file: bool) -> dict:
+        """
+        Actualiza las referencias de features en run_list.json después de renombrar un archivo o carpeta.
+        
+        Args:
+            old_rel_path: Ruta relativa antigua (ej: "login/auth.feature")
+            new_rel_path: Ruta relativa nueva (ej: "login/user_auth.feature")
+            is_file: True si es un archivo, False si es una carpeta
+        
+        Returns:
+            Diccionario con estadísticas de actualización
+        """
+        result = {
+            "updated": False,
+            "count": 0,
+            "modules": []
+        }
+        
+        # Normalizar paths (usar / como separador)
+        old_rel_path = old_rel_path.replace('\\', '/')
+        new_rel_path = new_rel_path.replace('\\', '/')
+        
+        if is_file:
+            # Renombrando un archivo
+            # Extraer feature_file y feature_dir del path antiguo y nuevo
+            old_parts = old_rel_path.split('/')
+            old_feature_file = old_parts[-1]
+            old_feature_dir = '/'.join(old_parts[:-1]) if len(old_parts) > 1 else ''
+            
+            new_parts = new_rel_path.split('/')
+            new_feature_file = new_parts[-1]
+            new_feature_dir = '/'.join(new_parts[:-1]) if len(new_parts) > 1 else ''
+            
+            # Buscar y actualizar referencias
+            for module in self.data.get('execution_sequence', []):
+                module_updated = False
+                for feature in module.get('features', []):
+                    if (feature.get('feature_file') == old_feature_file and 
+                        feature.get('feature_dir', '') == old_feature_dir):
+                        # Actualizar referencias
+                        feature['feature_file'] = new_feature_file
+                        feature['feature_dir'] = new_feature_dir
+                        
+                        # Actualizar el ID también
+                        # ID format: "feature::{module_name}::{path}"
+                        new_path = f"{new_feature_dir}/{new_feature_file}" if new_feature_dir else new_feature_file
+                        module_name = module.get('module_name', '')
+                        feature['id'] = f"feature::{module_name}::{new_path}"
+                        
+                        module_updated = True
+                        result["count"] += 1
+                
+                if module_updated and module['module_name'] not in result["modules"]:
+                    result["modules"].append(module['module_name'])
+        else:
+            # Renombrando una carpeta
+            # Actualizar todos los features cuyo feature_dir comience con la carpeta antigua
+            for module in self.data.get('execution_sequence', []):
+                module_updated = False
+                for feature in module.get('features', []):
+                    feature_dir = feature.get('feature_dir', '')
+                    
+                    # Normalizar para comparación
+                    normalized_feature_dir = feature_dir.replace('\\', '/')
+                    normalized_old_path = old_rel_path.replace('\\', '/')
+                    
+                    # Verificar si el feature_dir está dentro de la carpeta renombrada
+                    # Casos a manejar:
+                    # 1. feature_dir == old_path (exacto)
+                    # 2. feature_dir.startswith(old_path + '/') (subcarpeta)
+                    should_update = False
+                    new_dir = None
+                    
+                    if normalized_feature_dir == normalized_old_path:
+                        # Caso 1: Coincidencia exacta
+                        should_update = True
+                        new_dir = new_rel_path
+                    elif normalized_feature_dir.startswith(normalized_old_path + '/'):
+                        # Caso 2: Subcarpeta
+                        should_update = True
+                        suffix = normalized_feature_dir[len(normalized_old_path):]
+                        new_dir = new_rel_path + suffix
+                    
+                    if should_update and new_dir is not None:
+                        feature['feature_dir'] = new_dir
+                        
+                        # Actualizar el ID también
+                        # ID format: "feature::{module_name}::{path}"
+                        feature_file = feature.get('feature_file', '')
+                        new_path = f"{new_dir}/{feature_file}" if new_dir else feature_file
+                        module_name = module.get('module_name', '')
+                        feature['id'] = f"feature::{module_name}::{new_path}"
+                        
+                        module_updated = True
+                        result["count"] += 1
+                        # Log para debugging
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        logger.info(f"Updated feature_dir: '{feature_dir}' -> '{new_dir}' and ID in module '{module['module_name']}'")
+                
+                if module_updated and module['module_name'] not in result["modules"]:
+                    result["modules"].append(module['module_name'])
+        
+        # Guardar si hubo cambios
+        if result["count"] > 0:
+            result["updated"] = True
+            self._save()
+        
+        return result

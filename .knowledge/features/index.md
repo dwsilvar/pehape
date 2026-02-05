@@ -12,8 +12,11 @@ Documentación sobre cómo automatizar acciones adicionales en los ciclos de vid
 ### 📊 [Reportes Allure](file:///c:/Proyectos/ocr_test/pehape/.knowledge/features/reporting/allure_integration.md)
 Guía sobre la generación de reportes visuales, integración de evidencias y mantenimiento de archivos de reporte.
 
-### 🔎 [Automatización OCR y Fallbacks](file:///c:/Proyectos/ocr_test/pehape/.knowledge/features/ocr/fallback_images.md)
+### 🔎 [Automatización OCR y Fallbacks](file:///c:/Proyectos/ocr_test\pehape/.knowledge/features/ocr/fallback_images.md)
 Detalles sobre cómo el framework utiliza OCR para interactuar con la UI y cómo configurar imágenes de respaldo (fallback) cuando el texto no es reconocido.
+
+### 📁 [Gestión de Archivos](file:///c:/Proyectos/ocr_test/pehape/.knowledge/features/file_explorer_management.md)
+Documentación sobre las capacidades del Explorador de Archivos, incluyendo renombramiento y movimiento de recursos mediante Drag & Drop.
 
 ---
 

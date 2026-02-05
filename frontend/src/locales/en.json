@@ -8,6 +8,7 @@
         "loading": "Loading...",
         "error": "Error",
         "delete": "Delete",
+        "rename": "Rename",
         "cancel": "Cancel",
         "confirm": "Confirm",
         "active": "Activate",
@@ -21,7 +22,20 @@
         "console": "Console",
         "file_explorer": "File Explorer",
         "review_modules": "Review Modules",
-        "execution_order": "Execution Order"
+        "execution_order": "Execution Order",
+        "rename_success": "Renamed successfully!",
+        "rename_success_with_images": "Renamed successfully!\\n\\n{{count}} OCR image(s) were migrated to the new location.",
+        "rename_success_with_modules": "Renamed successfully!\\n\\n{{count}} feature reference(s) updated in module(s): {{modules}}",
+        "rename_success_complete": "Renamed successfully!\\n\\n{{imageCount}} OCR image(s) were migrated to the new location.\\n\\n{{moduleCount}} feature reference(s) updated in module(s): {{modules}}",
+        "rename_warning": "Renamed successfully, but with warnings:\\n\\n{{warnings}}",
+        "rename_error": "Error renaming resource",
+        "move_success": "Moved successfully!",
+        "move_success_with_images": "Moved successfully!\\n\\n{{count}} OCR image(s) were migrated to the new location.",
+        "move_success_with_modules": "Moved successfully!\\n\\n{{count}} feature reference(s) updated in module(s): {{modules}}",
+        "move_success_complete": "Moved successfully!\\n\\n{{imageCount}} OCR image(s) were migrated.\\n\\n{{moduleCount}} feature reference(s) updated in module(s): {{modules}}",
+        "move_error": "Error moving resource",
+        "move_error_conflict": "A resource with that name already exists in the destination",
+        "move_error_invalid": "Cannot move a folder into itself or its children"
     },
     "editor": {
         "tabs": {

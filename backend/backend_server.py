@@ -66,6 +66,89 @@ FEATURES_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'feature
 # Instanciar el manejador del plan de ejecución
 plan_manager = ExecutionPlanManager(FEATURES_DIR)
 
+# --- OCR Image Migration Helpers ---
+def get_ocr_images_directory(feature_rel_path: str) -> str:
+    """
+    Convierte una ruta relativa de feature a su directorio de imágenes OCR correspondiente.
+    
+    Args:
+        feature_rel_path: Ruta relativa del feature desde FEATURES_DIR (ej: "login/auth.feature")
+    
+    Returns:
+        Ruta absoluta al directorio de imágenes OCR (ej: "resources/images/login/auth/")
+    """
+    project_root = os.path.dirname(os.path.dirname(__file__))
+    
+    # Remover extensión .feature si existe
+    if feature_rel_path.endswith('.feature'):
+        feature_rel_path = feature_rel_path[:-8]  # Remove '.feature'
+    
+    # Construir ruta a directorio de imágenes
+    images_dir = os.path.join(project_root, 'resources', 'images', feature_rel_path)
+    return images_dir
+
+def migrate_ocr_images(old_rel_path: str, new_rel_path: str, is_file: bool) -> dict:
+    """
+    Migra imágenes OCR de una ubicación antigua a una nueva después de renombrar.
+    
+    Args:
+        old_rel_path: Ruta relativa antigua del recurso
+        new_rel_path: Ruta relativa nueva del recurso
+        is_file: True si es un archivo, False si es un directorio
+    
+    Returns:
+        Diccionario con estadísticas de migración
+    """
+    result = {
+        "migrated": False,
+        "count": 0,
+        "old_path": None,
+        "new_path": None,
+        "errors": []
+    }
+    
+    try:
+        old_images_dir = get_ocr_images_directory(old_rel_path)
+        new_images_dir = get_ocr_images_directory(new_rel_path)
+        
+        # Verificar si existe el directorio de imágenes antiguo
+        if not os.path.exists(old_images_dir):
+            logger.info(f"No OCR images found for {old_rel_path}")
+            return result
+        
+        # Contar imágenes antes de migrar
+        image_count = 0
+        for root, dirs, files in os.walk(old_images_dir):
+            image_count += len([f for f in files if f.endswith(('.png', '.jpg', '.jpeg'))])
+        
+        if image_count == 0:
+            logger.info(f"OCR images directory exists but is empty: {old_images_dir}")
+            return result
+        
+        # Crear directorio de destino si no existe
+        os.makedirs(os.path.dirname(new_images_dir), exist_ok=True)
+        
+        # Mover el directorio completo
+        try:
+            shutil.move(old_images_dir, new_images_dir)
+            result["migrated"] = True
+            result["count"] = image_count
+            result["old_path"] = old_images_dir
+            result["new_path"] = new_images_dir
+            logger.info(f"Successfully migrated {image_count} OCR images from {old_images_dir} to {new_images_dir}")
+        except Exception as e:
+            error_msg = f"Error moving OCR images: {str(e)}"
+            result["errors"].append(error_msg)
+            logger.error(error_msg)
+    
+    except Exception as e:
+        error_msg = f"Error during OCR image migration: {str(e)}"
+        result["errors"].append(error_msg)
+        logger.error(error_msg)
+    
+    return result
+
+
 # Importar el registro de tareas y asegurar que se carguen los módulos de tareas
 from executor.tasks_core.registry import get_all_tasks
 # Importar módulos de tareas conocidos para asegurar su registro
@@ -549,6 +632,187 @@ def delete_resource(resource_path):
         return jsonify({"message": message}), 200
 
     except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/resource/<path:resource_path>/rename', methods=['PUT'])
+def rename_resource(resource_path):
+    """
+    Endpoint para renombrar un archivo o directorio.
+    También migra las imágenes OCR asociadas a la nueva ubicación.
+    """
+    try:
+        data = request.json
+        new_name = data.get('new_name')
+        
+        if not new_name:
+            return jsonify({"error": "Se requiere 'new_name' en el cuerpo de la solicitud"}), 400
+
+        # Aseguramos que el path original es seguro y no sale del directorio de features
+        full_path = os.path.abspath(os.path.join(FEATURES_DIR, resource_path))
+        if os.path.commonpath([full_path, os.path.abspath(FEATURES_DIR)]) != os.path.abspath(FEATURES_DIR):
+            return jsonify({"error": "Ruta inválida o acceso denegado"}), 403
+
+        if not os.path.exists(full_path):
+            return jsonify({"error": f"El recurso '{resource_path}' no fue encontrado."}), 404
+
+        # Validar caracteres inválidos en el nuevo nombre
+        invalid_chars = ['/', '\\', ':', '*', '?', '"', '<', '>', '|']
+        if any(char in new_name for char in invalid_chars):
+            return jsonify({"error": f"El nombre contiene caracteres inválidos: {', '.join(invalid_chars)}"}), 400
+
+        # Si es un archivo .feature, asegurar que mantenga la extensión
+        is_file = os.path.isfile(full_path)
+        if is_file and full_path.endswith('.feature'):
+            if not new_name.endswith('.feature'):
+                new_name += '.feature'
+
+        # Construir el nuevo path
+        parent_dir = os.path.dirname(full_path)
+        new_full_path = os.path.abspath(os.path.join(parent_dir, new_name))
+
+        # Verificar que el nuevo path también esté dentro de FEATURES_DIR
+        if os.path.commonpath([new_full_path, os.path.abspath(FEATURES_DIR)]) != os.path.abspath(FEATURES_DIR):
+            return jsonify({"error": "El nuevo nombre resultaría en una ruta inválida"}), 403
+
+        # Verificar que no exista ya un recurso con ese nombre
+        if os.path.exists(new_full_path):
+            return jsonify({"error": f"Ya existe un recurso con el nombre '{new_name}'"}), 409
+
+        # Calcular paths relativos para la migración de imágenes
+        old_relative_path = os.path.relpath(full_path, FEATURES_DIR).replace('\\', '/')
+        new_relative_path = os.path.relpath(new_full_path, FEATURES_DIR).replace('\\', '/')
+
+        # Renombrar el recurso
+        os.rename(full_path, new_full_path)
+        logger.info(f"Successfully renamed {resource_path} to {new_relative_path}")
+        
+        # Migrar imágenes OCR asociadas
+        migration_result = migrate_ocr_images(old_relative_path, new_relative_path, is_file)
+        
+        # Actualizar referencias en módulos (run_list.json)
+        module_update_result = plan_manager.update_feature_paths_after_rename(old_relative_path, new_relative_path, is_file)
+        
+        resource_type = "archivo" if is_file else "directorio"
+        response_data = {
+            "message": f"{resource_type.capitalize()} renombrado exitosamente.",
+            "new_path": new_relative_path
+        }
+        
+        # Incluir información de migración si hubo imágenes
+        if migration_result["migrated"]:
+            response_data["images_migrated"] = {
+                "count": migration_result["count"],
+                "old_path": migration_result["old_path"],
+                "new_path": migration_result["new_path"]
+            }
+            logger.info(f"Migrated {migration_result['count']} OCR images")
+        
+        # Incluir información de actualización de módulos
+        if module_update_result["updated"]:
+            response_data["modules_updated"] = {
+                "count": module_update_result["count"],
+                "modules": module_update_result["modules"]
+            }
+            logger.info(f"Updated {module_update_result['count']} feature references in {len(module_update_result['modules'])} module(s)")
+        
+        # Incluir errores de migración si los hubo (pero no fallar la operación)
+        if migration_result["errors"]:
+            response_data["migration_warnings"] = migration_result["errors"]
+        
+        return jsonify(response_data), 200
+
+    except Exception as e:
+        logger.error(f"Error renaming resource: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/resource/<path:resource_path>/move', methods=['PUT'])
+def move_resource(resource_path):
+    """
+    Endpoint para mover un archivo o directorio a una nueva ubicación.
+    También migra las imágenes OCR asociadas y actualiza el run_list.json.
+    """
+    try:
+        data = request.json
+        destination_dir = data.get('destination_dir')
+        
+        if destination_dir is None:
+            return jsonify({"error": "Se requiere 'destination_dir' en el cuerpo de la solicitud"}), 400
+
+        # Aseguramos que el path original es seguro
+        full_path = os.path.abspath(os.path.join(FEATURES_DIR, resource_path))
+        if os.path.commonpath([full_path, os.path.abspath(FEATURES_DIR)]) != os.path.abspath(FEATURES_DIR):
+            return jsonify({"error": "Ruta original inválida o acceso denegado"}), 403
+
+        if not os.path.exists(full_path):
+            return jsonify({"error": f"El recurso '{resource_path}' no fue encontrado."}), 404
+
+        # Aseguramos que el directorio de destino es seguro
+        dest_full_dir = os.path.abspath(os.path.join(FEATURES_DIR, destination_dir))
+        if os.path.commonpath([dest_full_dir, os.path.abspath(FEATURES_DIR)]) != os.path.abspath(FEATURES_DIR):
+            return jsonify({"error": "Directorio de destino inválido o acceso denegado"}), 403
+
+        if not os.path.exists(dest_full_dir) or not os.path.isdir(dest_full_dir):
+            # Intentar crear el directorio si no existe (opcional)
+            # os.makedirs(dest_full_dir, exist_ok=True)
+            return jsonify({"error": f"El directorio de destino '{destination_dir}' no existe o no es un directorio."}), 404
+
+        # Construir el nuevo path conservando el nombre original
+        resource_name = os.path.basename(full_path)
+        new_full_path = os.path.join(dest_full_dir, resource_name)
+
+        # Validaciones de seguridad para evitar mover una carpeta dentro de sí misma
+        if os.path.commonpath([new_full_path, full_path]) == full_path:
+            return jsonify({"error": "No se puede mover un directorio dentro de sí mismo o de sus subdirectorios."}), 400
+
+        # Verificar que no exista ya un recurso con ese nombre en el destino
+        if os.path.exists(new_full_path):
+            return jsonify({"error": f"Ya existe un recurso con el nombre '{resource_name}' en el destino."}), 409
+
+        # Calcular paths relativos para la migración
+        is_file = os.path.isfile(full_path)
+        old_relative_path = os.path.relpath(full_path, FEATURES_DIR).replace('\\', '/')
+        new_relative_path = os.path.relpath(new_full_path, FEATURES_DIR).replace('\\', '/')
+
+        # Mover el recurso
+        os.rename(full_path, new_full_path)
+        logger.info(f"Successfully moved {resource_path} to {new_relative_path}")
+        
+        # Migrar imágenes OCR asociadas
+        migration_result = migrate_ocr_images(old_relative_path, new_relative_path, is_file)
+        
+        # Actualizar referencias en módulos (run_list.json)
+        module_update_result = plan_manager.update_feature_paths_after_rename(old_relative_path, new_relative_path, is_file)
+        
+        resource_type = "archivo" if is_file else "directorio"
+        response_data = {
+            "message": f"{resource_type.capitalize()} movido exitosamente.",
+            "new_path": new_relative_path
+        }
+        
+        # Incluir información de migración
+        if migration_result["migrated"]:
+            response_data["images_migrated"] = {
+                "count": migration_result["count"],
+                "old_path": migration_result["old_path"],
+                "new_path": migration_result["new_path"]
+            }
+        
+        # Incluir información de actualización de módulos
+        if module_update_result["updated"]:
+            response_data["modules_updated"] = {
+                "count": module_update_result["count"],
+                "modules": module_update_result["modules"]
+            }
+        
+        # Incluir warnings
+        if migration_result["errors"]:
+            response_data["migration_warnings"] = migration_result["errors"]
+        
+        return jsonify(response_data), 200
+
+    except Exception as e:
+        logger.error(f"Error moving resource: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 
