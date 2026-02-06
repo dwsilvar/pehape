@@ -69,6 +69,8 @@
             "tag_placeholder": "@tag",
             "select_image": "Seleccionar Imagen",
             "selected": "Seleccionado",
+            "paste_hint": "O pegue una imagen desde el portapapeles",
+            "clipboard_image": "imagen-portapapeles.png",
             "error_tag": "Por favor especifique un tag (ej. @mitag).",
             "error_file": "Por favor seleccione un archivo de imagen.",
             "error_upload": "Fallo al subir.",
@@ -78,7 +80,11 @@
             "generic_hint": "Marque esta opción para subir una imagen genérica que se usará como fallback cuando OCR falle. Se guardará en resources/images/features/generic/"
         },
         "validation_texts_hint": "Estos textos se pre-cargarán al agregar la tarea \"verificar_texto_archivo\"",
-        "steps_snippet_hint": "Copia estos snippets en tu archivo de steps para definir el comportamiento de los nuevos pasos:"
+        "steps_snippet_hint": "Copia estos snippets en tu archivo de steps para definir el comportamiento de los nuevos pasos:",
+        "ocr_association": {
+            "direct": "Imagen OCR asociada (Específica)",
+            "generic": "Imagen OCR asociada (Genérica)"
+        }
     },
     "orchestrator": {
         "title": "Plan de Ejecución",

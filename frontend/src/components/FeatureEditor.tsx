@@ -15,6 +15,13 @@ import ViewHeadlineIcon from '@mui/icons-material/ViewHeadline';
 import { FileData } from '../types';
 import { ImageUploadDialog } from './ImageUploadDialog';
 
+interface OCRImage {
+  relative_path: string;
+  filename: string;
+  key_text: string;
+  full_path_parts: string[];
+}
+
 interface FeatureEditorProps {
   selectedFile: FileData | null;
   editorContent: string;
@@ -48,7 +55,10 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
   const [compactCatalog, setCompactCatalog] = useState(true);
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const completionProviderRef = useRef<any>(null);
+  const hoverProviderRef = useRef<any>(null);
   const menuActionsRef = useRef<any[]>([]);
+  const [ocrImages, setOcrImages] = useState<OCRImage[]>([]);
+  const decorationsRef = useRef<string[]>([]);
 
   // Sincronizar estado local con props cuando cambian
   useEffect(() => {
@@ -72,6 +82,22 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
     };
     fetchCatalog();
   }, []);
+
+  // Fetch OCR Images
+  useEffect(() => {
+    const fetchOCRImages = async () => {
+      try {
+        const response = await fetch('/api/ocr-images');
+        if (response.ok) {
+          const data = await response.json();
+          setOcrImages(data);
+        }
+      } catch (error) {
+        console.error('Error fetching OCR images:', error);
+      }
+    };
+    fetchOCRImages();
+  }, [uploadDialogOpen]); // Refresh when dialog closes (might have uploaded new)
 
   // Update Completion Provider when catalog changes
   useEffect(() => {
@@ -183,6 +209,137 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
       }
     };
   }, [monacoInstance, stepCatalog]);
+
+  // Inject CSS for OCR decorations
+  useEffect(() => {
+    const styleId = 'monaco-ocr-decorations';
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement('style');
+      style.id = styleId;
+      style.innerHTML = `
+            .ocr-direct-link {
+                border-bottom: 2px dashed #4caf50;
+                cursor: help;
+                background-color: rgba(76, 175, 80, 0.1);
+            }
+            .ocr-generic-link {
+                border-bottom: 2px dashed #2196f3;
+                cursor: help;
+                background-color: rgba(33, 150, 243, 0.1);
+            }
+            .monaco-editor .monaco-hover {
+                z-index: 9999 !important;
+            }
+            .monaco-hover-content img {
+                max-width: 300px;
+                max-height: 200px;
+                border: 1px solid #ccc;
+                margin-bottom: 8px;
+            }
+        `;
+      document.head.appendChild(style);
+    }
+  }, []);
+
+  // Effect to scan for OCR associations and apply decorations
+  useEffect(() => {
+    if (!editorInstance || !monacoInstance || ocrImages.length === 0 || !selectedFile) return;
+
+    const model = editorInstance.getModel();
+    if (!model) return;
+
+    const content = model.getValue();
+    const lines = content.split('\n');
+    const newDecorations: any[] = [];
+
+    // Heuristic to find tags for each line
+    const lineTags: (string | null)[] = new Array(lines.length).fill(null);
+    let currentTag: string | null = null;
+    for (let i = 0; i < lines.length; i++) {
+      const trimmed = lines[i].trim();
+      if (trimmed.startsWith('@')) {
+        currentTag = trimmed.split(/\s+/)[0].substring(1); // Remove @
+      }
+      lineTags[i] = currentTag;
+    }
+
+    // Prepare feature path for matching
+    // resources/images/<rel_dir>/<feature_name>/<tag>/<text>.png
+    const featurePathParts = selectedFile.path.replace('.feature', '').split(/[/\\]/);
+    const featureName = featurePathParts.pop();
+    const relDirParts = featurePathParts;
+
+    ocrImages.forEach(img => {
+      const imgParts = img.full_path_parts; // [rel_dir..., feature_name, tag, filename]
+
+      // Match specific images
+      const isGeneric = imgParts[0] === 'features' && imgParts[1] === 'generic';
+
+      let match = false;
+      let matchType: 'direct' | 'generic' = 'direct';
+
+      if (isGeneric) {
+        match = true;
+        matchType = 'generic';
+      } else if (imgParts.length >= 3) {
+        // Check if it belongs to this feature
+        const imgFeatureName = imgParts[imgParts.length - 3];
+        const imgRelDir = imgParts.slice(0, imgParts.length - 3).join('/');
+        const currentRelDir = relDirParts.join('/');
+
+        if (imgFeatureName === featureName && imgRelDir === currentRelDir) {
+          match = true;
+          matchType = 'direct';
+        }
+      }
+
+      if (match) {
+        const keyText = img.key_text;
+        const imgTag = isGeneric ? null : imgParts[imgParts.length - 2];
+
+        lines.forEach((line: string, lineIdx: number) => {
+          if (line.includes(`"${keyText}"`) || line.includes(`'${keyText}'`) || (line.includes(keyText) && !line.trim().startsWith('#') && !line.trim().startsWith('@'))) {
+            // If direct match, also check tag
+            if (matchType === 'direct' && imgTag !== lineTags[lineIdx]) {
+              return; // Tag mismatch
+            }
+
+            // Find all occurrences in line
+            let startIdx = 0;
+            while ((startIdx = line.indexOf(keyText, startIdx)) !== -1) {
+              newDecorations.push({
+                range: new monacoInstance.Range(lineIdx + 1, startIdx + 1, lineIdx + 1, startIdx + keyText.length + 1),
+                options: {
+                  inlineClassName: matchType === 'generic' ? 'ocr-generic-link' : 'ocr-direct-link',
+                  hoverMessage: {
+                    value: `![${keyText}](${window.location.origin}/api/resources/images/${encodeURI(img.relative_path)})\n\n**${t(`editor.ocr_association.${matchType}`)}**`,
+                    isTrusted: true,
+                    supportHtml: true
+                  },
+                  stickiness: monacoInstance.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
+                }
+              });
+              startIdx += keyText.length;
+            }
+          }
+        });
+      }
+    });
+
+    decorationsRef.current = editorInstance.deltaDecorations(decorationsRef.current, newDecorations);
+
+    // Register Hover Provider if not registered
+    if (!hoverProviderRef.current) {
+      hoverProviderRef.current = monacoInstance.languages.registerHoverProvider('gherkin', {
+        provideHover: (model: any, position: any) => {
+          // Monaco already handles hoverMessage from decorations, 
+          // but we could add more logic here if needed.
+          return null;
+        }
+      });
+    }
+
+  }, [editorContent, ocrImages, selectedFile, monacoInstance, editorInstance, t]);
 
   // Usar validationTexts de props si está disponible, sino usar estado local
   const currentValidationTexts = onValidationTextsChange ? validationTexts : localValidationTexts;
@@ -442,11 +599,12 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
             readOnly: !selectedFile,
             theme: theme,
             wordWrap: 'off',
+            fixedOverflowWidgets: true,
             scrollbar: {
               horizontal: 'auto',
               vertical: 'auto',
             },
-            useShadowDOM: false, // ¡Esta es la clave! Evita que Mónaco cree un iframe que capture los eventos del ratón.
+            useShadowDOM: false,
           }}
           onMount={handleEditorDidMount}
           language={selectedFile ? 'gherkin' : undefined}

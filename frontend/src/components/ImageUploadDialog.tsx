@@ -58,6 +58,21 @@ export const ImageUploadDialog: React.FC<ImageUploadDialogProps> = ({
         }
     };
 
+    const handlePaste = (event: React.ClipboardEvent) => {
+        const items = event.clipboardData.items;
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf('image') !== -1) {
+                const blob = items[i].getAsFile();
+                if (blob) {
+                    const file = new File([blob], t('editor.upload_dialog.clipboard_image'), { type: blob.type });
+                    setSelectedFile(file);
+                    setError(null);
+                }
+                break;
+            }
+        }
+    };
+
     const handleUpload = async () => {
         // Skip tag validation if generic
         if (!isGeneric && !tag) {
@@ -81,7 +96,7 @@ export const ImageUploadDialog: React.FC<ImageUploadDialogProps> = ({
     };
 
     return (
-        <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+        <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth onPaste={handlePaste}>
             <DialogTitle>{t('editor.upload_dialog.title')}</DialogTitle>
             <DialogContent>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
@@ -126,7 +141,19 @@ export const ImageUploadDialog: React.FC<ImageUploadDialogProps> = ({
                         disabled={isGeneric}
                     />
 
-                    <Box sx={{ border: '1px dashed grey', p: 2, borderRadius: 1, textAlign: 'center' }}>
+                    <Box sx={{
+                        border: '2px dashed',
+                        borderColor: selectedFile ? 'primary.main' : 'grey.400',
+                        p: 3,
+                        borderRadius: 1,
+                        textAlign: 'center',
+                        bgcolor: selectedFile ? 'action.hover' : 'background.paper',
+                        transition: 'all 0.2s',
+                        '&:hover': {
+                            borderColor: 'primary.main',
+                            bgcolor: 'action.hover'
+                        }
+                    }}>
                         <input
                             accept="image/*"
                             style={{ display: 'none' }}
@@ -140,10 +167,38 @@ export const ImageUploadDialog: React.FC<ImageUploadDialogProps> = ({
                                 {t('editor.upload_dialog.select_image')}
                             </Button>
                         </label>
+
+                        <Typography variant="body2" sx={{ mt: 1, color: 'text.secondary' }}>
+                            {t('editor.upload_dialog.paste_hint')}
+                        </Typography>
+
                         {selectedFile && (
-                            <Typography variant="body2" sx={{ mt: 1 }}>
-                                {t('editor.upload_dialog.selected')}: {selectedFile.name}
-                            </Typography>
+                            <Box sx={{ mt: 2 }}>
+                                <Box sx={{
+                                    height: 120,
+                                    display: 'flex',
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                    bgcolor: 'background.paper',
+                                    borderRadius: 1,
+                                    overflow: 'hidden',
+                                    mb: 1,
+                                    border: '1px solid',
+                                    borderColor: 'divider'
+                                }}>
+                                    <img
+                                        src={URL.createObjectURL(selectedFile)}
+                                        alt="Preview"
+                                        style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain' }}
+                                        onLoad={(e) => {
+                                            // Optional: Revoke URL after load if needed, but here it's fine
+                                        }}
+                                    />
+                                </Box>
+                                <Typography variant="caption" sx={{ display: 'block', wordBreak: 'break-all' }}>
+                                    {t('editor.upload_dialog.selected')}: {selectedFile.name}
+                                </Typography>
+                            </Box>
                         )}
                     </Box>
 

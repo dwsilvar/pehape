@@ -69,6 +69,8 @@
             "tag_placeholder": "@tag",
             "select_image": "Select Image",
             "selected": "Selected",
+            "paste_hint": "Or paste an image from the clipboard",
+            "clipboard_image": "clipboard-image.png",
             "error_tag": "Please specify a tag (e.g., @mytag).",
             "error_file": "Please select an image file.",
             "error_upload": "Upload failed.",
@@ -78,7 +80,11 @@
             "generic_hint": "Check this option to upload a generic image to be used as fallback when OCR fails. It will be saved to resources/images/features/generic/"
         },
         "validation_texts_hint": "These texts will be pre-loaded when adding the \"verificar_texto_archivo\" task",
-        "steps_snippet_hint": "Copy these snippets into your steps file to define the behavior of the new steps:"
+        "steps_snippet_hint": "Copy these snippets into your steps file to define the behavior of the new steps:",
+        "ocr_association": {
+            "direct": "Associated OCR Image (Specific)",
+            "generic": "Associated OCR Image (Generic)"
+        }
     },
     "orchestrator": {
         "title": "Execution Plan",
