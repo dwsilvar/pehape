@@ -71,6 +71,9 @@ class TaskExecutor:
             context.ui_task_results = []
 
         feature_id = context.config.userdata.get("feature_id", "unknown_feature")
+        # Normalize feature_id to use forward slashes (matching frontend IDs)
+        if feature_id:
+            feature_id = feature_id.replace('\\', '/')
 
         task_class = get_task(task_name)
         if task_class:
@@ -80,6 +83,21 @@ class TaskExecutor:
                 if task_instance.should_run(hook_type, step):
                     logger.info(f"TaskExecutor: Executing task '{task_name}' (hook: {hook_type})")
                     
+                    # Report "running" status to UI
+                    if ui_index is not None:
+                        status_report = {
+                            "type": "task_status",
+                            "feature_id": feature_id,
+                            "task": {
+                                "name": task_name,
+                                "status": "running",
+                                "hook": hook_type,
+                                "ui_index": ui_index
+                            }
+                        }
+                        logger.info(f"[TASK_EXECUTOR] Emitting task_status (running): {status_report}")
+                        print(json.dumps(status_report), flush=True)
+
                     # Extract args from task_config if available (from UI config)
                     args = {}
                     if ui_index is not None:
@@ -126,6 +144,7 @@ class TaskExecutor:
                     "feature_id": feature_id,
                     "task": result
                 }
+                logger.info(f"[TASK_EXECUTOR] Emitting task_status (final): {status_report}")
                 print(json.dumps(status_report), flush=True)
         else:
             logger.warning(f"TaskExecutor: No task registered with name '{task_name}'.")

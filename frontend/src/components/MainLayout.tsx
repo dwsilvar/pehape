@@ -1,30 +1,30 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { Box, Paper, Tabs, Tab, MenuItem, AppBar, Toolbar, Button, Menu, ThemeProvider, CssBaseline, Badge, IconButton, Tooltip, Divider, Typography, CircularProgress, useTheme } from '@mui/material';
+import { Box, Paper, Tabs, Tab, MenuItem, Menu, IconButton, Typography, CircularProgress, useTheme, Badge, Button, alpha } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import CodeIcon from '@mui/icons-material/Code';
-import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import TerminalIcon from '@mui/icons-material/Terminal';
 import CloseIcon from '@mui/icons-material/Close';
-import Brightness4Icon from '@mui/icons-material/Brightness4';
-import Brightness7Icon from '@mui/icons-material/Brightness7';
-import LanguageIcon from '@mui/icons-material/Language';
 import CheckIcon from '@mui/icons-material/Check';
-import FolderIcon from '@mui/icons-material/Folder';
 import AppToolbar from './AppToolbar';
-import { DndContext, closestCenter, DragOverlay, Active, useSensor, useSensors, PointerSensor, TouchSensor, pointerWithin, rectIntersection } from '@dnd-kit/core';
-import { styled, alpha } from '@mui/material/styles';
-import { arrayMove } from '@dnd-kit/sortable';
-import FileExplorer, { DraggableTreeItemPreview } from './FileExplorer';
+import FileExplorer from './FileExplorer';
 import { FeatureEditor } from './FeatureEditor';
-import ExecutionOrder from './ExecutionOrder';
-import StatusBar from './StatusBar'; // Importar la nueva barra de estado
+import ExecutionOrder from './execution-order/ExecutionOrder';
+import StatusBar from './StatusBar';
 import ModulesComponent from './Modules';
-import ConsoleView from './ConsoleView'; // Importar la nueva vista de consola
-import { FileData, Module, ScenarioStatusMap } from '../types';
-import { getAppTheme } from '../theme';
-import { useExecutionOrder } from '../hooks/useExecutionOrder';
+import ConsoleView from './ConsoleView';
+import { FileData, Module } from '../types';
+import { useExecutionOrder as useGlobalExecutionOrder } from '../hooks/useExecutionOrder';
 import { useLayout } from '../context/LayoutContext';
+
+interface MainLayoutProps {
+  modules?: Module[];
+  setModules?: React.Dispatch<React.SetStateAction<Module[]>>;
+  onSaveModules?: (modulesToSave?: Module[]) => void;
+  selectedFile?: string | null;
+  draggedItemPath?: string | null;
+  activeDragId?: string | null;
+}
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -51,24 +51,44 @@ function TabPanel(props: TabPanelProps) {
   );
 }
 
-const MainLayout: React.FC = () => {
+const MainLayout: React.FC<MainLayoutProps> = ({
+  modules: propsModules,
+  setModules: propsSetModules,
+  onSaveModules: propsOnSaveModules,
+  selectedFile: propsSelectedFile,
+}) => {
   const { t, i18n } = useTranslation();
   const theme = useTheme();
-  const [selectedFile, setSelectedFile] = useState<FileData | null>(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Internal state for file selection if not provided via props
+  const [internalSelectedFile, setInternalSelectedFile] = useState<FileData | null>(null);
+  const selectedFile = (propsSelectedFile && typeof propsSelectedFile === 'string')
+    ? { name: propsSelectedFile.split('/').pop() || '', path: propsSelectedFile, type: 'file' as const } as FileData
+    : internalSelectedFile;
+
   const [editorContent, setEditorContent] = useState<string>('');
-  const [isDirty, setIsDirty] = useState(false); // Estado para rastrear cambios
+  const [isDirty, setIsDirty] = useState(false);
   const [isModifiedByDrag, setIsModifiedByDrag] = useState(false);
   const [fontSize] = useState(14);
-  const { modules, setModules, isLoading: isModulesLoading, refetch } = useExecutionOrder();
+
+  // Global state from hook if not provided via props
+  const { modules: hookModules, setModules: hookSetModules, isLoading: isModulesLoading, refetch } = useGlobalExecutionOrder();
+
+  const modules = propsModules || hookModules;
+  const setModules = propsSetModules || hookSetModules;
+
   const [tabValue, setTabValue] = useState(0);
   const modulesRef = useRef(modules);
   useEffect(() => {
     modulesRef.current = modules;
   }, [modules]);
-  const [focusedModule, setFocusedModule] = useState<string | null>(null);
-  const [validationTexts, setValidationTexts] = useState<string[]>([]); // Estado para textos a validar
 
-  // --- UI PERSPECTIVE STATE (Now shared via Context) ---
+  const [focusedModule, setFocusedModule] = useState<string | null>(null);
+  const [validationTexts, setValidationTexts] = useState<string[]>([]);
+  const lastOpenedFileRef = useRef<string | null>(null);
+
   const {
     activeView: activePerspective, setActiveView, isConsoleOpen, toggleConsole,
     logs, setLogs,
@@ -78,18 +98,35 @@ const MainLayout: React.FC = () => {
     scheduledExecutionTime, setScheduledExecutionTime,
     taskStatuses, setTaskStatuses,
     scenarioGifs, setScenarioGifs,
-    themeName, setThemeName
   } = useLayout();
 
-  const [orchestratorTab, setOrchestratorTab] = useState(0); // 0: ExecutionOrder, 1: Modules
-
-  // --- LIFTED STATE FOR COLLAPSE/EXPAND ---
+  const [currentScenarioName, setCurrentScenarioName] = useState<string | null>(null);
   const [executionOrderCollapsed, setExecutionOrderCollapsed] = useState<Set<string>>(new Set());
   const [modulesViewCollapsed, setModulesViewCollapsed] = useState<Set<string>>(new Set());
   const [fileExplorerWidth, setFileExplorerWidth] = useState(250);
-  const [consoleHeight, setConsoleHeight] = useState(200); // Height for dockable console
 
-  // --- Lógica para redimensionar el File Explorer ---
+  const [missingFiles, setMissingFiles] = useState<{
+    missing_features: Array<{ id: string, path: string, module: string, feature_file: string, feature_dir: string }>;
+    missing_tasks: Array<{ name: string, feature_id: string, hook: string }>;
+  }>({ missing_features: [], missing_tasks: [] });
+
+  useEffect(() => {
+    const fetchValidation = async () => {
+      try {
+        const response = await fetch('/api/validate-files');
+        if (response.ok) {
+          const data = await response.json();
+          setMissingFiles(data);
+        }
+      } catch (error) {
+        console.error('Error fetching file validation:', error);
+      }
+    };
+    fetchValidation();
+  }, [modules]);
+
+  const hasWarnings = missingFiles.missing_features.length > 0 || missingFiles.missing_tasks.length > 0;
+
   const layoutRef = useRef<HTMLDivElement>(null);
   const isResizingRef = useRef(false);
 
@@ -104,47 +141,36 @@ const MainLayout: React.FC = () => {
     if (!isResizingRef.current || !layoutRef.current) return;
     const layoutRect = layoutRef.current.getBoundingClientRect();
     const newWidth = e.clientX - layoutRect.left;
-
-    // Limites: no más de 1/3 del ancho total y no menos de 150px
     const maxWidth = layoutRect.width / 3;
     const minWidth = 150;
-
-    // Sujeta el nuevo ancho para que siempre esté entre los límites mínimo y máximo.
     const clampedWidth = Math.max(minWidth, Math.min(newWidth, maxWidth));
     setFileExplorerWidth(clampedWidth);
-  }, []); // No tiene dependencias externas, por lo que se puede dejar vacío.
+  }, []);
 
   const handleMouseUp = useCallback(() => {
     isResizingRef.current = false;
     document.removeEventListener('mousemove', handleMouseMove);
     document.removeEventListener('mouseup', handleMouseUp);
-  }, [handleMouseMove]); // Depende de handleMouseMove
+  }, [handleMouseMove]);
 
   useEffect(() => {
-    // Limpieza del event listener
     return () => handleMouseUp();
-  }, [handleMouseUp]); // Solo necesita handleMouseUp como dependencia
-  // ----------------------------------------------------
+  }, [handleMouseUp]);
 
   const createToggleHandler = useCallback((
     view: 'execution_order' | 'modules_view',
     setter: React.Dispatch<React.SetStateAction<Set<string>>>
   ) => async (sectionId: string) => {
     let newCollapsedState = false;
-
     setter(prev => {
       const newSet = new Set(prev);
       const isCurrentlyCollapsed = newSet.has(sectionId);
       newCollapsedState = !isCurrentlyCollapsed;
-
       if (newCollapsedState) newSet.add(sectionId);
       else newSet.delete(sectionId);
       return newSet;
     });
-
-    // Espera un momento para que el estado se actualice antes de enviar la llamada a la API.
     await new Promise(resolve => setTimeout(resolve, 0));
-
     await fetch('/api/ui-settings/module-collapse', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -155,16 +181,12 @@ const MainLayout: React.FC = () => {
   const handleToggleExecutionOrderCollapse = createToggleHandler('execution_order', setExecutionOrderCollapsed);
   const handleToggleModulesViewCollapse = createToggleHandler('modules_view', setModulesViewCollapsed);
 
-  // Función para limpiar los datos de los módulos antes de guardarlos.
-  // Elimina propiedades que son solo para la UI y no deben persistir en run_list.json.
   const cleanModulesForSave = (modulesToClean: Module[]): any[] => {
     return modulesToClean.map(module => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { color, is_collapsed, ...restOfModule } = module;
       return {
         ...restOfModule,
         features: module.features.map(feature => {
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const { display_tags, scenarios, color, ...restOfFeature } = feature;
           return restOfFeature;
         }),
@@ -172,76 +194,30 @@ const MainLayout: React.FC = () => {
     });
   };
 
-  // Persist modules to backend (used after drag modifications).
-  // The hook doesn't provide a handleSave function so we implement a minimal one here.
   const handleSave = useCallback(async (modulesToSave?: Module[]) => {
     try {
       const payload = cleanModulesForSave(modulesToSave || modulesRef.current);
-      const response = await fetch('/api/execution-order', { // Este endpoint debe guardar en run_list.json
+      const response = await fetch('/api/execution-order', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload), // Usar la referencia para evitar estado rancio o el payload directo
+        body: JSON.stringify(payload),
       });
       const updatedModules = await response.json();
-      setModules(updatedModules); // Actualiza el estado con la respuesta del servidor para mantener la consistencia
+      setModules(updatedModules);
+      if (propsOnSaveModules) propsOnSaveModules(updatedModules);
     } catch (error) {
       console.error('Error saving execution order:', error);
     }
-  }, [setModules]);
+  }, [setModules, propsOnSaveModules]);
 
-  // Simple local status placeholder (the hook doesn't currently return status).
-  type LocalStatusType = 'success' | 'error' | 'info' | null;
-  const status: { text: string; type: LocalStatusType } = { text: '', type: 'info' };
   const [viewMenuAnchorEl, setViewMenuAnchorEl] = useState<null | HTMLElement>(null);
   const [languageMenuAnchorEl, setLanguageMenuAnchorEl] = useState<null | HTMLElement>(null);
 
-
-  // Estados levantados desde ExecutionOrder para persistencia entre pestañas
-  // y para ser gestionados por el layout principal.
-  // AHORA gestionados por LayoutContext para percistencia entre rutas.
-
-  // Estado para gestionar el elemento que se está arrastrando y mostrar el overlay
-  const [activeDragItem, setActiveDragItem] = useState<Active | null>(null);
-  const runningFeatureIdRef = useRef(runningFeatureId);
-
-  // Buffer for logs to prevent high-frequency state updates
-  const bufferedLogsRef = useRef<string[]>([]);
-
-  // Deferred rendering state
   const [isReady, setIsReady] = useState(false);
   useEffect(() => {
-    // Defer heavy component rendering to allow initial paint to finish fast
     const timer = setTimeout(() => setIsReady(true), 100);
     return () => clearTimeout(timer);
   }, []);
-
-  // Flush logs buffer periodically
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (bufferedLogsRef.current.length > 0) {
-        const logsToFlush = [...bufferedLogsRef.current];
-        bufferedLogsRef.current = [];
-        setLogs(prev => [...prev, ...logsToFlush]);
-      }
-    }, 100); // Flush every 100ms
-    return () => clearInterval(interval);
-  }, []);
-
-  const availableThemes = {
-    'vs-light': 'VS Light',
-    'vs-dark': 'VS Dark',
-  };
-
-  useEffect(() => {
-    runningFeatureIdRef.current = runningFeatureId;
-  }, [runningFeatureId]);
-
-  useEffect(() => {
-    if (isModifiedByDrag) {
-      handleSave();
-      setIsModifiedByDrag(false); // Reset the flag after saving
-    }
-  }, [isModifiedByDrag, handleSave]);
 
   const handleViewMenuClick = (event: React.MouseEvent<HTMLElement>) => {
     setViewMenuAnchorEl(event.currentTarget);
@@ -250,6 +226,24 @@ const MainLayout: React.FC = () => {
   const handleViewMenuClose = () => {
     setViewMenuAnchorEl(null);
   };
+
+  const handleFileSelect = useCallback(async (path: string) => {
+    const name = path.split('/').pop() || path;
+    setInternalSelectedFile({ name, path, type: 'file' });
+    setEditorContent(t('editor.loading_file', { path }));
+    try {
+      const response = await fetch(`/api/features/${encodeURIComponent(path)}`);
+      if (!response.ok) throw new Error('Failed to fetch file content');
+      const data = await response.json();
+      setEditorContent(data.content);
+      setIsDirty(false);
+      setTabValue(0);
+    } catch (error) {
+      console.error("Error loading file:", error);
+      setEditorContent(t('editor.error_loading', { path }));
+      setIsDirty(false);
+    }
+  }, [t]);
 
   const handleLanguageMenuClose = () => {
     setLanguageMenuAnchorEl(null);
@@ -260,78 +254,15 @@ const MainLayout: React.FC = () => {
     handleLanguageMenuClose();
   };
 
-  // Configurar sensores para distinguir entre click y drag
-  // Memoize options objects to prevent unnecessary DndContext updates
-  const pointerSensorOptions = useMemo(() => ({
-    activationConstraint: {
-      distance: 4,
-    },
-  }), []);
-
-  const touchSensorOptions = useMemo(() => ({
-    activationConstraint: {
-      delay: 150,
-      tolerance: 5,
-    },
-  }), []);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, pointerSensorOptions),
-    useSensor(TouchSensor, touchSensorOptions)
-  );
-  // Lógica reescrita: ahora solo acepta el path del archivo.
-  const handleFileSelect = useCallback(async (path: string) => {
-    const name = path.split('/').pop() || path;
-
-    setSelectedFile({ name, path, type: 'file' });
-    setEditorContent(t('editor.loading_file', { path }));
-
-    try {
-      const response = await fetch(`/api/features/${encodeURIComponent(path)}`);
-      if (!response.ok) throw new Error('Failed to fetch file content');
-      const data = await response.json();
-      setEditorContent(data.content);
-      setIsDirty(false); // Limpia el estado de "sucio" al cargar un nuevo archivo
-      setTabValue(0); // Switch to editor tab on file select
-    } catch (error) {
-      console.error("Error loading file:", error);
-      setEditorContent(t('editor.error_loading', { path }));
-      setIsDirty(false);
-    }
-  }, [setEditorContent, setSelectedFile, setTabValue]);
-
-  // Handle URL query param for opening files
-  const location = useLocation();
-  const navigate = useNavigate();
-
-  // Ref to track the last file opened from URL to prevent double opening
-  const lastOpenedFileRef = useRef<string | null>(null);
-
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const fileToOpen = params.get('openFile');
-
     if (fileToOpen) {
-      // Prevent opening the same file twice
-      if (lastOpenedFileRef.current === fileToOpen) {
-        return;
-      }
-
-      // Ensure we are in the editor view
-      if (activePerspective !== 'editor') {
-        setActiveView('editor');
-      }
-
-      // Open the file
-      console.log("Auto-opening file from URL:", fileToOpen);
+      if (lastOpenedFileRef.current === fileToOpen) return;
+      if (activePerspective !== 'editor') setActiveView('editor');
       lastOpenedFileRef.current = fileToOpen;
       handleFileSelect(fileToOpen);
-
-      // Optional: Clear the param so refreshing doesn't force-reopen or to leave URL clean
-      // But keep it clean for now to see it works
-      // navigate('/', { replace: true }); 
     } else {
-      // Reset the ref when there's no file in URL
       lastOpenedFileRef.current = null;
     }
   }, [location.search, activePerspective, setActiveView, handleFileSelect]);
@@ -339,7 +270,7 @@ const MainLayout: React.FC = () => {
   const handleEditorChange = useCallback((value: string | undefined) => {
     if (value !== undefined) {
       setEditorContent(value);
-      setIsDirty(true); // Marca como "sucio" cuando el contenido cambia
+      setIsDirty(true);
     }
   }, []);
 
@@ -349,203 +280,130 @@ const MainLayout: React.FC = () => {
 
   const handleSaveFile = useCallback(async () => {
     if (!selectedFile || !isDirty) return;
-
     try {
       const response = await fetch(`/api/features/${encodeURIComponent(selectedFile.path)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: editorContent }),
       });
-
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to save file');
       }
-
-      setIsDirty(false); // Limpia el estado de "sucio" después de guardar
-      // Opcional: mostrar una notificación de éxito
-
+      setIsDirty(false);
     } catch (error) {
       console.error('Error saving file:', error);
-      // Opcional: mostrar una notificación de error
     }
   }, [selectedFile, editorContent, isDirty]);
 
   const navigateToModule = useCallback((moduleName: string) => {
-    setTabValue(1); // Cambia a la pestaña "Modulos" (ahora en el índice 1)
+    setTabValue(1);
     setFocusedModule(moduleName);
-  }, []); // No tiene dependencias, por lo que se puede dejar vacío.
+  }, []);
 
-  // Nueva función para limpiar el estado de "focused" después de usarlo.
   const clearFocusedModule = useCallback(() => {
     setFocusedModule(null);
   }, []);
 
-  // Función para refrescar módulos después de renombrar archivos/carpetas
   const handleRefreshModules = useCallback(async () => {
     try {
-      await refetch(); // Usa la función refetch del hook useExecutionOrder
+      await refetch();
     } catch (error) {
-      console.error('Error refreshing modules after rename:', error);
+      console.error('Error refreshing modules:', error);
     }
   }, [refetch]);
 
-  // --- Lógica de ejecución de pruebas, ahora en el layout principal ---
-  // Refactorizar la lógica de conexión a logs en una función reutilizable
   const connectToLogStream = useCallback(() => {
     setLogs(prev => [...prev, t('orchestrator.connecting_logs')]);
     const eventSource = new EventSource('/api/stream-logs');
-
     eventSource.onmessage = (event) => {
       const data = JSON.parse(event.data);
-
       if (data.type === 'scenario_status') {
-        const featureIdForUpdate = data.feature_id;
-        if (featureIdForUpdate) {
-          const uniqueScenarioId = `${featureIdForUpdate}::${data.name}`;
+        let featureId = data.feature_id?.replace(/\\/g, '/');
+        if (featureId) {
+          const uniqueId = `${featureId}::${data.name}`;
           if (data.status === 'running') {
-            setRunningFeatureId(featureIdForUpdate);
+            setRunningFeatureId(featureId);
+            setCurrentScenarioName(data.name);
           }
-          if (data.gifExecutionId) {
-            setScenarioGifs(prev => ({ ...prev, [uniqueScenarioId]: data.gifExecutionId }));
-          }
-          setScenarioStatuses(prev => ({ ...prev, [uniqueScenarioId]: data.status }));
+          if (data.gifExecutionId) setScenarioGifs(prev => ({ ...prev, [uniqueId]: data.gifExecutionId }));
+          setScenarioStatuses(prev => ({ ...prev, [uniqueId]: data.status }));
         }
         return;
       }
-
       if (data.type === 'task_status') {
-        const featureId = data.feature_id;
+        const featureId = data.feature_id?.replace(/\\/g, '/');
         const taskResult = data.task;
         if (featureId && taskResult && typeof taskResult.ui_index === 'number') {
           setTaskStatuses(prev => ({
             ...prev,
-            [featureId]: {
-              ...(prev[featureId] || {}),
-              [taskResult.ui_index]: {
-                status: taskResult.status,
-                error: taskResult.error
-              }
-            }
+            [featureId]: { ...(prev[featureId] || {}), [taskResult.ui_index]: { status: taskResult.status, error: taskResult.error } }
           }));
         }
         return;
       }
-
       if (data.type === 'report_ready' && data.reportUrl) {
-        setLogs(prev => [...prev, `--- ${t('common.finished')} (Report URL available) ---`]);
-        // En lugar de window.open, navegamos a la seccion de reportes interna
-        // para evitar el uso de Internet Explorer en la PC destino.
+        setLogs(prev => [...prev, `--- ${t('common.finished')} ---`]);
         navigate('/reports');
         return;
       }
-
-      if (data.log === '---EXECUTION_FINISHED---') {
-        setLogs(prev => [...prev, `--- ${t('common.finished')} ---`]);
+      if (data.log === '---EXECUTION_FINISHED---' || data.log === '---EXECUTION_STOPPED_BY_USER---' || data.log === '---EXECUTION_KILLED_BY_WATCHDOG---') {
+        setLogs(prev => [...prev, data.log]);
         setIsExecuting(false);
-        eventSource.close();
         setRunningFeatureId(null);
-      } else if (data.log === '---EXECUTION_STOPPED_BY_USER---') {
-        setLogs(prev => [...prev, `--- ${t('orchestrator.stop_tests')} ---`]);
-        setRunningFeatureId(null);
-        setIsExecuting(false);
         eventSource.close();
-      } else if (data.log === '---EXECUTION_KILLED_BY_WATCHDOG---') {
-        setLogs(prev => [...prev, `--- ${t('orchestrator.watchdog_terminated')} ---`]);
-        setRunningFeatureId(null);
-        setIsExecuting(false);
-        eventSource.close();
-      } else {
-        if (data.log) {
-          bufferedLogsRef.current.push(data.log);
-        }
+      } else if (data.log) {
+        setLogs(prev => [...prev, data.log]);
       }
     };
-
-    eventSource.onerror = () => {
-      console.log("EventSource connection closed or error.");
-      eventSource.close();
-    };
-  }, [setLogs, setIsExecuting, setRunningFeatureId, setScenarioStatuses, setScenarioGifs, setTaskStatuses]);
+    eventSource.onerror = () => eventSource.close();
+  }, [setLogs, setIsExecuting, setRunningFeatureId, setScenarioStatuses, setScenarioGifs, setTaskStatuses, t, navigate]);
 
   const handleRunTests = async () => {
     if (isExecuting) return;
-
     setIsExecuting(true);
     setLogs([t('orchestrator.starting_execution')]);
     setScenarioStatuses({});
     setTaskStatuses({});
     setScenarioGifs({});
     setRunningFeatureId(null);
-
     try {
       const response = await fetch('/api/run-tests', { method: 'POST' });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to start test execution');
-      }
-      const result = await response.json();
-      setLogs(prev => [...prev, result.message]);
-
-      // Conectar al stream
+      if (!response.ok) throw new Error('Failed to start execution');
       connectToLogStream();
-
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-      setLogs(prev => [...prev, `Error al iniciar la ejecución: ${errorMessage}`]);
-      setRunningFeatureId(null);
+      console.error(error);
       setIsExecuting(false);
     }
   };
 
   const handleStopTests = async () => {
     try {
-      const response = await fetch('/api/stop-tests', { method: 'POST' });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to stop test execution');
-      }
-      const result = await response.json();
-      setLogs(prev => [...prev, result.message]);
+      await fetch('/api/stop-tests', { method: 'POST' });
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-      setLogs(prev => [...prev, `Error al detener la ejecución: ${errorMessage}`]);
+      console.error(error);
     }
   };
 
   const handleScheduleTests = async (date: Date) => {
     try {
-      setLogs(prev => [...prev, `Programando ejecución para: ${date.toLocaleString()}...`]);
-      const response = await fetch('/api/schedule-tests', {
+      await fetch('/api/schedule-tests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ execution_time: date.toISOString() }),
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to schedule tests');
-      }
-      const result = await response.json();
-      setLogs(prev => [...prev, result.message]);
       setScheduledExecutionTime(date);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-      setLogs(prev => [...prev, `Error al programar ejecución: ${errorMessage}`]);
+      console.error(error);
     }
   };
 
   const handleCancelSchedule = async () => {
     try {
-      const response = await fetch('/api/cancel-schedule', { method: 'POST' });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to cancel schedule');
-      }
+      await fetch('/api/cancel-schedule', { method: 'POST' });
       setScheduledExecutionTime(null);
-      setLogs(prev => [...prev, 'Ejecución programada cancelada.']);
     } catch (error) {
-      setLogs(prev => [...prev, 'Error al cancelar la programación.']);
+      console.error(error);
     }
   };
 
@@ -555,440 +413,129 @@ const MainLayout: React.FC = () => {
         const scheduleResponse = await fetch('/api/schedule-status');
         if (scheduleResponse.ok) {
           const data = await scheduleResponse.json();
-          if (data.scheduled && data.execution_time) {
-            setScheduledExecutionTime(new Date(data.execution_time));
-          } else {
-            setScheduledExecutionTime(null);
-          }
+          setScheduledExecutionTime(data.scheduled ? new Date(data.execution_time) : null);
         }
-
         const executionResponse = await fetch('/api/execution-status');
         if (executionResponse.ok) {
-          const execData = await executionResponse.json();
-          if (execData.running && !isExecuting) {
-            console.log("Detectada ejecución en segundo plano. Conectando logs...");
+          const data = await executionResponse.json();
+          if (data.running && !isExecuting) {
             setIsExecuting(true);
-            setScheduledExecutionTime(null);
             connectToLogStream();
           }
         }
       } catch (error) {
-        console.error("Error polling statuses", error);
+        console.error(error);
       }
     };
-
     checkStatus();
     const interval = setInterval(checkStatus, 5000);
     return () => clearInterval(interval);
-  }, [isExecuting, connectToLogStream]);
+  }, [isExecuting, connectToLogStream, setIsExecuting, setScheduledExecutionTime]);
 
-  const ConsoleTabLabel = () => (
-    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-      Console
-      {isExecuting && (
-        <Badge
-          color="primary"
-          variant="dot"
-          sx={{ ml: 1.5 }}
-        />
-      )}
-    </Box>
-  );
+  const progress = useMemo(() => {
+    if (!isExecuting) return undefined;
+    const activeScenarios = modules.flatMap(m => m.features).filter(f => f.active).flatMap(f => f.scenarios || []);
+    if (activeScenarios.length === 0) return 0;
+    const completed = Object.values(scenarioStatuses).filter(s => ['passed', 'failed', 'skipped'].includes(s)).length;
+    return Math.min(100, (completed / activeScenarios.length) * 100);
+  }, [isExecuting, modules, scenarioStatuses]);
 
   return (
-    <>
-      {/* Ajustamos el Box principal para dejar espacio para la barra de estado */}
-      <Box sx={{
-        display: 'flex', flexDirection: 'column',
-        height: '100vh', pb: '24px' /* Padding-bottom para no solapar con la barra */
-      }}>
-        {/* Barra de Menú Superior */}
-        <AppToolbar
-          title="Pehape - Automation Framework"
-          icon={<CodeIcon sx={{ fontSize: 32 }} />}
-          showViewMenu={true}
-        />
+    <Box ref={layoutRef} sx={{ display: 'flex', flexDirection: 'column', height: '100vh', pb: '24px', overflow: 'hidden' }}>
+      <AppToolbar title="Pehape" icon={<CodeIcon />} showViewMenu={true} />
 
-        {/* View Menu (simplified - no theme/language) */}
-        <Menu
-          anchorEl={viewMenuAnchorEl}
-          open={Boolean(viewMenuAnchorEl)}
-          onClose={handleViewMenuClose}
-        >
-          <MenuItem disabled>{t('common.view')}</MenuItem>
-          <MenuItem onClick={handleViewMenuClose}>
-            <Typography variant="caption" color="text.secondary">
-              {t('common.view')} options
-            </Typography>
-          </MenuItem>
-        </Menu>
-
-        {/* Language Selection Menu */}
-        <Menu
-          anchorEl={languageMenuAnchorEl}
-          open={Boolean(languageMenuAnchorEl)}
-          onClose={handleLanguageMenuClose}
-        >
-          <MenuItem onClick={() => handleLanguageChange('en')}>
-            <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-              <Box sx={{ flexGrow: 1 }}>English</Box>
-              {i18n.language === 'en' && <CheckIcon fontSize="small" color="primary" />}
-            </Box>
-          </MenuItem>
-          <MenuItem onClick={() => handleLanguageChange('es')}>
-            <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-              <Box sx={{ flexGrow: 1 }}>Español</Box>
-              {i18n.language === 'es' && <CheckIcon fontSize="small" color="primary" />}
-            </Box>
-          </MenuItem>
-        </Menu>
-
-        <DndContext
-          sensors={sensors}
-          collisionDetection={(args) => {
-            const activeType = args.active.data.current?.type as string;
-            if (activeType === 'file-explorer-feature') {
-              // Switch to rectIntersection for better cross-container detection
-              return rectIntersection(args);
-            }
-            const droppableContainers = args.droppableContainers.filter((container) => {
-              return container.data.current?.type === activeType;
-            });
-            return closestCenter({ ...args, droppableContainers: droppableContainers });
-          }}
-          onDragStart={(event) => {
-            setActiveDragItem(event.active);
-          }}
-          onDragCancel={() => { // Added onDragCancel wrapper
-            // Si se cancela el arrastre, limpiamos el estado
-            setActiveDragItem(null);
-          }} // Closing bracket for onDragCancel
-          onDragEnd={async (event) => {
-            // Al finalizar el arrastre, limpiamos el estado
-            setActiveDragItem(null);
-            const { active, over } = event;
-
-            if (!over) return;
-
-            // ... (Drag Logic remains largely the same, ensuring variables activePerspective don't break logic) ...
-            // ... Since I am replacing the block, I need to include the logic or refer to it.
-            // ... Given the tool limitation, I will copy the logic but verify context availability.
-
-            // CASO 1: Arrastrar un feature desde el FileExplorer a un Módulo
-            const isFileExplorerDrag = active.data.current?.type === 'file-explorer-feature';
-
-            // Logica mejorada de detección de target
-            let targetModuleName = null;
-
-            if (isFileExplorerDrag) {
-              const overId = over.id.toString();
-
-              // 1. Direct drop on module container (created by useDroppable in Modules.tsx)
-              if (overId.startsWith('module-drop-area-')) {
-                targetModuleName = over.data.current?.moduleName;
-              }
-              // 2. Drop on an existing feature inside a module (handled by useSortable -> implicit droppable)
-              else {
-                // Buscar si el ID sobre el que se soltó corresponde a algún feature de algún módulo
-                // Esto permite soltar "entre" features o sobre features existentes
-                for (const mod of modules) {
-                  // Check if 'overId' matches a feature ID in this module
-                  const isOverFeature = mod.features.some(f => f.id === overId);
-                  // Also check if 'overId' matches the SortableContext ID (which is the module name)
-                  const isOverSortableContext = overId === mod.module_name;
-
-                  if (isOverFeature || isOverSortableContext) {
-                    targetModuleName = mod.module_name;
-                    break;
-                  }
-                }
-              }
-
-              if (targetModuleName) {
-                const featurePath = active.data.current?.path;
-                if (featurePath) {
-                  try {
-                    const response = await fetch(`/api/modules/${encodeURIComponent(targetModuleName)}/features`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ path: featurePath }),
-                    });
-                    if (!response.ok) {
-                      const errorData = await response.json();
-                      throw new Error(errorData.error || 'Failed to add feature');
-                    }
-                    const updatedModules = await response.json();
-                    setModules(() => updatedModules);
-                  } catch (error) { console.error('Error adding feature:', error); }
-                }
-                return;
-              }
-            }
-
-            // CASO 2: Reordenar Módulos
-            const isModuleDrag = active.data.current?.type === 'module';
-            if (isModuleDrag) {
-              if (active.id !== over.id) {
-                const oldIndex = modules.findIndex((m) => m.module_name === active.id);
-                const newIndex = modules.findIndex((m) => m.module_name === over.id);
-                setModules((currentModules: Module[]) => arrayMove(currentModules, oldIndex, newIndex));
-                setIsModifiedByDrag(true);
-              }
-              return;
-            }
-
-            // CASO 3: Reordenar Features dentro del mismo módulo
-            const isFeatureDrag = active.data.current?.type === 'feature';
-            if (isFeatureDrag) {
-              const activeContainer = active.data.current?.sortable.containerId;
-              const overContainer = over.data.current?.sortable.containerId;
-
-              if (activeContainer === overContainer) {
-                const moduleName = activeContainer;
-                const module = modules.find(m => m.module_name === moduleName);
-                if (!module) return;
-                const oldIndex = module.features.findIndex(f => f.id === active.id);
-                const newIndex = module.features.findIndex(f => f.id === over.id);
-                if (oldIndex !== newIndex) {
-                  const reorderedFeatures = arrayMove(module.features, oldIndex, newIndex);
-                  const updatedFeaturesWithOrder = reorderedFeatures.map((feature, index) => ({ ...feature, order: index + 1 }));
-                  const originalModules = modules;
-                  setModules(current => current.map(m => m.module_name === moduleName ? { ...m, features: updatedFeaturesWithOrder } : m));
-                  try {
-                    const featuresToSave = updatedFeaturesWithOrder.map(({ display_tags, scenarios, color, ...rest }) => rest);
-                    const response = await fetch(`/api/modules/${encodeURIComponent(moduleName)}/features/reorder`, {
-                      method: 'PUT',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify(featuresToSave),
-                    });
-                    if (!response.ok) setModules(originalModules);
-                  } catch (e) {
-                    console.error('Error reordering:', e);
-                    setModules(originalModules);
-                  }
-                }
-              }
-              return;
-            }
-          }}
-        >
-          <Box sx={{ display: 'flex', flexDirection: 'row', height: '100%', overflow: 'hidden', bgcolor: 'background.default' }}>
-            {/* 2. SIDEBAR (File Explorer) - Only visible in Editor Mode */}
-            {activePerspective === 'editor' && (
-              <>
-                <Paper
-                  elevation={0}
-                  square
-                  sx={{ width: fileExplorerWidth, minWidth: '150px', overflow: 'auto', display: 'flex', flexDirection: 'column', borderRight: 1, borderColor: 'divider', bgcolor: 'background.paper' }}
-                >
-                  <Box sx={{ p: 1, borderBottom: 1, borderColor: 'divider', fontWeight: 'bold' }}>{t('common.explorer')}</Box>
-                  {isReady ? (
-                    <FileExplorer
-                      onFileSelect={handleFileSelect}
-                      fontSize={fontSize}
-                      onRefreshModules={handleRefreshModules}
-                    />
-                  ) : (
-                    <Typography variant="body2" sx={{ p: 2, color: 'text.secondary' }}>Loading explorer...</Typography>
-                  )}
-                </Paper>
-                {/* Resizer Handle */}
-                <Box
-                  onMouseDown={handleMouseDown}
-                  sx={{
-                    width: '4px',
-                    cursor: 'col-resize',
-                    bgcolor: 'divider',
-                    '&:hover': { bgcolor: 'primary.main' }
-                  }}
-                />
-              </>
-            )}
-
-            {/* 3. MAIN WORKSPACE */}
-            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-
-              {/* CONTENT AREA */}
-              <Box sx={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
-                {activePerspective === 'editor' ? (
-                  // --- EDITOR VIEW (Tabs: Code | Modules) ---
-                  <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                    <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-                      <Tabs
-                        value={tabValue}
-                        onChange={handleTabChange}
-                        aria-label="editor tabs"
-                        sx={{ minHeight: '48px', '& .MuiTab-root': { textTransform: 'none' } }}
-                      >
-                        <Tab
-                          label={isDirty ? `1. ${selectedFile?.name || t('common.editor')} ${t('editor.dirty_marker')}` : (`1. ${selectedFile?.name || t('common.editor')}`)}
-                          id="editor-tab-0"
-                        />
-                        <Tab label={`2. ${t('common.modules')}`} id="editor-tab-1" />
-                      </Tabs>
-                    </Box>
-
-                    {/* TabPanel 0: Feature Editor */}
-                    <TabPanel value={tabValue} index={0}>
-                      <FeatureEditor
-                        selectedFile={selectedFile}
-                        editorContent={editorContent}
-                        onEditorChange={handleEditorChange}
-                        theme={themeName}
-                        onSave={handleSaveFile}
-                        isDirty={isDirty}
-                        isResizing={isResizingRef.current}
-                        validationTexts={validationTexts}
-                        onValidationTextsChange={setValidationTexts}
-                      />
-                    </TabPanel>
-
-                    {/* TabPanel 1: Modules Component */}
-                    <TabPanel value={tabValue} index={1}>
-                      {isReady && !isModulesLoading ? (
-                        <ModulesComponent
-                          fontSize={fontSize}
-                          onFeatureSelect={handleFileSelect}
-                          modules={modules}
-                          setModules={setModules}
-                          scenarioStatuses={scenarioStatuses}
-                          setScenarioStatuses={setScenarioStatuses}
-                          isExecuting={isExecuting}
-                          runningFeatureId={runningFeatureId}
-                          onRunTests={handleRunTests}
-                          onSaveModules={handleSave}
-                          collapsedSections={modulesViewCollapsed}
-                          onToggleSectionCollapse={handleToggleModulesViewCollapse}
-                          focusedModule={focusedModule}
-                          onStopTests={handleStopTests}
-                          navigateToModule={navigateToModule}
-                          onFocusConsumed={clearFocusedModule}
-                        />
-                      ) : (
-                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 2 }}>
-                          <CircularProgress size={40} thickness={4} />
-                          <Typography variant="caption" color="text.secondary">Loading modules...</Typography>
-                        </Box>
-                      )}
-                    </TabPanel>
-                  </Box>
-                ) : (
-                  // --- ORCHESTRATOR VIEW (Execution Flow Only) ---
-                  <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', p: 0, bgcolor: 'background.default', overflow: 'hidden' }}>
-                    <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
-                      {isReady && !isModulesLoading ? (
-                        <ExecutionOrder
-                          fontSize={fontSize}
-                          onFeatureSelect={handleFileSelect}
-                          modules={modules}
-                          setModules={setModules}
-                          isExecuting={isExecuting}
-                          runningFeatureId={runningFeatureId}
-                          onRunTests={handleRunTests}
-                          onSaveModules={handleSave}
-                          collapsedSections={executionOrderCollapsed}
-                          onToggleSectionCollapse={handleToggleExecutionOrderCollapse}
-                          navigateToModule={navigateToModule}
-                          onStopTests={handleStopTests}
-                          onScheduleTests={handleScheduleTests}
-                          scheduledExecutionTime={scheduledExecutionTime}
-                          onCancelSchedule={handleCancelSchedule}
-                          validationTexts={validationTexts}
-                        />
-                      ) : (
-                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 2 }}>
-                          <CircularProgress size={40} thickness={4} />
-                          <Typography variant="caption" color="text.secondary">Loading execution plan...</Typography>
-                        </Box>
-                      )}
-                    </Box>
-                  </Box>
-                )}
-              </Box>
-
-              {/* 4. CONSOLE DOCK */}
-              {/* Hide console entirely in editor mode as per user request */}
-              {isConsoleOpen && activePerspective !== 'editor' && (
-                <Paper
-                  elevation={8}
-                  sx={{
-                    height: '250px',
-                    borderTop: 1,
-                    borderColor: 'divider',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    zIndex: 1100
-                  }}
-                >
-                  <Box sx={{ display: 'flex', alignItems: 'center', p: 1, bgcolor: 'action.hover', borderBottom: 1, borderColor: 'divider' }}>
-                    <Typography variant="overline" sx={{ flexGrow: 1, fontWeight: 'bold' }}>Console / Output</Typography>
-                    <IconButton size="small" onClick={toggleConsole}>
-                      <CloseIcon fontSize="small" />
-                    </IconButton>
-                  </Box>
-                  <Box sx={{ flex: 1, overflow: 'auto', p: 0 }}>
-                    <ConsoleView logs={logs} />
-                  </Box>
-                </Paper>
-              )}
-
-            </Box>
-
-          </Box>
-          {/* Aquí renderizamos el "fantasma" del elemento que se está arrastrando */}
-          <DragOverlay dropAnimation={null}>
-            {activeDragItem && activeDragItem.data.current?.type === 'file-explorer-feature' && (
-              // Renderizamos una versión simplificada del TreeItem para el overlay
-              <Paper elevation={4} sx={{ p: 1, display: 'flex', alignItems: 'center', backgroundColor: 'primary.light' }}>
-                <DraggableTreeItemPreview
-                  path={activeDragItem.data.current.path}
-                  type={activeDragItem.data.current.resourceType}
-                />
-              </Paper>
-            )}
-          </DragOverlay>
-        </DndContext>
-        {/* Renderizar la barra de toggle de consola justo encima de la barra de estado - Solo en Orquestrador */}
-        {activePerspective === 'orchestrator' && (
-          <Box sx={{
-            display: 'flex',
-            alignItems: 'center',
-            height: '24px',
-            bgcolor: 'background.paper',
-            borderTop: 1,
-            borderColor: 'divider',
-            px: 1,
-            gap: 1
-          }}>
-            <Button
-              size="small"
-              onClick={toggleConsole}
-              startIcon={<TerminalIcon sx={{ fontSize: '14px !important' }} />}
-              sx={{
-                height: '100%',
-                fontSize: '10px',
-                textTransform: 'none',
-                px: 1,
-                borderRadius: 0,
-                color: isConsoleOpen ? 'primary.main' : 'text.secondary',
-                backgroundColor: isConsoleOpen ? alpha(theme.palette.primary.main, 0.1) : 'transparent',
-                '&:hover': {
-                  backgroundColor: alpha(theme.palette.primary.main, 0.2),
-                }
-              }}
-            >
-              {t('common.console')}
-            </Button>
-          </Box>
+      <Box sx={{ flex: 1, display: 'flex', minWidth: 0, overflow: 'hidden' }}>
+        {activePerspective === 'editor' && (
+          <>
+            <Paper elevation={0} sx={{ width: fileExplorerWidth, borderRight: 1, borderColor: 'divider', display: 'flex', flexDirection: 'column' }}>
+              <Box sx={{ p: 1, borderBottom: 1, borderColor: 'divider', fontWeight: 'bold' }}>{t('common.explorer')}</Box>
+              <FileExplorer onFileSelect={handleFileSelect} fontSize={fontSize} onRefreshModules={handleRefreshModules} />
+            </Paper>
+            <Box onMouseDown={handleMouseDown} sx={{ width: '4px', cursor: 'col-resize', bgcolor: 'divider', '&:hover': { bgcolor: 'primary.main' } }} />
+          </>
         )}
 
-        <StatusBar
-          message={status?.text || ''}
-          isLoading={isModulesLoading}
-          statusType={status?.type || 'info'}
-        />
-      </Box >
-    </>
+        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+          <Box sx={{ flex: 1, overflow: 'auto' }}>
+            {activePerspective === 'editor' ? (
+              <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                <Tabs value={tabValue} onChange={handleTabChange}>
+                  <Tab label={selectedFile?.name || t('common.editor')} />
+                  <Tab label={t('common.modules')} />
+                </Tabs>
+                <TabPanel value={tabValue} index={0}>
+                  <FeatureEditor
+                    selectedFile={selectedFile}
+                    editorContent={editorContent}
+                    onEditorChange={handleEditorChange}
+                    onSave={handleSaveFile}
+                    isDirty={isDirty}
+                    validationTexts={validationTexts}
+                    onValidationTextsChange={setValidationTexts}
+                  />
+                </TabPanel>
+                <TabPanel value={tabValue} index={1}>
+                  <ModulesComponent
+                    modules={modules}
+                    setModules={setModules}
+                    onFeatureSelect={handleFileSelect}
+                    onRunTests={handleRunTests}
+                    onSaveModules={handleSave}
+                    collapsedSections={modulesViewCollapsed}
+                    onToggleSectionCollapse={handleToggleModulesViewCollapse}
+                    navigateToModule={navigateToModule}
+                    onStopTests={handleStopTests}
+                    onFocusConsumed={clearFocusedModule}
+                  />
+                </TabPanel>
+              </Box>
+            ) : (
+              <ExecutionOrder
+                modules={modules}
+                setModules={setModules}
+                onFeatureSelect={handleFileSelect}
+                onRunTests={handleRunTests}
+                onSaveModules={handleSave}
+                collapsedSections={executionOrderCollapsed}
+                onToggleSectionCollapse={handleToggleExecutionOrderCollapse}
+                onStopTests={handleStopTests}
+                onScheduleTests={handleScheduleTests}
+                scheduledExecutionTime={scheduledExecutionTime}
+                onCancelSchedule={handleCancelSchedule}
+                validationTexts={validationTexts}
+              />
+            )}
+          </Box>
+
+          {isConsoleOpen && activePerspective !== 'editor' && (
+            <Paper elevation={8} sx={{ height: '250px', borderTop: 1, borderColor: 'divider', display: 'flex', flexDirection: 'column' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', p: 1, bgcolor: 'action.hover' }}>
+                <Typography variant="overline" sx={{ flexGrow: 1 }}>Console</Typography>
+                <IconButton size="small" onClick={toggleConsole}><CloseIcon fontSize="small" /></IconButton>
+              </Box>
+              <Box sx={{ flex: 1, overflow: 'auto' }}><ConsoleView logs={logs} /></Box>
+            </Paper>
+          )}
+
+          {activePerspective === 'orchestrator' && (
+            <Box sx={{ height: '24px', borderTop: 1, borderColor: 'divider', px: 1, display: 'flex', alignItems: 'center' }}>
+              <Button size="small" onClick={toggleConsole} startIcon={<TerminalIcon sx={{ fontSize: 14 }} />}>
+                {t('common.console')}
+              </Button>
+            </Box>
+          )}
+        </Box>
+      </Box>
+
+      <StatusBar
+        message={''}
+        isExecuting={isExecuting}
+        progress={progress}
+        onStop={handleStopTests}
+        currentFeature={runningFeatureId || undefined}
+        currentScenario={currentScenarioName || undefined}
+      />
+    </Box>
   );
 };
 

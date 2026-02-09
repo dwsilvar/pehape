@@ -11,11 +11,11 @@ interface HomePageProps {
     onSaveModules: any;
 }
 
-const HomePage: React.FC<HomePageProps> = () => {
+const HomePage: React.FC<HomePageProps> = (props) => {
     // HomePage is now just a route wrapper for the unified MainLayout
     // The state and logic have been moved to MainLayout + Context
     return (
-        <MainLayout />
+        <MainLayout {...props} />
     );
 };
 

@@ -374,7 +374,7 @@ const FileExplorerComponent: React.FC<FileExplorerProps> = ({ onFileSelect, font
     if (!dialog || !newItemName) return;
 
     try {
-      const url = dialog.type === 'file' ? '/api/files' : '/api/folders';
+      const url = dialog.type === 'file' ? '/api/files' : '/api/directories';
       const path = dialog.basePath ? `${dialog.basePath}/${newItemName}` : newItemName;
 
       const response = await fetch(url, {

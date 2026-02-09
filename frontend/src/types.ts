@@ -20,13 +20,18 @@ export interface FeatureItem {
   color?: string;
   tags: string[] | null; // Tags seleccionados para la ejecución (se guarda en JSON)
   display_tags?: string[]; // Todos los tags del .feature (solo para mostrar)
-  scenarios?: string[]; // Nombres de los escenarios del .feature
+  scenarios?: { name: string; tags: string[] }[]; // Nombres y tags de los escenarios del .feature
   ui_tasks?: {
     name: string;
     scope: 'feature' | 'scenario' | 'step';
     hook: 'before' | 'after';
     scenario_name?: string;
   }[];
+}
+
+export interface HookInfo {
+  module_name: string;
+  tags?: string[];
 }
 
 /**
@@ -39,8 +44,8 @@ export interface Module {
   features: FeatureItem[];
   color?: string;
   is_collapsed?: boolean; // Estado de colapso para la UI
-  setup?: (Module | string)[];
-  teardown?: (Module | string)[];
+  setup?: (Module | string | HookInfo)[];
+  teardown?: (Module | string | HookInfo)[];
   view_states?: {
     execution_order?: { [key: string]: boolean };
     modules_view?: { [key: string]: boolean };

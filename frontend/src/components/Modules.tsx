@@ -37,11 +37,13 @@ import SyncIcon from '@mui/icons-material/Sync';
 import StopIcon from '@mui/icons-material/Stop';
 import LocalOfferIcon from '@mui/icons-material/LocalOffer';
 import WebhookIcon from '@mui/icons-material/Webhook';
+import WarningIcon from '@mui/icons-material/Warning';
 import { useSortable, SortableContext, verticalListSortingStrategy, } from '@dnd-kit/sortable';
 import { arrayMove } from '@dnd-kit/sortable';
 import { useDroppable, useDndContext, Active } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { Module, FeatureItem, ScenarioStatusMap } from '../types';
+import { useLayout } from '../context/LayoutContext';
 
 const DEFAULT_FEATURE_COLOR = '#4db6ac';
 
@@ -111,6 +113,11 @@ interface ExecutionItemProps {
   onDelete: (moduleName: string, item: FeatureItem) => void;
   onTagClick: (moduleName: string, featureId: string, tag: string) => void;
   scenarioStatuses: ScenarioStatusMap;
+  taskStatuses: Record<string, Record<number, { status: string, error?: string }>>;
+  missingFiles: {
+    missing_features: Array<{ id: string, path: string, module: string, feature_file: string, feature_dir: string }>;
+    missing_tasks: Array<{ name: string, feature_id: string, hook: string }>;
+  };
   isRunning: boolean;
   isFirst: boolean;
   isLast: boolean;
@@ -126,6 +133,8 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
   onDelete,
   onTagClick,
   scenarioStatuses,
+  taskStatuses,
+  missingFiles,
   isRunning,
   isFirst,
   isLast,
@@ -236,6 +245,20 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
             <Typography sx={{ fontSize: `${fontSize}px` }}>
               {`${item.order}. ${item.feature_file}`}
             </Typography>
+            {/* Warning icon if feature file is missing */}
+            {missingFiles.missing_features.some(mf => mf.id === item.id) && (
+              <Tooltip title={`File not found: ${missingFiles.missing_features.find(mf => mf.id === item.id)?.path}`} arrow>
+                <WarningIcon fontSize="small" sx={{ color: 'error.main' }} />
+              </Tooltip>
+            )}
+            {/* Warning icon if any task is missing */}
+            {item.ui_tasks && item.ui_tasks.some((task: any) =>
+              missingFiles.missing_tasks.some(mt => mt.name === task.name && mt.feature_id === item.id)
+            ) && (
+                <Tooltip title="One or more tasks not found" arrow>
+                  <WarningIcon fontSize="small" sx={{ color: 'warning.main' }} />
+                </Tooltip>
+              )}
             {/* Mostrar los tags del feature si existen, ahora al lado del nombre */}
             {item.display_tags && item.display_tags.length > 0 && (
               item.display_tags.map((tag) => (
@@ -253,14 +276,17 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
           {/* Mostrar los escenarios del feature si existen */}
           {item.scenarios && item.scenarios.length > 0 && (
             <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-              {item.scenarios.map((scenario) => {
-                // Construimos la clave única para este escenario específico
-                const uniqueScenarioId = `${item.id}::${scenario}`;
+              {item.scenarios.map((scenarioObj) => {
+                // Determine scenario name whether it's a string or object
+                const scenarioName = typeof scenarioObj === 'string' ? scenarioObj : scenarioObj.name;
 
-                const truncatedLabel = scenario.length > 25 ? `${scenario.substring(0, 25)}...` : scenario;
+                // Construimos la clave única para este escenario específico
+                const uniqueScenarioId = `${item.id}::${scenarioName}`;
+
+                const truncatedLabel = scenarioName.length > 25 ? `${scenarioName.substring(0, 25)}...` : scenarioName;
 
                 return (
-                  <Tooltip key={scenario} title={scenario} arrow>
+                  <Tooltip key={scenarioName} title={scenarioName} arrow>
                     <Chip
                       icon={
                         undefined
@@ -268,6 +294,35 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
                       label={truncatedLabel}
                       size="small"
                       sx={{ fontSize: '0.7rem', height: '20px' }}
+                    />
+                  </Tooltip>
+                );
+              })}
+            </Box>
+          )}
+          {/* Mostrar las tareas UI del feature si existen */}
+          {item.ui_tasks && item.ui_tasks.length > 0 && (
+            <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+              {item.ui_tasks.map((task: any, taskIndex: number) => {
+                const taskStatus = taskStatuses[item.id]?.[taskIndex];
+                const colorMap = {
+                  passed: 'success',
+                  failed: 'error',
+                  pending: 'default',
+                  running: 'info',
+                } as const;
+                const chipColor = taskStatus?.status ? colorMap[taskStatus.status as keyof typeof colorMap] || 'default' : 'default';
+
+                const taskLabel = `${task.hook || 'task'}: ${task.name}`;
+                const truncatedTaskLabel = taskLabel.length > 30 ? `${taskLabel.substring(0, 30)}...` : taskLabel;
+
+                return (
+                  <Tooltip key={taskIndex} title={taskLabel} arrow>
+                    <Chip
+                      label={truncatedTaskLabel}
+                      size="small"
+                      color={chipColor}
+                      sx={{ fontSize: '0.65rem', height: '18px' }}
                     />
                   </Tooltip>
                 );
@@ -300,7 +355,14 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
       >
         <MenuItem onClick={handleOpenInEditor}>{t('editor.feature_editor')}</MenuItem>
         <MenuItem onClick={handleToggle}>{item.active ? t('common.inactive') : t('common.active')}</MenuItem>
-        <MenuItem onClick={handleDelete}>{t('common.delete')}</MenuItem>
+        {missingFiles.missing_features.some(mf => mf.id === item.id) && (
+          <MenuItem onClick={handleDelete} sx={{ color: 'error.main' }}>
+            {t('common.delete')} ({t('common.file_missing', { defaultValue: 'file missing' })})
+          </MenuItem>
+        )}
+        {!missingFiles.missing_features.some(mf => mf.id === item.id) && (
+          <MenuItem onClick={handleDelete}>{t('common.delete')}</MenuItem>
+        )}
       </Menu>
     </>
     // ... (rest of render logic for ExecutionItem)
@@ -492,6 +554,8 @@ interface ModulesProps {
   onStopTests: () => void;
   navigateToModule: (moduleName: string) => void;
   onFocusConsumed: () => void;
+  hasWarnings?: boolean;
+  warningMessage?: string;
 }
 
 const Modules: React.FC<ModulesProps> = ({
@@ -513,10 +577,31 @@ const Modules: React.FC<ModulesProps> = ({
   onFocusConsumed,
 }) => {
   const { t } = useTranslation();
+  const { taskStatuses } = useLayout();
   // Necesitamos acceder al elemento activo para deshabilitar el SortableContext si no es un módulo.
   // Esto es un patrón avanzado para permitir que droppables externos funcionen dentro de un SortableContext.
   const { active } = useDndContext();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [missingFiles, setMissingFiles] = useState<{
+    missing_features: Array<{ id: string, path: string, module: string, feature_file: string, feature_dir: string }>;
+    missing_tasks: Array<{ name: string, feature_id: string, hook: string }>;
+  }>({ missing_features: [], missing_tasks: [] });
+
+  // Fetch validation results on mount
+  useEffect(() => {
+    const fetchValidation = async () => {
+      try {
+        const response = await fetch('/api/validate-files');
+        if (response.ok) {
+          const data = await response.json();
+          setMissingFiles(data);
+        }
+      } catch (error) {
+        console.error('Error fetching file validation:', error);
+      }
+    };
+    fetchValidation();
+  }, [modules]); // Re-validate when modules change
 
   const { setNodeRef: setGlobalDroppableRef } = useDroppable({
     id: 'execution-order-droppable-area',
@@ -958,6 +1043,8 @@ const Modules: React.FC<ModulesProps> = ({
                               onMoveFeature={handleMoveFeature}
                               onTagClick={handleTagToggle}
                               scenarioStatuses={scenarioStatuses}
+                              taskStatuses={taskStatuses}
+                              missingFiles={missingFiles}
                               isRunning={feature.id === runningFeatureId}
                               isFirst={index === 0}
                               isLast={index === module.features.length - 1}

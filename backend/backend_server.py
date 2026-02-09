@@ -66,6 +66,10 @@ FEATURES_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'feature
 # Instanciar el manejador del plan de ejecución
 plan_manager = ExecutionPlanManager(FEATURES_DIR)
 
+# Register validation blueprint
+from validation_api import validation_bp
+app.register_blueprint(validation_bp)
+
 # --- OCR Image Migration Helpers ---
 def get_ocr_images_directory(feature_rel_path: str) -> str:
     """
@@ -1066,39 +1070,40 @@ def parse_feature_file_with_behave(file_path):
         dict: Un diccionario con "tags" y "scenarios".
     """
     all_tags = set()
-    scenario_names = []
+    scenarios_data = []
     
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
         parser = Parser()
-        feature = parser.parse(content, file_path) # Pasamos el contenido y el path para errores
+        feature = parser.parse(content, file_path)
 
         if isinstance(feature, Feature):
             # 1. Extraer tags a nivel de Feature
-            # (La extracción de tags se omite para no guardarlos en 'display_tags')
             for tag in feature.tags:
                 all_tags.add(f"@{tag}")
 
             # 2. Iterar sobre los escenarios
             for scenario in feature.scenarios:
-                # Behave modela Scenarios y ScenarioOutlines de forma similar
                 if isinstance(scenario, (Scenario, ScenarioOutline)):
-                    # Añadimos el nombre del escenario a nuestra lista
-                    scenario_names.append(scenario.name)
-                    
-                    # También extraemos los tags a nivel de Scenario
-                    for tag in scenario.tags:
-                        all_tags.add(f"@{tag}")
+                    # Extraer tags del escenario
+                    scenario_tags = [f"@{tag}" for tag in scenario.tags]
+                    for tag in scenario_tags:
+                        all_tags.add(tag)
+
+                    # Añadir objeto con nombre y tags
+                    scenarios_data.append({
+                        "name": scenario.name,
+                        "tags": scenario_tags
+                    })
 
     except Exception as e:
-        # Es buena idea registrar el error si el archivo .feature tiene sintaxis inválida
         print(f"Error parsing feature file '{file_path}' with Behave parser: {e}")
         return {"tags": [], "scenarios": []}
 
     return {
         "tags": sorted(list(all_tags)),
-        "scenarios": scenario_names
+        "scenarios": scenarios_data
     }
 
 @app.route('/api/steps/catalog', methods=['GET'])
@@ -1557,6 +1562,8 @@ def stream_logs():
                 data = json.loads(line_strip)
                 # Si es un reporte de estado (escenario o tarea), envíalo con su tipo
                 if data.get("type") in ["scenario_status", "task_status"]:
+                    if data.get("type") == "task_status":
+                        logger.info(f"[STREAM_LOGS] Sending task_status event: {data}")
                     yield f"data: {json.dumps(data)}\n\n"
                     continue # Pasa a la siguiente línea sin tratarlo como un log normal
             except (json.JSONDecodeError, TypeError):
@@ -1916,7 +1923,11 @@ def serve_react_app(path):
     Sirve la aplicación React (Single Page Application).
     Si el archivo existe en frontend/dist, lo sirve.
     Si no, sirve index.html para que el router de React maneje la ruta.
+    Para rutas que comienzan con /api/, devolvemos un error JSON 404 en lugar de index.html.
     """
+    if path.startswith('api/'):
+        return jsonify({"error": f"API endpoint not found: /{path}"}), 404
+
     frontend_dist = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'frontend', 'dist')
     
     # Seguridad: Evitar salir del directorio
