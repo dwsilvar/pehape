@@ -15,6 +15,7 @@ import DeleteTaskConfirmationDialog from './dialogs/DeleteTaskConfirmationDialog
 // Components
 import ExecutionOrderHeader from './components/ExecutionOrderHeader';
 import ExecutionOrderList from './components/ExecutionOrderList';
+import ExecutionDetailPreview from './components/ExecutionDetailPreview';
 
 interface ExecutionOrderProps {
     fontSize: number;
@@ -97,7 +98,10 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = (props) => {
         handleTagToggle,
         handleModuleColorChange,
         handleRefreshFeatures,
-        handleToggleModuleCollapse
+        handleToggleModuleCollapse,
+        selectedScenario,
+        handleSelectScenario,
+        setSelectedScenario
     } = useExecutionOrder(props);
 
     const { active } = useDndContext();
@@ -124,39 +128,86 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = (props) => {
                 onCancelSchedule={props.onCancelSchedule}
             />
 
-            <ExecutionOrderList
-                displayedModules={displayedModules}
-                active={active}
-                collapsedSections={props.collapsedSections}
-                onToggleModuleCollapse={handleToggleModuleCollapse}
-                onModuleColorChange={handleModuleColorChange}
-                onDeleteModule={handleDeleteModule}
-                onToggleSectionCollapse={(moduleName, section) => props.onToggleSectionCollapse(`${moduleName}::${section}`)}
+            {/* Split Layout Container */}
+            <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden', gap: 1, position: 'relative', minHeight: 0 }}>
 
-                onOpenHookDialog={handleOpenHookDialog}
-                onNavigateToModule={props.navigateToModule}
-                onDeleteHook={handleDeleteHook}
-                onFeatureSelect={props.onFeatureSelect}
-                onToggleFeatureActivity={(moduleName, feature) => handleToggleFeatureActivity(moduleName, feature.id)}
-                onDeleteFeature={handleDeleteFeature}
-                onMoveFeature={handleMoveFeature}
-                onTagToggle={handleTagToggle}
-                runningFeatureId={props.runningFeatureId}
-                onAddTask={handleOpenTaskDialog}
-                onDeleteTask={handleDeleteTask}
-                onEditTask={handleOpenEditTaskDialog}
-                // `useTaskManagement` exports `handleOpenEditTaskDialog`.
-                // `useExecutionOrder` didn't export `handleOpenEditTaskDialog` explicitly in return?
-                // Let's check `useExecutionOrder.ts`.
-                // It spreads `...taskManagement`. So it should export it.
-                // But in destructured variables above I didn't list it because I used handleOpenTaskDialog?
-                // Actually `handleOpenEditTaskDialog` signature: (moduleName, featureItem, task, index, event)
-                // ExecutionOrderList expects onEditTask with same signature.
-                // I need to make sure I import/destructure it.
+                {/* Master List (Occupies full space, scrolls internally) */}
+                <Box sx={{
+                    flex: 1,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    overflowY: 'auto',
+                    minHeight: 0,
+                    // Add buffer on the right if detail is open, to avoid covering scrollbar or content if desired
+                    // but usually floating means it covers. Let's add a slight padding.
+                    pr: selectedScenario ? '420px' : 0,
+                    transition: 'padding-right 0.3s ease'
+                }}>
+                    <ExecutionOrderList
+                        displayedModules={displayedModules}
+                        active={active}
+                        collapsedSections={props.collapsedSections}
+                        onToggleModuleCollapse={handleToggleModuleCollapse}
+                        onModuleColorChange={handleModuleColorChange}
+                        onDeleteModule={handleDeleteModule}
 
-                missingFiles={missingFiles}
-                fontSize={props.fontSize}
-            />
+                        onOpenHookDialog={handleOpenHookDialog}
+                        onNavigateToModule={props.navigateToModule}
+                        onDeleteHook={handleDeleteHook}
+                        onFeatureSelect={props.onFeatureSelect}
+                        onToggleFeatureActivity={(moduleName, feature) => handleToggleFeatureActivity(moduleName, feature.id)}
+                        onDeleteFeature={handleDeleteFeature}
+                        onMoveFeature={handleMoveFeature}
+                        onTagToggle={handleTagToggle}
+                        runningFeatureId={props.runningFeatureId}
+                        onAddTask={handleOpenTaskDialog}
+                        onDeleteTask={handleDeleteTask}
+                        onEditTask={handleOpenEditTaskDialog}
+
+                        missingFiles={missingFiles}
+                        fontSize={props.fontSize}
+
+                        selectedScenario={selectedScenario}
+                        onSelectScenario={handleSelectScenario}
+                        onSelectModule={handleSelectScenario}
+                    />
+                </Box>
+
+                {/* Floating Detail Panel */}
+                {selectedScenario && (
+                    <Box sx={{
+                        position: 'absolute',
+                        right: 16,
+                        top: 16,
+                        bottom: 16,
+                        width: 400,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        overflow: 'hidden',
+                        borderRadius: 3,
+                        border: '1px solid rgba(226, 232, 240, 0.8)',
+                        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                        backdropFilter: 'blur(10px)',
+                        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+                        zIndex: 1000,
+                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                    }}>
+                        <ExecutionDetailPreview
+                            selectedScenario={selectedScenario}
+                            modules={props.modules}
+                            missingFiles={missingFiles}
+                            onAddTask={handleOpenTaskDialog}
+                            onDeleteTask={handleDeleteTask}
+                            onEditTask={handleOpenEditTaskDialog}
+                            onTagClick={handleTagToggle}
+                            onEditFeature={props.onFeatureSelect}
+                            onAddHook={handleOpenHookDialog}
+                            onDeleteHook={handleDeleteHook}
+                            onClose={() => setSelectedScenario(null)}
+                        />
+                    </Box>
+                )}
+            </Box>
 
             <ScheduleDialog
                 open={scheduleDialogOpen}

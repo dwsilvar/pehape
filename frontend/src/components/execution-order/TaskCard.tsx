@@ -71,16 +71,15 @@ const TaskCard: React.FC<TaskCardProps> = ({
                         transform: 'translateY(-2px)',
                         boxShadow: 3,
                     },
-                    minWidth: '150px',
-                    maxWidth: '250px',
+                    width: '200px',
                     position: 'relative',
                     border: '1px solid',
-                    borderColor: 'divider',
+                    borderColor: '#e2e8f0', // slate-200 matching scenario child
                     borderLeft: `4px solid ${timingColor}`,
                     pl: 1,
                     pr: 3, // Space for delete button
                     py: 0.5,
-                    backgroundColor: status === 'running' ? '#e3f2fd' : 'background.paper',
+                    backgroundColor: status === 'running' ? '#e3f2fd' : '#FFFFFF',
                 }}
                 onClick={(e) => {
                     e.stopPropagation();

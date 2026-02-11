@@ -18,6 +18,11 @@ Detalles sobre cómo el framework utiliza OCR para interactuar con la UI y cómo
 ### 📁 [Gestión de Archivos](file:///c:/Proyectos/ocr_test/pehape/.knowledge/features/file_explorer_management.md)
 Documentación sobre las capacidades del Explorador de Archivos, incluyendo renombramiento y movimiento de recursos mediante Drag & Drop.
 
+### 🐞 Sistema de Feedback y Reportes
+El framework incluye un acceso directo en el Sidebar para reportar bugs o mejoras directamente al equipo de desarrollo mediante un formulario centralizado.
+- **Acceso**: Icono `BugReport` en el Sidebar.
+- **Plataforma**: Google Forms.
+
 ---
 
 > [!NOTE]

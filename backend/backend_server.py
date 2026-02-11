@@ -94,15 +94,17 @@ def get_ocr_images_directory(feature_rel_path: str) -> str:
 def migrate_ocr_images(old_rel_path: str, new_rel_path: str, is_file: bool) -> dict:
     """
     Migra imágenes OCR de una ubicación antigua a una nueva después de renombrar.
+    También actualiza las entradas en ocr_mapping.json.
     
     Args:
-        old_rel_path: Ruta relativa antigua del recurso
+        old_rel_path: Ruta relativa antigua del recurso (desde FEATURES_DIR)
         new_rel_path: Ruta relativa nueva del recurso
         is_file: True si es un archivo, False si es un directorio
     
     Returns:
         Diccionario con estadísticas de migración
     """
+    import json
     result = {
         "migrated": False,
         "count": 0,
@@ -112,12 +114,56 @@ def migrate_ocr_images(old_rel_path: str, new_rel_path: str, is_file: bool) -> d
     }
     
     try:
+        mapping_path = os.path.join(RESOURCES_IMAGES_DIR, 'ocr_mapping.json')
+        
+        # 1. Actualizar ocr_mapping.json si existe
+        if os.path.exists(mapping_path):
+            try:
+                mapping = {}
+                with open(mapping_path, 'r', encoding='utf-8') as f:
+                    mapping = json.load(f)
+                
+                new_mapping = {}
+                mapping_changed = False
+                
+                # Normalizar rutas para comparación (usar forward slash)
+                old_key_prefix = old_rel_path.replace('\\', '/')
+                new_key_prefix = new_rel_path.replace('\\', '/')
+                
+                for key, value in mapping.items():
+                    # Caso 1: Renombrar un archivo específico
+                    if is_file:
+                        if key == old_key_prefix:
+                            new_mapping[new_key_prefix] = value
+                            mapping_changed = True
+                            logger.info(f"Mapping: Renamed file key from {key} to {new_key_prefix}")
+                        else:
+                            new_mapping[key] = value
+                    # Caso 2: Renombrar un directorio (afecta a múltiples features hijos)
+                    else:
+                        if key.startswith(old_key_prefix + "/") or key == old_key_prefix:
+                            new_key = key.replace(old_key_prefix, new_key_prefix, 1)
+                            new_mapping[new_key] = value
+                            mapping_changed = True
+                            logger.info(f"Mapping: Updated directory-based key from {key} to {new_key}")
+                        else:
+                            new_mapping[key] = value
+                
+                if mapping_changed:
+                    with open(mapping_path, 'w', encoding='utf-8') as f:
+                        json.dump(new_mapping, f, indent=2, ensure_ascii=False)
+                    logger.info("ocr_mapping.json updated successfully after rename")
+            except Exception as e:
+                logger.error(f"Error updating ocr_mapping.json during migration: {e}")
+                result["errors"].append(f"Error updating mapping: {str(e)}")
+
+        # 2. Mover directorios físicos (Opción A)
         old_images_dir = get_ocr_images_directory(old_rel_path)
         new_images_dir = get_ocr_images_directory(new_rel_path)
         
         # Verificar si existe el directorio de imágenes antiguo
         if not os.path.exists(old_images_dir):
-            logger.info(f"No OCR images found for {old_rel_path}")
+            logger.info(f"No physical OCR images directory found for {old_rel_path}")
             return result
         
         # Contar imágenes antes de migrar
@@ -126,22 +172,32 @@ def migrate_ocr_images(old_rel_path: str, new_rel_path: str, is_file: bool) -> d
             image_count += len([f for f in files if f.endswith(('.png', '.jpg', '.jpeg'))])
         
         if image_count == 0:
-            logger.info(f"OCR images directory exists but is empty: {old_images_dir}")
-            return result
+            logger.info(f"OCR images directory exists but is physicaly empty: {old_images_dir}")
+            # Aun así intentamos mover el directorio para mantener limpieza
         
-        # Crear directorio de destino si no existe
+        # Crear directorio padre de destino si no existe
         os.makedirs(os.path.dirname(new_images_dir), exist_ok=True)
         
         # Mover el directorio completo
         try:
-            shutil.move(old_images_dir, new_images_dir)
+            if os.path.exists(new_images_dir):
+                # Si por alguna razón ya existe el destino, fusionamos o borramos (aquí borramos el destino vacío por simplicidad)
+                if not os.listdir(new_images_dir):
+                    os.rmdir(new_images_dir)
+                    shutil.move(old_images_dir, new_images_dir)
+                else:
+                    logger.warning(f"Destination image directory already exists and is not empty: {new_images_dir}")
+                    # En este caso particular de "renombrar", si el destino existe es un conflicto raro.
+            else:
+                shutil.move(old_images_dir, new_images_dir)
+                
             result["migrated"] = True
             result["count"] = image_count
             result["old_path"] = old_images_dir
             result["new_path"] = new_images_dir
-            logger.info(f"Successfully migrated {image_count} OCR images from {old_images_dir} to {new_images_dir}")
+            logger.info(f"Successfully migrated physical OCR images from {old_images_dir} to {new_images_dir}")
         except Exception as e:
-            error_msg = f"Error moving OCR images: {str(e)}"
+            error_msg = f"Error moving physical OCR images: {str(e)}"
             result["errors"].append(error_msg)
             logger.error(error_msg)
     
@@ -289,31 +345,111 @@ RESOURCES_IMAGES_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 
 def list_ocr_images():
     """
     Lista recursivamente todas las imágenes en resources/images
-    y devuelve su estructura jerárquica plana.
-    Estructura esperada: resources/images/<modulo>/<feature>/<tag>/<texto>.png
+    y devuelve su estructura jerárquica plana con metadatos del mapeo.
     """
+    import json
     images_data = []
+    mapping_path = os.path.join(RESOURCES_IMAGES_DIR, 'ocr_mapping.json')
+    mapping = {}
     
+    if os.path.exists(mapping_path):
+        try:
+            with open(mapping_path, 'r', encoding='utf-8') as f:
+                mapping = json.load(f)
+        except Exception as e:
+            logger.error(f"Error reading ocr_mapping.json: {e}")
+
     if not os.path.exists(RESOURCES_IMAGES_DIR):
         return jsonify([])
 
     try:
+        seen_ids = set()
         for root, dirs, files in os.walk(RESOURCES_IMAGES_DIR):
             for file in files:
-                if file.lower().endswith(('.png', '.jpg', '.jpeg')):
+                if file.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
+                    if file in seen_ids:
+                        continue
+                    seen_ids.add(file)
+                    
                     abs_path = os.path.join(root, file)
                     rel_path = os.path.relpath(abs_path, RESOURCES_IMAGES_DIR)
                     path_parts = rel_path.split(os.sep)
                     
-                    # Intentar inferir estructura si es posible
-                    # <modulo relative path>/<feature>/<tag>/<filename>
-                    # Esto puede variar, así que lo hacemos genérico pero intentamos extraer info útil
+                    # Normalizar rel_path para el frontend
+                    rel_path_web = rel_path.replace("\\", "/")
                     
+                    # Buscar si esta imagen física está en el mapeo
+                    associated_texts = []
+                    mapped_to = [] # List of {feature, tag}
+                    is_mapped = False
+                    key_text = os.path.splitext(file)[0] # Default (ID)
+                    
+                    # El mapeo se organiza por: feature_path -> tag -> steps -> {id, texts, original_text}
+                    # Esta es una búsqueda inversa costosa pero necesaria para enriquecer los datos
+                    for feat_key, feat_data in mapping.items():
+                        if feat_key == 'generic' and isinstance(feat_data, list):
+                            for step in feat_data:
+                                if step.get('id') == file:
+                                    key_text = step.get('original_text', key_text)
+                                    associated_texts.extend(step.get('texts', []))
+                                    is_mapped = True
+                                    if {"feature": "generic", "tag": None, "text": step.get('original_text'), "full_steps": step.get('texts', [])} not in mapped_to:
+                                        mapped_to.append({"feature": "generic", "tag": None, "text": step.get('original_text'), "full_steps": step.get('texts', [])})
+                        elif isinstance(feat_data, dict):
+                            for tag_name, tag_info in feat_data.items():
+                                if not isinstance(tag_info, dict): continue
+                                steps = tag_info.get('steps', [])
+                                for step in steps:
+                                    if step.get('id') == file:
+                                        key_text = step.get('original_text', key_text)
+                                        associated_texts.extend(step.get('texts', []))
+                                        is_mapped = True
+                                        mapping_entry = {
+                                            "feature": feat_key, 
+                                            "tag": tag_name, 
+                                            "text": step.get('original_text'),
+                                            "full_steps": step.get('texts', [])
+                                        }
+                                        if mapping_entry not in mapped_to:
+                                            mapped_to.append(mapping_entry)
+
+
+                    # Fallback: Si no está en el mapeo, extraer feature del path
+                    # Estructura legacy: [feature_path]/[subfolder]/[tag_or_scenario]/imagen.png
+                    # Ejemplo: retiro/retiro/ok/img.png o access_no_card/deposit/movistar/successful/img.png
+                    if not is_mapped and len(path_parts) >= 2:
+                        # Verificar que no sea una imagen genérica
+                        if not (len(path_parts) >= 2 and path_parts[0] == 'features' and path_parts[1] == 'generic'):
+                            # Construir el feature path desde las primeras partes del path
+                            # Típicamente: path_parts[0] o path_parts[0]/path_parts[1]
+                            if len(path_parts) >= 3:
+                                # Caso: retiro/retiro/ok/ -> feature: "retiro/retiro", tag: "ok"
+                                legacy_feature = f"{path_parts[0]}/{path_parts[1]}"
+                                legacy_tag = path_parts[2] if len(path_parts) > 2 else None
+                            else:
+                                # Caso simple: feature/imagen.png
+                                legacy_feature = path_parts[0]
+                                legacy_tag = None
+                            
+                            # Agregar entrada de mapeo legacy
+                            legacy_entry = {
+                                "feature": legacy_feature,
+                                "tag": legacy_tag,
+                                "text": key_text,
+                                "full_steps": []
+                            }
+                            if legacy_entry not in mapped_to:
+                                mapped_to.append(legacy_entry)
+                                is_mapped = True
+
                     item = {
-                        "relative_path": rel_path.replace("\\", "/"),
+                        "relative_path": rel_path_web,
                         "filename": file,
-                        "key_text": os.path.splitext(file)[0],
-                        "full_path_parts": path_parts
+                        "key_text": key_text,
+                        "full_path_parts": path_parts,
+                        "associated_texts": list(set(associated_texts)),
+                        "mapped_to": mapped_to,
+                        "is_mapped": is_mapped
                     }
                     images_data.append(item)
                     
@@ -321,6 +457,88 @@ def list_ocr_images():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/resources/images/<path:filename>', methods=['DELETE'])
+def delete_ocr_image(filename):
+    """
+    Elimina una imagen física y todas sus referencias en ocr_mapping.json.
+    """
+    import json
+    try:
+        # 1. Ruta absoluta de la imagen
+        abs_image_path = os.path.join(RESOURCES_IMAGES_DIR, filename)
+        
+        # Seguridad: Evitar que salgan de RESOURCES_IMAGES_DIR
+        if os.path.commonpath([abs_image_path, os.path.abspath(RESOURCES_IMAGES_DIR)]) != os.path.abspath(RESOURCES_IMAGES_DIR):
+            return jsonify({"error": "Ruta inválida o acceso denegado"}), 403
+
+        # 2. Actualizar ocr_mapping.json
+        mapping_path = os.path.join(RESOURCES_IMAGES_DIR, 'ocr_mapping.json')
+        if os.path.exists(mapping_path):
+            try:
+                with open(mapping_path, 'r', encoding='utf-8') as f:
+                    mapping = json.load(f)
+                
+                mapping_changed = False
+                # Nombre del archivo base (el ID único)
+                target_id = os.path.basename(filename)
+                
+                # Recorrer el mapeo y limpiar referencias
+                for feat_path in list(mapping.keys()):
+                    feat_data = mapping[feat_path]
+                    
+                    # Caso genérico
+                    if feat_path == 'generic' and isinstance(feat_data, list):
+                        original_len = len(feat_data)
+                        mapping[feat_path] = [s for s in feat_data if s.get('id') != target_id]
+                        if len(mapping[feat_path]) != original_len:
+                            mapping_changed = True
+                    # Caso específico (feature -> tag -> steps)
+                    elif isinstance(feat_data, dict):
+                        for tag_name in list(feat_data.keys()):
+                            tag_info = feat_data[tag_name]
+                            if isinstance(tag_info, dict) and 'steps' in tag_info:
+                                steps = tag_info['steps']
+                                original_len = len(steps)
+                                tag_info['steps'] = [s for s in steps if s.get('id') != target_id]
+                                if len(tag_info['steps']) != original_len:
+                                    mapping_changed = True
+                                    
+                                # Opcional: limpiar tags vacíos
+                                if not tag_info['steps']:
+                                    del feat_data[tag_name]
+                        
+                        # Opcional: limpiar features vacíos
+                        if not feat_data:
+                            del mapping[feat_path]
+
+                if mapping_changed:
+                    with open(mapping_path, 'w', encoding='utf-8') as f:
+                        json.dump(mapping, f, indent=2, ensure_ascii=False)
+                    logger.info(f"Ocr_mapping.json updated: records for {target_id} removed.")
+            except Exception as e:
+                logger.error(f"Error updating mapping during deletion: {e}")
+
+        # 3. Eliminar archivo físico
+        if os.path.exists(abs_image_path):
+            os.remove(abs_image_path)
+            logger.info(f"Physical image deleted: {abs_image_path}")
+            
+            # 4. Limpiar directorios vacíos hacia arriba (hasta RESOURCES_IMAGES_DIR)
+            parent = os.path.dirname(abs_image_path)
+            while parent != RESOURCES_IMAGES_DIR and os.path.commonpath([parent, RESOURCES_IMAGES_DIR]) == os.path.abspath(RESOURCES_IMAGES_DIR):
+                try:
+                    if not os.listdir(parent):
+                        os.rmdir(parent)
+                        parent = os.path.dirname(parent)
+                    else:
+                        break
+                except Exception:
+                    break
+
+        return jsonify({"message": "Imagen eliminada correctamente"}), 200
+    except Exception as e:
+        logger.error(f"Error deleting OCR image: {e}")
+        return jsonify({"error": str(e)}), 500
 @app.route('/api/resources/images/<path:filename>', methods=['GET'])
 def serve_ocr_image(filename):
     """
@@ -464,71 +682,196 @@ def get_feature_content(filepath):
 @app.route('/api/images/upload', methods=['POST'])
 def upload_image():
     """
-    Endpoint para subir una imagen de fallback OCR.
-    Soporta dos modos:
-    1. Generic: Guarda en resources/images/features/generic/{text}.png
-    2. Tag-specific: Guarda en la estructura de feature/tag específica
+    Endpoint para subir una imagen OCR.
+    Mantiene un mapeo en ocr_mapping.json para permitir múltiples textos por imagen
+    y manejar caracteres especiales.
     """
+    import json
+    import time
+    import hashlib
+    
     try:
         if 'file' not in request.files:
             return jsonify({"error": "No file part"}), 400
         
         file = request.files['file']
         text = request.form.get('text')
+        step_text = request.form.get('step_text') # El texto completo de la línea
         is_generic = request.form.get('is_generic', 'false').lower() == 'true'
 
-        # Validate common required fields
         if not file or not text:
             return jsonify({"error": "Missing required fields: file and text"}), 400
 
-        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        mapping_path = os.path.join(RESOURCES_IMAGES_DIR, 'ocr_mapping.json')
+        
+        # Cargar mapeo existente
+        mapping = {}
+        if os.path.exists(mapping_path):
+            with open(mapping_path, 'r', encoding='utf-8') as f:
+                mapping = json.load(f)
+
+        # Generar un ID único para la imagen (evita caracteres especiales del texto)
+        timestamp = int(time.time())
+        text_hash = hashlib.md5(text.encode()).hexdigest()[:8]
+        unique_id = f"img_{timestamp}_{text_hash}.png"
 
         if is_generic:
-            # Generic image upload - save to generic folder
-            generic_dir = os.path.join(project_root, 'resources', 'images', 'features', 'generic')
+            # Lógica genérica
+            generic_dir = os.path.join(RESOURCES_IMAGES_DIR, 'features', 'generic')
             os.makedirs(generic_dir, exist_ok=True)
-            target_path = os.path.join(generic_dir, f"{text}.png")
-            
-            # Save file
+            target_path = os.path.join(generic_dir, unique_id)
             file.save(target_path)
             
-            return jsonify({
-                "message": f"Generic image saved successfully at {target_path}", 
-                "path": target_path,
-                "is_generic": True
+            # Actualizar mapeo genérico
+            if 'generic' not in mapping:
+                mapping['generic'] = []
+            
+            # Buscar si ya existe una entrada para esta imagen (por si acaso)
+            # o simplemente agregar una nueva asociación
+            mapping['generic'].append({
+                "id": unique_id,
+                "texts": [step_text] if step_text else [text],
+                "original_text": text
             })
+            
+            with open(mapping_path, 'w', encoding='utf-8') as f:
+                json.dump(mapping, f, indent=2, ensure_ascii=False)
+                
+            return jsonify({"message": "Generic image saved", "id": unique_id, "is_generic": True})
         else:
-            # Tag-specific image upload - existing logic
             feature_path_rel = request.form.get('feature_path')
             tag = request.form.get('tag')
 
             if not feature_path_rel or not tag:
-                return jsonify({"error": "Missing required fields for tag-specific image: feature_path and tag"}), 400
+                return jsonify({"error": "Missing feature_path or tag"}), 400
 
-            # Construct absolute path to feature file
-            full_feature_path = os.path.join(FEATURES_DIR, feature_path_rel)
-            
-            # Ensure tag has @
             if not tag.startswith('@'):
                 tag = f"@{tag}"
                 
-            # Get target image path
-            target_path = get_image_path_from_feature_and_tag(full_feature_path, [tag], text)
+            # Obtener el path de destino (físico)
+            # Usamos unique_id en lugar de text para el nombre del archivo
+            full_feature_path = os.path.join(FEATURES_DIR, feature_path_rel)
+            target_path = get_image_path_from_feature_and_tag(full_feature_path, [tag], unique_id)
             
-            # Ensure directory exists
-            os.makedirs(os.path.dirname(target_path), exist_ok=True)
+            # Asegurar que el nombre del archivo en la ruta sea el unique_id (a veces la ruta antigua metía .png)
+            target_dir = os.path.dirname(target_path)
+            os.makedirs(target_dir, exist_ok=True)
+            final_save_path = os.path.join(target_dir, unique_id)
+            file.save(final_save_path)
             
-            # Save file
-            file.save(target_path)
+            # Actualizar mapeo específico
+            if feature_path_rel not in mapping:
+                mapping[feature_path_rel] = {}
             
-            return jsonify({
-                "message": f"Image saved successfully at {target_path}", 
-                "path": target_path,
-                "is_generic": False
+            if tag not in mapping[feature_path_rel]:
+                mapping[feature_path_rel][tag] = {"steps": []}
+            
+            mapping[feature_path_rel][tag]["steps"].append({
+                "id": unique_id,
+                "texts": [step_text] if step_text else [text],
+                "original_text": text
             })
+            
+            with open(mapping_path, 'w', encoding='utf-8') as f:
+                json.dump(mapping, f, indent=2, ensure_ascii=False)
+                
+            return jsonify({"message": "Image saved and mapped", "id": unique_id, "path": final_save_path})
 
     except Exception as e:
-        print(f"Error uploading image: {e}")
+        logger.error(f"Error uploading image: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/images/link', methods=['POST'])
+def link_image():
+    """
+    Víncula una imagen física existente con un nuevo texto/tag/feature.
+    Copia el archivo a la nueva ubicación y lo registra en el mapeo.
+    """
+    import json
+    import shutil
+    try:
+        data = request.json
+        source_rel_path = data.get('source_relative_path')
+        text = data.get('text')
+        step_text = data.get('step_text')
+        feature_path_rel = data.get('feature_path')
+        tag = data.get('tag')
+        is_generic = data.get('is_generic', False)
+
+        if not source_rel_path or not text:
+            return jsonify({"error": "Missing source_relative_path or text"}), 400
+
+        source_abs_path = os.path.join(RESOURCES_IMAGES_DIR, source_rel_path)
+        if not os.path.exists(source_abs_path):
+            return jsonify({"error": f"Source image not found: {source_rel_path}"}), 404
+
+        mapping_path = os.path.join(RESOURCES_IMAGES_DIR, 'ocr_mapping.json')
+        mapping = {}
+        if os.path.exists(mapping_path):
+            with open(mapping_path, 'r', encoding='utf-8') as f:
+                mapping = json.load(f)
+
+        filename = os.path.basename(source_abs_path)
+        filename_no_ext = os.path.splitext(filename)[0]
+        
+        if is_generic:
+            generic_dir = os.path.join(RESOURCES_IMAGES_DIR, 'features', 'generic')
+            os.makedirs(generic_dir, exist_ok=True)
+            target_path = os.path.join(generic_dir, filename)
+            
+            if source_abs_path != target_path:
+                shutil.copy2(source_abs_path, target_path)
+            
+            if 'generic' not in mapping:
+                mapping['generic'] = []
+            
+            # Evitar duplicados exactos
+            exists = any(s.get('id') == filename and s.get('original_text') == text for s in mapping['generic'])
+            if not exists:
+                mapping['generic'].append({
+                    "id": filename,
+                    "texts": [step_text] if step_text else [text],
+                    "original_text": text
+                })
+        else:
+            if not feature_path_rel or not tag:
+                return jsonify({"error": "Missing feature_path or tag"}), 400
+
+            if not tag.startswith('@'):
+                tag = f"@{tag}"
+
+            full_feature_path = os.path.join(FEATURES_DIR, feature_path_rel)
+            # Pasamos filename_no_ext para evitar doble .png
+            target_path = get_image_path_from_feature_and_tag(full_feature_path, [tag], filename_no_ext)
+            
+            target_dir = os.path.dirname(target_path)
+            os.makedirs(target_dir, exist_ok=True)
+            
+            if source_abs_path != target_path:
+                shutil.copy2(source_abs_path, target_path)
+            
+            if feature_path_rel not in mapping:
+                mapping[feature_path_rel] = {}
+            if tag not in mapping[feature_path_rel]:
+                mapping[feature_path_rel][tag] = {"steps": []}
+            
+            # Evitar duplicados exactos
+            steps = mapping[feature_path_rel][tag]["steps"]
+            exists = any(s.get('id') == filename and s.get('original_text') == text for s in steps)
+            if not exists:
+                mapping[feature_path_rel][tag]["steps"].append({
+                    "id": filename,
+                    "texts": [step_text] if step_text else [text],
+                    "original_text": text
+                })
+
+        with open(mapping_path, 'w', encoding='utf-8') as f:
+            json.dump(mapping, f, indent=2, ensure_ascii=False)
+
+        return jsonify({"message": "Image linked successfully", "id": filename})
+
+    except Exception as e:
+        logger.error(f"Error linking image: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/features/<path:filepath>', methods=['POST'])
@@ -1425,10 +1768,22 @@ def get_execution_video(execution_id):
         temp_video.close()
         
         # Define codec and create VideoWriter
-        # Using 'avc1' (H.264) for better compatibility and no audio track
-        fourcc = cv2.VideoWriter_fourcc(*'avc1')
-        fps = 1  # 1 frame per second (matching the 1000ms GIF duration)
-        out = cv2.VideoWriter(temp_video_path, fourcc, fps, (width, height))
+        # Using 'mp4v' for better compatibility on Windows/Linux by default
+        # 'avc1' is better but often requires extra DLLs
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        base_fps = 1  # Logic 1 frame per second
+        output_fps = 10 # 10 frames per second for smoother seek/playback
+        repeat_count = output_fps // base_fps
+        
+        out = cv2.VideoWriter(temp_video_path, fourcc, output_fps, (width, height))
+        
+        if not out.isOpened():
+            logger.error("Failed to open VideoWriter with mp4v, trying avc1...")
+            fourcc = cv2.VideoWriter_fourcc(*'avc1')
+            out = cv2.VideoWriter(temp_video_path, fourcc, output_fps, (width, height))
+            
+        if not out.isOpened():
+             return jsonify({"error": "Failed to initialize video writer with available codecs"}), 500
         
         # Process each frame
         for index, image_path in enumerate(images):
@@ -1456,9 +1811,11 @@ def get_execution_video(execution_id):
                 # Draw white text
                 cv2.putText(frame, text, (x, y), font, font_scale, (255, 255, 255), thickness)
                 
-                out.write(frame)
+                # Write frame multiple times for smoothness
+                for _ in range(repeat_count):
+                    out.write(frame)
             except Exception as ex:
-                print(f"Error processing video frame {image_path}: {ex}")
+                logger.error(f"Error processing video frame {image_path}: {ex}")
         
         out.release()
         

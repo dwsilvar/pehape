@@ -20,6 +20,7 @@
         "theme": "Theme",
         "language": "Language",
         "console": "Console",
+        "view_options": "View options",
         "file_explorer": "File Explorer",
         "review_modules": "Review Modules",
         "execution_order": "Execution Order",
@@ -35,7 +36,17 @@
         "move_success_complete": "Moved successfully!\\n\\n{{imageCount}} OCR image(s) were migrated.\\n\\n{{moduleCount}} feature reference(s) updated in module(s): {{modules}}",
         "move_error": "Error moving resource",
         "move_error_conflict": "A resource with that name already exists in the destination",
-        "move_error_invalid": "Cannot move a folder into itself or its children"
+        "move_error_invalid": "You cannot move a folder inside itself or its children",
+        "sidebar": {
+            "editor": "Editor",
+            "execution": "Execution Order",
+            "maintenance": "Maintenance",
+            "tasks": "Tasks",
+            "ocr": "OCR Images",
+            "apps": "Running Apps",
+            "reports": "Reports",
+            "feedback": "Report Bug / Improvement"
+        }
     },
     "editor": {
         "tabs": {
@@ -84,6 +95,19 @@
         "ocr_association": {
             "direct": "Associated OCR Image (Specific)",
             "generic": "Associated OCR Image (Generic)"
+        },
+        "ocr_restriction_error": "You can only associate OCR images with text enclosed in quotes (step variables).",
+        "gallery": {
+            "title": "OCR Image Resources",
+            "subtitle": "Backup images for OCR recognition, sorted by name.",
+            "no_images": "No images found in resources/images/.",
+            "delete_confirm": "Are you sure you want to delete the image \"{{name}}\"? This action cannot be undone.",
+            "delete_success": "Image deleted successfully.",
+            "delete_error": "Error deleting image",
+            "delete_tooltip": "Delete image",
+            "associated_steps": "Associated steps:",
+            "usage_in_features": "Usage in features:",
+            "no_text": "No text"
         }
     },
     "orchestrator": {
@@ -103,7 +127,20 @@
         "tasks": {
             "associated_tasks": "Associated Tasks:",
             "add_task": "Add Task",
-            "edit_task": "Edit Task"
+            "edit_task": "Edit Task",
+            "select_task": "Select Task",
+            "choose_task_placeholder": "Select a task...",
+            "scope": "Scope",
+            "feature": "Feature",
+            "scenario": "Scenario",
+            "hook": "Hook",
+            "before": "Before",
+            "after": "After",
+            "select_scenario": "Select Scenario",
+            "choose_scenario_placeholder": "Choose a scenario...",
+            "configuration": "Configuration",
+            "enter_text_placeholder": "Enter text...",
+            "add_task_to": "Add Task to {{file}}"
         },
         "connecting_logs": "Connecting to log stream...",
         "watchdog_terminated": "Execution terminated by Watchdog",

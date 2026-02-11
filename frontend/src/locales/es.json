@@ -20,9 +20,11 @@
         "theme": "Tema",
         "language": "Idioma",
         "console": "Consola",
+        "view_options": "Opciones de vista",
         "file_explorer": "Explorador de Archivos",
         "review_modules": "Revisar Módulos",
         "execution_order": "Orden de Ejecución",
+        "search": "Buscar...",
         "rename_success": "¡Renombrado exitosamente!",
         "rename_success_with_images": "¡Renombrado exitosamente!\\n\\n{{count}} imagen(es) OCR migrada(s) a la nueva ubicación.",
         "rename_success_with_modules": "¡Renombrado exitosamente!\\n\\n{{count}} referencia(s) de feature actualizada(s) en módulo(s): {{modules}}",
@@ -35,7 +37,17 @@
         "move_success_complete": "¡Movido exitosamente!\\n\\n{{imageCount}} imagen(es) OCR migrada(s).\\n\\n{{moduleCount}} referencia(s) de feature actualizada(s) en módulo(s): {{modules}}",
         "move_error": "Error al mover recurso",
         "move_error_conflict": "Ya existe un recurso con ese nombre en el destino",
-        "move_error_invalid": "No se puede mover una carpeta dentro de sí misma o sus hijos"
+        "move_error_invalid": "No se puede mover una carpeta dentro de sí misma o sus hijos",
+        "sidebar": {
+            "editor": "Editor",
+            "execution": "Orden de Ejecución",
+            "maintenance": "Mantenimiento",
+            "tasks": "Tareas",
+            "ocr": "Imágenes OCR",
+            "apps": "Apps en Ejecución",
+            "reports": "Reportes",
+            "feedback": "Reportar Error / Mejora"
+        }
     },
     "editor": {
         "tabs": {
@@ -49,7 +61,8 @@
         "placeholder": "Seleccione un archivo del explorador para editar",
         "validate": "Validar",
         "upload_ocr_image": "Subir Imagen OCR",
-        "add_to_validation": "Agregar a Textos de Validación",
+        "link_ocr_image": "Vincular Imagen OCR Existente",
+        "add_to_validation": "Añadir a lista de validación",
         "step_catalog": "Catálogo de Pasos",
         "hide_steps": "Ocultar Pasos",
         "validation_texts": "Textos a Validar",
@@ -84,6 +97,22 @@
         "ocr_association": {
             "direct": "Imagen OCR asociada (Específica)",
             "generic": "Imagen OCR asociada (Genérica)"
+        },
+        "ocr_restriction_error": "Solo puedes asociar imágenes OCR a textos encerrados entre comillas (variables de los pasos).",
+        "link_dialog": {
+            "title": "Vincular Imagen OCR Existente"
+        },
+        "gallery": {
+            "title": "Recursos de Imágenes OCR",
+            "subtitle": "Imágenes de respaldo para el reconocimiento OCR, ordenadas por nombre.",
+            "no_images": "No se encontraron imágenes en resources/images/.",
+            "delete_confirm": "¿Estás seguro de que deseas eliminar la imagen \"{{name}}\"? Esta acción no se puede deshacer.",
+            "delete_success": "Imagen eliminada correctamente.",
+            "delete_error": "Error al eliminar la imagen",
+            "delete_tooltip": "Eliminar imagen",
+            "associated_steps": "Pasos asociados:",
+            "usage_in_features": "Uso en features:",
+            "no_text": "Sin texto"
         }
     },
     "orchestrator": {
@@ -102,8 +131,21 @@
         },
         "tasks": {
             "associated_tasks": "Tareas Asociadas:",
-            "add_task": "Añadir Tarea",
-            "edit_task": "Editar Tarea"
+            "add_task": "Agregar Tarea",
+            "edit_task": "Editar Tarea",
+            "select_task": "Seleccionar Tarea",
+            "choose_task_placeholder": "Seleccione una tarea...",
+            "scope": "Alcance (Scope)",
+            "feature": "Feature",
+            "scenario": "Escenario",
+            "hook": "Momento (Hook)",
+            "before": "Antes (Before)",
+            "after": "Después (After)",
+            "select_scenario": "Seleccionar Escenario",
+            "choose_scenario_placeholder": "Seleccione un escenario...",
+            "configuration": "Configuración",
+            "enter_text_placeholder": "Ingrese texto...",
+            "add_task_to": "Añadir Tarea a {{file}}"
         },
         "connecting_logs": "Conectando al flujo de logs...",
         "watchdog_terminated": "Ejecución terminada por el Watchdog",

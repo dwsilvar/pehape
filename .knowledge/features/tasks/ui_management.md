@@ -9,7 +9,31 @@ Para acceder a la documentación de tareas:
 2.  En la barra lateral izquierda (Sidebar), busque el icono de **Asignación** (📋 o similar).
 3.  Haga clic en él para navegar a la página **"Documentación de Tareas"**.
 
-## 2. Información Visualizada
+---
+
+## 2. Visualización del Flujo de Ejecución (Orchestrator)
+
+El Orchestrator (Execution Order) proporciona feedback visual en tiempo real sobre el estado de las pruebas.
+
+### Indicadores de Estado
+Cada escenario muestra un indicador visual que representa su estado actual:
+- **Spinner (Círculo Giratorio)**: Indica que el escenario está en ejecución.
+- **Check (Verde)**: El escenario finalizó exitosamente.
+- **Error (Rojo)**: El escenario falló. Se muestra un mensaje de error si está disponible.
+
+*Nota: Los iconos se ubican inmediatamente a la izquierda del nombre del escenario para una rápida identificación.*
+
+### Efecto de Progreso Activo
+Durante la ejecución, el escenario activo muestra un efecto visual de "barra de progreso" de fondo. Este efecto consiste en un degradado animado que se desplaza horizontalmente, indicando que el proceso está vivo aunque el paso actual tome tiempo.
+
+### Vistas Colapsadas y Resúmenes
+Para facilitar la gestión de grandes conjuntos de pruebas, las Features y Módulos pueden colapsarse:
+- **Frecuencia de Tareas/Escenarios**: Al colapsar un módulo o una feature, la cabecera muestra automáticamente el conteo total de escenarios y tareas contenidas.
+- **Visualización Compacta**: Permite tener una visión general del progreso sin perder el contexto de cuántas pruebas se están ejecutando en cada sección.
+
+---
+
+## 3. Información Visualizada
 
 La página muestra una lista de todas las tareas registradas en el sistema, agrupadas por **Módulo** (el archivo Python donde están definidas).
 

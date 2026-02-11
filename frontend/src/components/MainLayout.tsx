@@ -88,6 +88,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
   const [focusedModule, setFocusedModule] = useState<string | null>(null);
   const [validationTexts, setValidationTexts] = useState<string[]>([]);
   const lastOpenedFileRef = useRef<string | null>(null);
+  const [isSidebarResizing, setIsSidebarResizing] = useState(false);
 
   const {
     activeView: activePerspective, setActiveView, isConsoleOpen, toggleConsole,
@@ -130,13 +131,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({
   const layoutRef = useRef<HTMLDivElement>(null);
   const isResizingRef = useRef(false);
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
-    isResizingRef.current = true;
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-  };
-
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isResizingRef.current || !layoutRef.current) return;
     const layoutRect = layoutRef.current.getBoundingClientRect();
@@ -149,13 +143,25 @@ const MainLayout: React.FC<MainLayoutProps> = ({
 
   const handleMouseUp = useCallback(() => {
     isResizingRef.current = false;
+    setIsSidebarResizing(false);
     document.removeEventListener('mousemove', handleMouseMove);
     document.removeEventListener('mouseup', handleMouseUp);
   }, [handleMouseMove]);
 
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizingRef.current = true;
+    setIsSidebarResizing(true);
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
   useEffect(() => {
-    return () => handleMouseUp();
-  }, [handleMouseUp]);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [handleMouseMove, handleMouseUp]);
 
   const createToggleHandler = useCallback((
     view: 'execution_order' | 'modules_view',
@@ -238,6 +244,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
       setEditorContent(data.content);
       setIsDirty(false);
       setTabValue(0);
+      setActiveView('editor');
     } catch (error) {
       console.error("Error loading file:", error);
       setEditorContent(t('editor.error_loading', { path }));
@@ -455,8 +462,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({
           </>
         )}
 
-        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-          <Box sx={{ flex: 1, overflow: 'auto' }}>
+        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+          <Box sx={{ flex: 1, overflow: activePerspective === 'editor' ? 'auto' : 'hidden', display: 'flex', flexDirection: 'column' }}>
             {activePerspective === 'editor' ? (
               <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                 <Tabs value={tabValue} onChange={handleTabChange}>
@@ -470,6 +477,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                     onEditorChange={handleEditorChange}
                     onSave={handleSaveFile}
                     isDirty={isDirty}
+                    theme={theme.palette.mode === 'dark' ? 'vs-dark' : 'light'}
+                    isResizing={isSidebarResizing}
                     validationTexts={validationTexts}
                     onValidationTextsChange={setValidationTexts}
                   />
@@ -478,26 +487,36 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                   <ModulesComponent
                     modules={modules}
                     setModules={setModules}
+                    fontSize={fontSize}
                     onFeatureSelect={handleFileSelect}
                     onRunTests={handleRunTests}
                     onSaveModules={handleSave}
+                    scenarioStatuses={scenarioStatuses}
+                    setScenarioStatuses={setScenarioStatuses}
+                    isExecuting={isExecuting}
+                    runningFeatureId={runningFeatureId}
                     collapsedSections={modulesViewCollapsed}
                     onToggleSectionCollapse={handleToggleModulesViewCollapse}
                     navigateToModule={navigateToModule}
                     onStopTests={handleStopTests}
+                    focusedModule={focusedModule}
                     onFocusConsumed={clearFocusedModule}
                   />
                 </TabPanel>
               </Box>
             ) : (
               <ExecutionOrder
+                fontSize={fontSize}
                 modules={modules}
                 setModules={setModules}
                 onFeatureSelect={handleFileSelect}
+                isExecuting={isExecuting}
+                runningFeatureId={runningFeatureId}
                 onRunTests={handleRunTests}
                 onSaveModules={handleSave}
                 collapsedSections={executionOrderCollapsed}
                 onToggleSectionCollapse={handleToggleExecutionOrderCollapse}
+                navigateToModule={navigateToModule}
                 onStopTests={handleStopTests}
                 onScheduleTests={handleScheduleTests}
                 scheduledExecutionTime={scheduledExecutionTime}

@@ -1,6 +1,5 @@
 import React from 'react';
-import { Box, Paper, Typography } from '@mui/material'; // Fixed: removed duplicate DragIndicatorIcon from here
-// Checking original imports: import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
+import { Box, Paper, Typography, Chip, Tooltip } from '@mui/material';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import { useSortable } from '@dnd-kit/sortable';
 import { useDroppable, useDndContext } from '@dnd-kit/core';
@@ -12,10 +11,14 @@ const DEFAULT_MODULE_COLOR = '#7e57c2';
 interface SortableModuleProps {
     module: Module;
     controls: React.ReactNode;
+    headerPrefix?: React.ReactNode;
+    headerSuffix?: React.ReactNode;
     children: React.ReactNode;
+    onSelect?: () => void;
+    isSelected?: boolean;
 }
 
-const SortableModule: React.FC<SortableModuleProps> = ({ module, controls, children }) => {
+const SortableModule: React.FC<SortableModuleProps> = ({ module, controls, headerPrefix, headerSuffix, children, onSelect, isSelected }) => {
     const {
         attributes,
         listeners,
@@ -78,30 +81,81 @@ const SortableModule: React.FC<SortableModuleProps> = ({ module, controls, child
             </Box>
             <Paper
                 ref={setDroppableNodeRef} // Explicitly attach droppable ref here
-                elevation={2}
+                variant="outlined"
                 sx={{
                     mb: 2,
                     p: 2,
                     pl: 4,
-                    backgroundColor: module.color ? `${module.color}20` : 'background.paper',
+                    backgroundColor: isSelected ? '#F1F5F9' : `${module.color || DEFAULT_MODULE_COLOR}08`,
+                    borderColor: isSelected ? '#3b82f6' : (module.color || DEFAULT_MODULE_COLOR),
+                    borderWidth: isSelected ? '2px' : '1px',
                     outline: showHighlight ? '2px dashed' : 'none',
                     outlineColor: showHighlight ? 'primary.main' : 'transparent',
-                    transition: 'outline-color 0.2s ease-in-out, background-color 0.2s ease-in-out',
+                    transition: 'all 0.2s ease-in-out',
                 }}
             >
-                <Box display="flex" alignItems="center" mb={1}>
+                <Box
+                    display="flex"
+                    alignItems="center"
+                    mb={1}
+                    onClick={(e) => { e.stopPropagation(); onSelect?.(); }}
+                    sx={{
+                        cursor: 'pointer',
+                        p: 0.5,
+                        borderRadius: 1,
+                        '&:hover': {
+                            backgroundColor: isSelected ? 'rgba(59, 130, 246, 0.08)' : 'rgba(0, 0, 0, 0.03)'
+                        }
+                    }}
+                >
                     <Box
                         sx={{
                             flexGrow: 1,
                             display: 'flex',
-                            alignItems: 'center'
+                            alignItems: 'center',
+                            gap: 1
                         }}
                     >
-                        <Typography variant="h6" sx={{ fontSize: `${14 + 2}px`, flexGrow: 1 }}>
+                        {headerPrefix}
+                        <Typography variant="h6" sx={{ fontSize: `${14 + 2}px`, fontWeight: isSelected ? 'bold' : 'normal' }}>
                             {module.active
                                 ? `${module.order}. ${module.module_name}`
                                 : module.module_name}
                         </Typography>
+                        {headerSuffix}
+
+                        <Box sx={{ display: 'flex', gap: 0.5, ml: 1 }}>
+                            {(module.setup || []).length > 0 && (
+                                <Tooltip title="Setup Hooks">
+                                    <Chip
+                                        label={`${(module.setup || []).length} S`}
+                                        size="small"
+                                        sx={{
+                                            height: '18px',
+                                            fontSize: '0.65rem',
+                                            backgroundColor: '#7e57c2',
+                                            color: 'white',
+                                            fontWeight: 'bold'
+                                        }}
+                                    />
+                                </Tooltip>
+                            )}
+                            {(module.teardown || []).length > 0 && (
+                                <Tooltip title="Teardown Hooks">
+                                    <Chip
+                                        label={`${(module.teardown || []).length} T`}
+                                        size="small"
+                                        sx={{
+                                            height: '18px',
+                                            fontSize: '0.65rem',
+                                            backgroundColor: '#5e35b1',
+                                            color: 'white',
+                                            fontWeight: 'bold'
+                                        }}
+                                    />
+                                </Tooltip>
+                            )}
+                        </Box>
                     </Box>
                     {controls}
                 </Box>

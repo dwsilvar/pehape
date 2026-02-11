@@ -1,17 +1,22 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box, Typography, Card, CardContent, Grid, Chip, Divider, CircularProgress, Accordion, AccordionSummary, AccordionDetails, Button, IconButton, Snackbar, Alert } from '@mui/material';
-import { ExpandMore as ExpandMoreIcon, Image as ImageIcon, Edit as EditIcon } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
+import { Box, Typography, Card, CardContent, Grid, Chip, CircularProgress, Button, IconButton, Snackbar, Alert } from '@mui/material';
+import { Image as ImageIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import AppToolbar from '../components/AppToolbar';
 
 interface OCRImage {
     relative_path: string;
     filename: string;
-    key_text: string; // The text being searched
+    key_text: string;
     full_path_parts: string[];
+    associated_texts?: string[];
+    mapped_to?: { feature: string; tag: string | null; text?: string }[];
+    is_mapped?: boolean;
 }
 
 const OCRResourcesPage: React.FC = () => {
+    const { t } = useTranslation();
     const navigate = useNavigate();
     const [images, setImages] = useState<OCRImage[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
@@ -40,68 +45,36 @@ const OCRResourcesPage: React.FC = () => {
         fetchImages();
     }, []);
 
-    // Grouping logic: Try to group by "Feature" (assuming parent folder of tag folder)
-    // Structure: .../FeatureName/Tag/Image.png
-    // Parts: [..., Feature, Tag, Image]
-    // If length < 3, just put in "Uncategorized"
+    // Sorting logic: Sort alphabetically by key_text
+    const sortedImages = [...images].sort((a, b) =>
+        (a.key_text || "").localeCompare(b.key_text || "")
+    );
 
-    const groupedImages = images.reduce((acc, img) => {
-        let groupName = "Uncategorized";
-        const parts = img.full_path_parts;
-
-        // Heuristic: The folder containing the image is the Tag. The folder above that is the Feature.
-        if (parts.length >= 3) {
-            const featureName = parts[parts.length - 3];
-            groupName = featureName;
-        } else if (parts.length === 2) {
-            groupName = parts[0]; // Just the top folder
+    const handleDeleteImage = async (img: OCRImage) => {
+        if (!window.confirm(t('editor.gallery.delete_confirm', { name: img.key_text }))) {
+            return;
         }
 
-        if (!acc[groupName]) {
-            acc[groupName] = [];
-        }
-        acc[groupName].push(img);
-        return acc;
-    }, {} as Record<string, OCRImage[]>);
-
-
-    const handleOpenFeature = async (groupName: string, exampleImage: OCRImage) => {
-        // Reconstruct feature path
         try {
-            const parts = exampleImage.full_path_parts;
-            if (parts.length < 3) {
-                console.warn("Cannot derive feature path from image path (too short)");
-                return;
+            const response = await fetch(`/api/resources/images/${encodeURIComponent(img.relative_path)}`, {
+                method: 'DELETE',
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || t('editor.gallery.delete_error'));
             }
 
-            // Remove last 2 parts (FileName, Tag)
-            const featureAndDirs = parts.slice(0, -2);
-            /*
-               Example: .../images/features/path/to/feature/tag/image.png
-               parts: [features, path, to, feature, tag, image.png]
-               featureAndDirs: [features, path, to, feature]
-               relativePath: features/path/to/feature.feature
-            */
-            const relativePath = `${featureAndDirs.join('/')}.feature`;
+            setSnackbarMessage(t('editor.gallery.delete_success'));
+            setSnackbarOpen(true);
 
-            // 1. Validate if feature exists
-            try {
-                const response = await fetch(`/api/features/${encodeURIComponent(relativePath)}`);
-                if (!response.ok) {
-                    setSnackbarMessage(`El feature asociado (${relativePath}) no existe.`);
-                    setSnackbarOpen(true);
-                    return;
-                }
-            } catch (err) {
-                console.error("Validation error", err);
-                setSnackbarMessage(`Error verificando el feature: ${relativePath}`);
-                setSnackbarOpen(true);
-                return;
-            }
-
-            navigate(`/?openFile=${encodeURIComponent(relativePath)}`);
-        } catch (e) {
-            console.error("Error opening feature", e);
+            // Refresh list
+            const updatedImages = images.filter(i => i.relative_path !== img.relative_path);
+            setImages(updatedImages);
+        } catch (err: any) {
+            console.error("Delete error", err);
+            setSnackbarMessage(`Error: ${err.message}`);
+            setSnackbarOpen(true);
         }
     };
 
@@ -114,93 +87,123 @@ const OCRResourcesPage: React.FC = () => {
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-            <AppToolbar title="Recursos de Imágenes OCR" icon={<ImageIcon sx={{ fontSize: 32 }} />} />
+            <AppToolbar title={t('editor.gallery.title')} icon={<ImageIcon sx={{ fontSize: 32 }} />} />
             <Box sx={{ p: 4, flex: 1, overflowY: 'auto' }}>
                 <Typography variant="body1" sx={{ mb: 4, color: 'text.secondary' }}>
-                    Imágenes de respaldo utilizadas cuando falla el reconocimiento de texto OCR.
+                    {t('editor.gallery.subtitle')}
                 </Typography>
 
-                {Object.keys(groupedImages).length === 0 && (
-                    <Typography variant="body1">No se encontraron imágenes en <code>resources/images/</code>.</Typography>
-                )}
-
-                {Object.entries(groupedImages).map(([groupName, groupImages]) => (
-                    <Accordion key={groupName} defaultExpanded>
-                        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', pr: 2 }}>
-                                <Typography variant="h6" sx={{ flexGrow: 1 }}>{groupName}</Typography>
-                                <Chip label={`${groupImages.length} images`} size="small" sx={{ mr: 2 }} />
-                                {groupName !== 'Uncategorized' && (
-                                    <Button
-                                        component="div"
-                                        size="small"
-                                        variant="outlined"
-                                        startIcon={<EditIcon />}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleOpenFeature(groupName, groupImages[0]);
-                                        }}
-                                        sx={{ cursor: 'pointer' }}
-                                    >
-                                        Open Feature
-                                    </Button>
-                                )}
-                            </Box>
-                        </AccordionSummary>
-                        <AccordionDetails>
-                            <Grid container spacing={3}>
-                                {groupImages.map((img) => (
-                                    <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={img.relative_path}>
-                                        <Card elevation={2}>
-                                            <Box sx={{
-                                                height: 150,
-                                                display: 'flex',
-                                                justifyContent: 'center',
-                                                alignItems: 'center',
-                                                bgcolor: '#f5f5f5',
-                                                overflow: 'hidden'
-                                            }}>
-                                                <img
-                                                    src={`/api/resources/images/${img.relative_path}`}
-                                                    alt={img.key_text}
-                                                    style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain' }}
-                                                />
+                {sortedImages.length === 0 ? (
+                    <Typography variant="body1">{t('editor.gallery.no_images')}</Typography>
+                ) : (
+                    <Grid container spacing={3}>
+                        {sortedImages.map((img) => (
+                            <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={img.relative_path}>
+                                <Card elevation={2}>
+                                    <Box sx={{
+                                        height: 150,
+                                        display: 'flex',
+                                        justifyContent: 'center',
+                                        alignItems: 'center',
+                                        bgcolor: '#f5f5f5',
+                                        overflow: 'hidden'
+                                    }}>
+                                        <img
+                                            src={`/api/resources/images/${img.relative_path}`}
+                                            alt={img.key_text}
+                                            style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain' }}
+                                        />
+                                    </Box>
+                                    <CardContent>
+                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                                            <Box sx={{ flex: 1 }}>
+                                                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: 'primary.main', lineHeight: 1.2 }}>
+                                                    {img.mapped_to && img.mapped_to.length > 0
+                                                        ? Array.from(new Set(img.mapped_to.map(m => m.text).filter(Boolean))).join(' / ')
+                                                        : `"${img.key_text}"`}
+                                                </Typography>
+                                                {(img.full_path_parts[1] === 'generic' || img.mapped_to?.some(m => m.feature === 'generic')) && (
+                                                    <Chip
+                                                        label={t('editor.upload_dialog.generic_label')}
+                                                        size="small"
+                                                        color="info"
+                                                        variant="filled"
+                                                        sx={{ mt: 0.5, height: 18, fontSize: '0.6rem', fontWeight: 'bold' }}
+                                                    />
+                                                )}
                                             </Box>
-                                            <CardContent>
-                                                <Typography variant="subtitle2" noWrap title={img.key_text} sx={{ fontWeight: 'bold' }}>
-                                                    "{img.key_text}"
-                                                </Typography>
+                                            <IconButton
+                                                size="small"
+                                                color="error"
+                                                onClick={() => handleDeleteImage(img)}
+                                                title={t('editor.gallery.delete_tooltip')}
+                                                sx={{ ml: 1, mt: -0.5 }}
+                                            >
+                                                <DeleteIcon fontSize="small" />
+                                            </IconButton>
+                                        </Box>
 
-                                                {/* Storage Path */}
-                                                <Typography
-                                                    variant="caption"
-                                                    sx={{
-                                                        mt: 1,
-                                                        display: 'block',
-                                                        color: 'text.secondary',
-                                                        fontFamily: 'monospace',
-                                                        fontSize: '0.7rem',
-                                                        wordBreak: 'break-all'
-                                                    }}
-                                                    title={`resources/images/${img.relative_path}`}
-                                                >
-                                                    📁 resources/images/{img.relative_path}
-                                                </Typography>
+                                        {/* Image ID (Filename) */}
+                                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1, fontFamily: 'monospace', fontSize: '0.6rem' }}>
+                                            ID: {img.filename}
+                                        </Typography>
 
-                                                <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                                                    {/* Show hierarchy tags */}
-                                                    {img.full_path_parts.slice(0, -1).map((part, idx) => (
-                                                        <Chip key={idx} label={part} size="small" variant="outlined" sx={{ fontSize: '0.75rem' }} />
+                                        {/* Associated Steps from Mapping */}
+                                        {img.associated_texts && img.associated_texts.length > 0 && (
+                                            <Box sx={{ mt: 1 }}>
+                                                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 'bold' }}>
+                                                    {t('editor.gallery.associated_steps')}
+                                                </Typography>
+                                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                                                    {Array.from(new Set(img.associated_texts)).map((text, idx) => (
+                                                        <Chip key={idx} label={text} size="small" variant="outlined" sx={{ fontSize: '0.6rem', height: 20, bgcolor: 'rgba(0,0,0,0.02)' }} />
                                                     ))}
                                                 </Box>
-                                            </CardContent>
-                                        </Card>
-                                    </Grid>
-                                ))}
+                                            </Box>
+                                        )}
+
+                                        {/* Related Features Mapping */}
+                                        {img.mapped_to && img.mapped_to.length > 0 && (
+                                            <Box sx={{ mt: 1.5 }}>
+                                                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 'bold', display: 'block', mb: 0.5 }}>
+                                                    {t('editor.gallery.usage_in_features')}
+                                                </Typography>
+                                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                                                    {img.mapped_to.map((m, idx) => {
+                                                        const isGeneric = m.feature === 'generic' || img.full_path_parts[1] === 'generic';
+                                                        const featureLabel = isGeneric
+                                                            ? t('editor.ocr_association.generic')
+                                                            : (m.feature.length > 40 ? `...${m.feature.substring(m.feature.length - 40)}` : m.feature);
+
+                                                        return (
+                                                            <Typography
+                                                                key={idx}
+                                                                variant="caption"
+                                                                sx={{
+                                                                    fontSize: '0.6rem',
+                                                                    display: 'block',
+                                                                    bgcolor: isGeneric ? 'rgba(25, 118, 210, 0.08)' : 'rgba(0,0,0,0.03)',
+                                                                    p: 0.5,
+                                                                    borderRadius: 1,
+                                                                    borderLeft: '2px solid',
+                                                                    borderColor: isGeneric ? 'primary.main' : 'divider',
+                                                                    wordBreak: 'break-all'
+                                                                }}
+                                                                title={isGeneric ? t('editor.upload_dialog.generic_hint') : m.feature}
+                                                            >
+                                                                <strong>{isGeneric ? featureLabel : `"${featureLabel}"`}</strong> &rarr; "{m.text || t('editor.gallery.no_text')}"
+                                                            </Typography>
+                                                        );
+                                                    })}
+                                                </Box>
+                                            </Box>
+                                        )}
+                                    </CardContent>
+                                </Card>
                             </Grid>
-                        </AccordionDetails>
-                    </Accordion>
-                ))}
+                        ))}
+                    </Grid>
+                )}
 
                 <Snackbar open={snackbarOpen} autoHideDuration={6000} onClose={handleCloseSnackbar} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}>
                     <Alert onClose={handleCloseSnackbar} severity="warning" sx={{ width: '100%' }}>

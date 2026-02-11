@@ -13,7 +13,7 @@ export const useTaskManagement = ({ setModules, validationTexts }: UseTaskManage
     const [editingTaskIndex, setEditingTaskIndex] = useState<number | null>(null);
     const [newTaskConfig, setNewTaskConfig] = useState<{
         name: string;
-        scope: 'feature' | 'scenario' | 'step';
+        scope: 'feature' | 'scenario';
         hook: 'before' | 'after';
         scenario_name?: string;
         args: Record<string, any>;
@@ -54,12 +54,27 @@ export const useTaskManagement = ({ setModules, validationTexts }: UseTaskManage
         setNewTaskConfig(prev => ({ ...prev, name: taskName, args: initialArgs }));
     }, [availableTasks, validationTexts]);
 
-    const handleOpenTaskDialog = useCallback(async (moduleName: string, item: FeatureItem, event?: React.MouseEvent) => {
+    const handleOpenTaskDialog = useCallback(async (moduleName: string, item: FeatureItem, scenarioName?: string, event?: React.MouseEvent, hook?: 'before' | 'after') => {
         if (event?.currentTarget instanceof HTMLElement) {
             event.currentTarget.blur();
         }
         setSelectedFeatureForTask({ moduleName, item });
         setTaskDialogOpen(true);
+
+        if (hook) {
+            setNewTaskConfig(prev => ({
+                ...prev,
+                hook: hook
+            }));
+        }
+
+        if (scenarioName) {
+            setNewTaskConfig(prev => ({
+                ...prev,
+                scope: 'scenario',
+                scenario_name: scenarioName
+            }));
+        }
 
         if (availableTasks.length === 0) {
             await fetchTasks();

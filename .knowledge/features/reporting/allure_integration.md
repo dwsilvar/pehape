@@ -12,6 +12,7 @@ El sistema genera automáticamente un reporte detallado y visualmente atractivo 
 - **Evidencia Visual**: Se adjuntan capturas de pantalla automáticamente cuando falla un paso o después de pasos específicos, facilitando la depuración.
 - **Historial y Tendencias**: Permite visualizar la evolución de las pruebas (aunque esto depende de la persistencia del historial, actualmente se limpia en cada ejecución con `--clean`).
 - **Acceso Web**: El reporte es accesible directamente desde la interfaz web de la aplicación de gestión de pruebas.
+- **Evidencias Técnicas (GIF/Video)**: Además del reporte Allure, el sistema genera automáticamente animaciones y videos de la ejecución para facilitar la reproducción visual de los pasos.
 
 ### Flujo de Uso
 1.  **Ejecutar Pruebas**: El usuario inicia las pruebas desde el frontend.
@@ -129,3 +130,21 @@ Para gestionar el ciclo de vida de los reportes y optimizar el espacio en disco,
         -   `screenshots`: Borra `reports/screenshots`.
         -   `all`: Borra los tres directorios anteriores.
     -   **Lógica**: Utiliza `shutil.rmtree` para eliminar y vuelve a crear la carpeta vacía inmediatamente para evitar errores en futuras ejecuciones.
+### 4. Evidencias Técnicas: GIFs y Videos de Ejecución
+
+Además de las capturas integradas en Allure, el framework genera archivos multimedia independientes para cada escenario.
+
+#### Generación de Artefactos
+1. **Captura por Paso**: Durante la ejecución, se guarda una imagen PNG por cada paso en un directorio temporal (`reports/temp_gif/<execution_id>`).
+2. **Generación de GIF**: Se concatenan las imágenes de los pasos con una duración lógica de 1 segundo por paso.
+3. **Generación de Video (MP4)**:
+   - Se procesan las imágenes PNG usando OpenCV (cv2).
+   - **Calidad y Fluidez**: El video se genera a **10 FPS**. Cada imagen de paso se repite internamente para mantener la duración de 1 segundo, lo que permite una visualización fluida y compatible con reproductores estándar.
+   - **Compatibilidad**: Se utiliza una lógica de selección de codecs (`mp4v` o `avc1`) para asegurar que el video sea reproducible sin necesidad de software adicional.
+
+#### Acceso y Descarga
+Desde la pantalla de **Execution Order**, el usuario puede:
+- **Descargar GIF**: Obtener una animación cíclica del escenario (ideal para compartir rápido).
+- **Descargar Video**: Obtener un archivo MP4 de alta compatibilidad (ideal para documentación técnica y evidencias legales).
+
+*Nota: Estas evidencias se sirven mediante los endpoints `/api/execution/<id>/gif` y `/api/execution/<id>/video`.*

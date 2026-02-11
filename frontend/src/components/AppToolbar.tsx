@@ -68,7 +68,7 @@ const AppToolbar: React.FC<AppToolbarProps> = ({ title, icon, showViewMenu = fal
                         {/* View Menu Button */}
                         {showViewMenu && (
                             <Button color="inherit" onClick={handleViewMenuClick} size="small">
-                                View
+                                {t('common.view')}
                             </Button>
                         )}
 
@@ -120,7 +120,7 @@ const AppToolbar: React.FC<AppToolbarProps> = ({ title, icon, showViewMenu = fal
                     <MenuItem disabled>{t('common.view')}</MenuItem>
                     <MenuItem onClick={handleViewMenuClose}>
                         <Typography variant="caption" color="text.secondary">
-                            {t('common.view')} options
+                            {t('common.view_options')}
                         </Typography>
                     </MenuItem>
                 </Menu>

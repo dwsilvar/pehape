@@ -1,7 +1,7 @@
 import { FC, useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import i18n from '../i18n';
-import { Box, Typography, Button, List, ListItem, ListItemText, IconButton, Chip, Paper, CircularProgress } from '@mui/material';
+import { Box, Typography, Button, List, ListItem, ListItemText, IconButton, Chip, Paper, CircularProgress, Snackbar, Alert } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import DeleteIcon from '@mui/icons-material/Delete';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -12,14 +12,19 @@ import MonacoEditor, { OnMount } from '@monaco-editor/react';
 import CloseIcon from '@mui/icons-material/Close';
 import ViewStreamIcon from '@mui/icons-material/ViewStream';
 import ViewHeadlineIcon from '@mui/icons-material/ViewHeadline';
+import LinkIcon from '@mui/icons-material/Link';
 import { FileData } from '../types';
 import { ImageUploadDialog } from './ImageUploadDialog';
+import { ImageLinkDialog } from './ImageLinkDialog';
 
 interface OCRImage {
   relative_path: string;
   filename: string;
   key_text: string;
   full_path_parts: string[];
+  associated_texts?: string[];
+  mapped_to?: { feature: string; tag: string | null; text?: string; full_steps?: string[] }[];
+  is_mapped?: boolean;
 }
 
 interface FeatureEditorProps {
@@ -37,13 +42,18 @@ interface FeatureEditorProps {
 export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorContent, onEditorChange, theme, onSave, isDirty, isResizing, validationTexts = [], onValidationTextsChange }) => {
   const { t } = useTranslation();
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [selectedText, setSelectedText] = useState('');
+  const [selectedStepText, setSelectedStepText] = useState(''); // New state for full line text
   const [detectedTag, setDetectedTag] = useState<string | null>(null);
   const [localValidationTexts, setLocalValidationTexts] = useState<string[]>(validationTexts);
 
   // States for Gherkin Validation and Suggestions
   const [stepCatalog, setStepCatalog] = useState<{ type: string; pattern: string; location: string }[]>([]);
   const [isValidating, setIsValidating] = useState(false);
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [snackbarSeverity, setSnackbarSeverity] = useState<'error' | 'warning' | 'info' | 'success'>('warning');
   const [validationResult, setValidationResult] = useState<{
     valid: boolean;
     undefined_steps: { keyword: string; name: string; note?: string }[];
@@ -252,77 +262,152 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
     const lines = content.split('\n');
     const newDecorations: any[] = [];
 
-    // Heuristic to find tags for each line
+    // Normalize current path for comparison (no extension, forward slashes, no 'features/' prefix)
+    const normalizePath = (p: string) => {
+      let normalized = p.replace(/\\/g, '/').replace(/^\//, '');
+      if (normalized.startsWith('features/')) {
+        normalized = normalized.substring(9);
+      }
+      return normalized.replace('.feature', '');
+    };
+    const currentFeatureKey = normalizePath(selectedFile.path);
+
+    // Heuristic to find tags for each line - Keep the @ to match mapping
     const lineTags: (string | null)[] = new Array(lines.length).fill(null);
     let currentTag: string | null = null;
     for (let i = 0; i < lines.length; i++) {
       const trimmed = lines[i].trim();
       if (trimmed.startsWith('@')) {
-        currentTag = trimmed.split(/\s+/)[0].substring(1); // Remove @
+        // Keep the whole tag including @ (e.g. "@successful")
+        currentTag = trimmed.split(/\s+/)[0];
       }
       lineTags[i] = currentTag;
     }
 
-    // Prepare feature path for matching
-    // resources/images/<rel_dir>/<feature_name>/<tag>/<text>.png
-    const featurePathParts = selectedFile.path.replace('.feature', '').split(/[/\\]/);
-    const featureName = featurePathParts.pop();
-    const relDirParts = featurePathParts;
-
     ocrImages.forEach(img => {
-      const imgParts = img.full_path_parts; // [rel_dir..., feature_name, tag, filename]
+      // Logic for new mapped format
+      if (img.mapped_to && img.mapped_to.length > 0) {
+        img.mapped_to.forEach(m => {
+          let isMatch = false;
+          let matchType: 'direct' | 'generic' = 'direct';
 
-      // Match specific images
-      const isGeneric = imgParts[0] === 'features' && imgParts[1] === 'generic';
-
-      let match = false;
-      let matchType: 'direct' | 'generic' = 'direct';
-
-      if (isGeneric) {
-        match = true;
-        matchType = 'generic';
-      } else if (imgParts.length >= 3) {
-        // Check if it belongs to this feature
-        const imgFeatureName = imgParts[imgParts.length - 3];
-        const imgRelDir = imgParts.slice(0, imgParts.length - 3).join('/');
-        const currentRelDir = relDirParts.join('/');
-
-        if (imgFeatureName === featureName && imgRelDir === currentRelDir) {
-          match = true;
-          matchType = 'direct';
-        }
-      }
-
-      if (match) {
-        const keyText = img.key_text;
-        const imgTag = isGeneric ? null : imgParts[imgParts.length - 2];
-
-        lines.forEach((line: string, lineIdx: number) => {
-          if (line.includes(`"${keyText}"`) || line.includes(`'${keyText}'`) || (line.includes(keyText) && !line.trim().startsWith('#') && !line.trim().startsWith('@'))) {
-            // If direct match, also check tag
-            if (matchType === 'direct' && imgTag !== lineTags[lineIdx]) {
-              return; // Tag mismatch
-            }
-
-            // Find all occurrences in line
-            let startIdx = 0;
-            while ((startIdx = line.indexOf(keyText, startIdx)) !== -1) {
-              newDecorations.push({
-                range: new monacoInstance.Range(lineIdx + 1, startIdx + 1, lineIdx + 1, startIdx + keyText.length + 1),
-                options: {
-                  inlineClassName: matchType === 'generic' ? 'ocr-generic-link' : 'ocr-direct-link',
-                  hoverMessage: {
-                    value: `![${keyText}](${window.location.origin}/api/resources/images/${encodeURI(img.relative_path)})\n\n**${t(`editor.ocr_association.${matchType}`)}**`,
-                    isTrusted: true,
-                    supportHtml: true
-                  },
-                  stickiness: monacoInstance.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
-                }
-              });
-              startIdx += keyText.length;
+          if (m.feature === 'generic') {
+            isMatch = true;
+            matchType = 'generic';
+          } else {
+            const mappedFeatureKey = normalizePath(m.feature);
+            if (mappedFeatureKey === currentFeatureKey) {
+              isMatch = true;
+              matchType = 'direct';
             }
           }
+
+          if (isMatch) {
+            const textToMatch = m.text || img.key_text;
+            if (!textToMatch) return;
+
+            lines.forEach((line: string, lineIdx: number) => {
+              const trimmedLine = line.trim();
+              if (trimmedLine.startsWith('#') || trimmedLine.startsWith('@') || trimmedLine === '') return;
+
+              // Match tag if direct - Tag in mapping has @ (e.g. "@successful")
+              if (matchType === 'direct' && m.tag && m.tag !== lineTags[lineIdx]) {
+                return;
+              }
+
+              // NEW: Match the full step text to avoid ambiguity
+              // If the mapping specifies full steps, the current line must be one of them.
+              if (matchType === 'direct' && m.full_steps && m.full_steps.length > 0) {
+                if (!m.full_steps.includes(trimmedLine)) {
+                  return;
+                }
+              }
+
+              // Permissive match: quotes or literal
+              const escapedText = textToMatch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              // Matches "text", 'text' or just text.
+              const regex = new RegExp(`(["'])${escapedText}\\1|${escapedText}`, 'g');
+              let match;
+
+              while ((match = regex.exec(line)) !== null) {
+                const fullMatch = match[0];
+                const matchIdx = match.index;
+
+                newDecorations.push({
+                  range: new monacoInstance.Range(lineIdx + 1, matchIdx + 1, lineIdx + 1, matchIdx + fullMatch.length + 1),
+                  options: {
+                    inlineClassName: matchType === 'generic' ? 'ocr-generic-link' : 'ocr-direct-link',
+                    hoverMessage: [
+                      {
+                        value: `![${textToMatch}](${window.location.origin}/api/resources/images/${img.relative_path})\n\n**${t(`editor.ocr_association.${matchType}`)}**\n\n*ID: ${img.filename}*`,
+                        isTrusted: true,
+                        supportHtml: true
+                      }
+                    ],
+                    stickiness: monacoInstance.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
+                  }
+                });
+              }
+            });
+          }
         });
+      } else {
+        // --- Legacy Fallback (Legacy folder-based matching) ---
+        const imgParts = img.full_path_parts;
+        const isGeneric = imgParts[0] === 'features' && imgParts[1] === 'generic';
+
+        // Re-implement folder-based matching logic
+        const featurePathParts = currentFeatureKey.split(/[/\\]/).filter(Boolean);
+        const featureName = featurePathParts.pop();
+        const relDirParts = featurePathParts;
+
+        let isCurrentFeature = false;
+        let matchType: 'direct' | 'generic' = 'direct';
+
+        if (isGeneric) {
+          isCurrentFeature = true;
+          matchType = 'generic';
+        } else if (imgParts.length >= 3) {
+          const imgFeatureName = imgParts[imgParts.length - 3];
+          const imgRelDir = imgParts.slice(0, imgParts.length - 3).join('/');
+          const currentRelDir = relDirParts.join('/');
+          if (imgFeatureName === featureName && imgRelDir === currentRelDir) {
+            isCurrentFeature = true;
+          }
+        }
+
+        if (isCurrentFeature) {
+          const keyText = img.key_text;
+          const imgTag = isGeneric ? null : (imgParts.length >= 2 ? imgParts[imgParts.length - 2] : null);
+
+          lines.forEach((line: string, lineIdx: number) => {
+            const trimmedLine = line.trim();
+            if (trimmedLine.startsWith('#') || trimmedLine.startsWith('@') || trimmedLine === '') return;
+
+            // Legacy tag check removed substring(1)
+            const cleanedCurrentTag = lineTags[lineIdx]?.startsWith('@') ? lineTags[lineIdx]?.substring(1) : lineTags[lineIdx];
+            if (matchType === 'direct' && imgTag && imgTag !== cleanedCurrentTag) return;
+
+            if (line.includes(keyText)) {
+              let startIdx = 0;
+              while ((startIdx = line.indexOf(keyText, startIdx)) !== -1) {
+                newDecorations.push({
+                  range: new monacoInstance.Range(lineIdx + 1, startIdx + 1, lineIdx + 1, startIdx + keyText.length + 1),
+                  options: {
+                    inlineClassName: matchType === 'generic' ? 'ocr-generic-link' : 'ocr-direct-link',
+                    hoverMessage: [{
+                      value: `![${keyText}](${window.location.origin}/api/resources/images/${img.relative_path})\n\n**${t(`editor.ocr_association.${matchType}`)}**\n\n*ID: ${img.filename}*`,
+                      isTrusted: true,
+                      supportHtml: true
+                    }],
+                    stickiness: monacoInstance.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
+                  }
+                });
+                startIdx += keyText.length;
+              }
+            }
+          });
+        }
       }
     });
 
@@ -396,6 +481,41 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
         if (model && selection && !selection.isEmpty()) {
           const text = model.getValueInRange(selection);
 
+          // --- Quote Restriction Check ---
+          // 1. Check if selection itself starts and ends with quotes
+          const startsWithQuote = text.startsWith('"') || text.startsWith("'");
+          const endsWithQuote = text.endsWith('"') || text.endsWith("'");
+
+          let validatedText = text;
+          let isValid = false;
+
+          if (startsWithQuote && endsWithQuote) {
+            // User selected the quotes too, strip them for the OCR key_text but it's valid
+            validatedText = text.substring(1, text.length - 1);
+            isValid = true;
+          } else {
+            // 2. Check surrounding characters in the model
+            const beforeRange = new monacoInstance.Range(selection.startLineNumber, selection.startColumn - 1, selection.startLineNumber, selection.startColumn);
+            const afterRange = new monacoInstance.Range(selection.endLineNumber, selection.endColumn, selection.endLineNumber, selection.endColumn + 1);
+
+            const charBefore = model.getValueInRange(beforeRange);
+            const charAfter = model.getValueInRange(afterRange);
+
+            if ((charBefore === '"' && charAfter === '"') || (charBefore === "'" && charAfter === "'")) {
+              isValid = true;
+            }
+          }
+
+          if (!isValid) {
+            setSnackbarMessage(t('editor.ocr_restriction_error') || 'Solo puedes asociar imágenes OCR a textos encerrados entre comillas (variables de los pasos).');
+            setSnackbarSeverity('warning');
+            setSnackbarOpen(true);
+            return;
+          }
+          // --------------------------------
+
+          const fullLineText = model.getLineContent(selection.startLineNumber).trim();
+
           // Heuristic to find the nearest tag upwards
           let tag = null;
           for (let i = selection.startLineNumber; i >= 1; i--) {
@@ -408,9 +528,68 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
             }
           }
 
-          setSelectedText(text);
+          setSelectedText(validatedText);
+          setSelectedStepText(fullLineText);
           setDetectedTag(tag);
           setUploadDialogOpen(true);
+        }
+      }
+    });
+
+    // Register OCR link action
+    const linkAction = editorInstance.addAction({
+      id: 'link-ocr-image',
+      label: t('editor.link_ocr_image', 'Vincular Imagen OCR Existente'),
+      contextMenuGroupId: 'navigation',
+      contextMenuOrder: 1.55,
+      run: (ed: any) => {
+        const model = ed.getModel();
+        const selection = ed.getSelection();
+        if (model && selection && !selection.isEmpty()) {
+          const text = model.getValueInRange(selection);
+
+          // Reutilizar lógica de validación de comillas
+          const startsWithQuote = text.startsWith('"') || text.startsWith("'");
+          const endsWithQuote = text.endsWith('"') || text.endsWith("'");
+
+          let validatedText = text;
+          let isValid = false;
+
+          if (startsWithQuote && endsWithQuote) {
+            validatedText = text.substring(1, text.length - 1);
+            isValid = true;
+          } else {
+            const beforeRange = new monacoInstance.Range(selection.startLineNumber, selection.startColumn - 1, selection.startLineNumber, selection.startColumn);
+            const afterRange = new monacoInstance.Range(selection.endLineNumber, selection.endColumn, selection.endLineNumber, selection.endColumn + 1);
+            const charBefore = model.getValueInRange(beforeRange);
+            const charAfter = model.getValueInRange(afterRange);
+            if ((charBefore === '"' && charAfter === '"') || (charBefore === "'" && charAfter === "'")) {
+              isValid = true;
+            }
+          }
+
+          if (!isValid) {
+            setSnackbarMessage(t('editor.ocr_restriction_error'));
+            setSnackbarSeverity('warning');
+            setSnackbarOpen(true);
+            return;
+          }
+
+          const fullLineText = model.getLineContent(selection.startLineNumber).trim();
+          let tag = null;
+          for (let i = selection.startLineNumber; i >= 1; i--) {
+            const lineContent = model.getLineContent(i).trim();
+            if (lineContent.startsWith('@')) {
+              const tags = lineContent.split(/\s+/);
+              tag = tags[0];
+              break;
+            }
+          }
+
+          setSelectedText(validatedText);
+          setSelectedStepText(fullLineText);
+          setDetectedTag(tag);
+          setLinkDialogOpen(true);
         }
       }
     });
@@ -433,7 +612,7 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
       }
     });
 
-    menuActionsRef.current = [ocrAction, validationAction];
+    menuActionsRef.current = [ocrAction, linkAction, validationAction];
   };
 
   // Re-register menu actions when language changes
@@ -463,6 +642,7 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
 
     const formData = new FormData();
     formData.append('text', text);
+    formData.append('step_text', selectedStepText); // Pass full context
     formData.append('file', file);
     formData.append('is_generic', isGeneric.toString());
 
@@ -480,6 +660,35 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.error || 'Failed to upload image');
+    }
+  };
+
+  const handleLinkImage = async (sourcePath: string, text: string, tag: string, isGeneric: boolean) => {
+    if (!selectedFile) return;
+
+    const response = await fetch('/api/images/link', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        source_relative_path: sourcePath,
+        text,
+        step_text: selectedStepText,
+        feature_path: isGeneric ? null : selectedFile.path,
+        tag: isGeneric ? null : tag,
+        is_generic: isGeneric
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to link image');
+    }
+
+    // Refresh decorations after linking
+    const imagesResponse = await fetch('/api/ocr-images');
+    if (imagesResponse.ok) {
+      const data = await imagesResponse.json();
+      setOcrImages(data);
     }
   };
 
@@ -944,11 +1153,31 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
       <ImageUploadDialog
         open={uploadDialogOpen}
         onClose={() => setUploadDialogOpen(false)}
+        onUpload={handleUploadImage}
         initialText={selectedText}
         initialTag={detectedTag}
         featurePath={selectedFile?.path || ''}
-        onUpload={handleUploadImage}
       />
+
+      <ImageLinkDialog
+        open={linkDialogOpen}
+        onClose={() => setLinkDialogOpen(false)}
+        onLink={handleLinkImage}
+        initialText={selectedText}
+        initialTag={detectedTag}
+        featurePath={selectedFile?.path || ''}
+      />
+
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={6000}
+        onClose={() => setSnackbarOpen(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert onClose={() => setSnackbarOpen(false)} severity={snackbarSeverity} sx={{ width: '100%' }}>
+          {snackbarMessage}
+        </Alert>
+      </Snackbar>
     </Box >
   );
 };

@@ -87,6 +87,23 @@ export const useExecutionOrder = ({
     const [scheduleDialogOpen, setScheduleDialogOpen] = React.useState(false);
     const [scheduledTime, setScheduledTime] = React.useState('');
 
+    // --- Detail Preview State ---
+    const [selectedScenario, setSelectedScenario] = React.useState<{
+        moduleName: string;
+        featureId?: string;
+        scenarioName?: string;
+    } | null>(null);
+
+    const handleSelectScenario = React.useCallback((moduleName: string, featureId?: string, scenarioName?: string) => {
+        setSelectedScenario(prev => {
+            // Toggle selection if same scenario/feature/module is clicked
+            if (prev?.moduleName === moduleName && prev?.featureId === featureId && prev?.scenarioName === scenarioName) {
+                return null;
+            }
+            return { moduleName, featureId, scenarioName };
+        });
+    }, []);
+
     const handleOpenScheduleDialog = React.useCallback((event?: React.MouseEvent) => {
         if (event?.currentTarget instanceof HTMLElement) {
             event.currentTarget.blur();
@@ -503,6 +520,9 @@ export const useExecutionOrder = ({
         handleTagToggle,
         handleModuleColorChange,
         handleRefreshFeatures,
-        handleToggleModuleCollapse
+        handleToggleModuleCollapse,
+        selectedScenario,
+        handleSelectScenario,
+        setSelectedScenario
     };
 };

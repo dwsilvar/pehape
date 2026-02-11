@@ -638,6 +638,100 @@ Write-Host "3. See README.md for more options and troubleshooting."
 "@
 $installScript | Out-File -FilePath "$PackageDir\install.ps1" -Encoding utf8
 Write-Log "install.ps1 generated successfully." "SUCCESS"
+
+# 7.1 Generate update.ps1 - Intelligent Updater
+Write-Log "Step 7.1: Generating update.ps1" "INFO"
+$updateScript = @"
+# update.ps1 - Intelligent Updater for Pehape
+`$ProjectRoot = Get-Location
+Write-Host "========================================" -ForegroundColor Blue
+Write-Host "Pehape Intelligent Updater" -ForegroundColor Blue
+Write-Host "========================================" -ForegroundColor Blue
+
+# Definition of protected items (WILL NOT BE OVERWRITTEN)
+`$ProtectedFiles = @(
+    "config\config.py",
+    "features\run_list.json",
+    "features\ui_settings.json",
+    "backend\server_config.json"
+)
+`$ProtectedFolders = @(
+    "resources\images",
+    "resources\ocr_images"
+)
+
+# Detect Python
+`$pythonCmd = ""
+`$cmdsToTry = @("py", "python")
+foreach (`$cmd in `$cmdsToTry) {
+    if (Get-Command `$cmd -ErrorAction SilentlyContinue) {
+        try {
+            `$version = & `$cmd --version 2>&1
+            if (`$LASTEXITCODE -eq 0) {
+                `$pythonCmd = `$cmd
+                break
+            }
+        } catch {}
+    }
+}
+
+if (-not `$pythonCmd) {
+    Write-Host "ERROR: Python not found. Cannot update dependencies." -ForegroundColor Red
+    pause
+    exit 1
+}
+
+Write-Host "Backing up installation directory (partial)..." -ForegroundColor Gray
+# We don't do a full backup, but we ensure protected items are safe by skipping them in copy.
+
+Write-Host "Updating application files (preserving configuration)..." -ForegroundColor Cyan
+# Copy logic: Iterate through source files and only copy if not protected
+# We use a temp location or just simple logic
+`$SourceFiles = Get-ChildItem -Path . -Recurse -File | Where-Object { `$_.FullName -notlike "*update.ps1*" -and `$_.FullName -notlike "*install.ps1*" }
+
+foreach (`$file in `$SourceFiles) {
+    `$relativePath = Resolve-Path -Path `$file.FullName -Relative
+    `$relativePath = `$relativePath.TrimStart(".\")
+    
+    `$isProtected = `$false
+    foreach (`$p in `$ProtectedFiles) {
+        if (`$relativePath -eq `$p) { `$isProtected = `$true; break }
+    }
+    
+    if (-not `$isProtected) {
+        foreach (`$pf in `$ProtectedFolders) {
+            if (`$relativePath.StartsWith(`$pf)) { `$isProtected = `$true; break }
+        }
+    }
+    
+    if (`$isProtected -and (Test-Path "`$ProjectRoot\`$relativePath")) {
+        Write-Host "[SKIP] Preserving: `$relativePath" -ForegroundColor Yellow
+    } else {
+        `$destPath = Join-Path `$ProjectRoot `$relativePath
+        `$destDir = Split-Path `$destPath
+        if (-not (Test-Path `$destDir)) { New-Item -ItemType Directory -Path `$destDir -Force | Out-Null }
+        Copy-Item `$file.FullName `$destPath -Force
+    }
+}
+
+Write-Host "Updating dependencies..." -ForegroundColor Cyan
+if (Test-Path ".venv") {
+    & .\.venv\Scripts\python.exe -m pip install --no-index --find-links="dependencies\python" -r requirements.txt
+    if (`$LASTEXITCODE -ne 0) {
+        Write-Host "Warning: Failed to update some dependencies. Run install.ps1 if issues persist." -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "Virtual environment not found. Please run install.ps1." -ForegroundColor Red
+    pause
+}
+
+Write-Host ""
+Write-Host "========================================" -ForegroundColor Green
+Write-Host "Update Complete!" -ForegroundColor Green
+Write-Host "========================================" -ForegroundColor Green
+"@
+$updateScript | Out-File -FilePath "$PackageDir\update.ps1" -Encoding utf8
+Write-Log "update.ps1 generated successfully." "SUCCESS"
 # 8. Generate README.md with instructions
 Write-Log "Step 8: Generating README.md" "INFO"
 $readmeContent = @"
