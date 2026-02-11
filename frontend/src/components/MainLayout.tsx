@@ -358,6 +358,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({
         setLogs(prev => [...prev, data.log]);
         setIsExecuting(false);
         setRunningFeatureId(null);
+        setCurrentScenarioName(null);  // Clear current scenario
+        setScenarioStatuses({});       // Clear all scenario statuses
+        setScenarioGifs({});           // Clear all GIF references
+        setTaskStatuses({});           // Clear all task statuses
         eventSource.close();
       } else if (data.log) {
         setLogs(prev => [...prev, data.log]);
