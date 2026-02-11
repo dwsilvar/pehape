@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Paper, Typography, Chip, Tooltip } from '@mui/material';
+import { Box, Paper, Typography, Chip, Tooltip, alpha, useTheme } from '@mui/material';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import { useSortable } from '@dnd-kit/sortable';
 import { useDroppable, useDndContext } from '@dnd-kit/core';
@@ -19,6 +19,7 @@ interface SortableModuleProps {
 }
 
 const SortableModule: React.FC<SortableModuleProps> = ({ module, controls, headerPrefix, headerSuffix, children, onSelect, isSelected }) => {
+    const theme = useTheme();
     const {
         attributes,
         listeners,
@@ -86,8 +87,8 @@ const SortableModule: React.FC<SortableModuleProps> = ({ module, controls, heade
                     mb: 2,
                     p: 2,
                     pl: 4,
-                    backgroundColor: isSelected ? '#F1F5F9' : `${module.color || DEFAULT_MODULE_COLOR}08`,
-                    borderColor: isSelected ? '#3b82f6' : (module.color || DEFAULT_MODULE_COLOR),
+                    backgroundColor: isSelected ? alpha(theme.palette.primary.main, 0.08) : alpha(module.color || DEFAULT_MODULE_COLOR, 0.03),
+                    borderColor: isSelected ? theme.palette.primary.main : (module.color || DEFAULT_MODULE_COLOR),
                     borderWidth: isSelected ? '2px' : '1px',
                     outline: showHighlight ? '2px dashed' : 'none',
                     outlineColor: showHighlight ? 'primary.main' : 'transparent',
@@ -104,7 +105,11 @@ const SortableModule: React.FC<SortableModuleProps> = ({ module, controls, heade
                         p: 0.5,
                         borderRadius: 1,
                         '&:hover': {
-                            backgroundColor: isSelected ? 'rgba(59, 130, 246, 0.08)' : 'rgba(0, 0, 0, 0.03)'
+                            backgroundColor: isSelected
+                                ? alpha(theme.palette.primary.main, 0.08)
+                                : (theme.palette.mode === 'dark'
+                                    ? alpha(theme.palette.common.white, 0.03)
+                                    : alpha(theme.palette.common.black, 0.02))
                         }
                     }}
                 >
@@ -133,8 +138,8 @@ const SortableModule: React.FC<SortableModuleProps> = ({ module, controls, heade
                                         sx={{
                                             height: '18px',
                                             fontSize: '0.65rem',
-                                            backgroundColor: '#7e57c2',
-                                            color: 'white',
+                                            backgroundColor: theme.palette.secondary.main,
+                                            color: theme.palette.secondary.contrastText,
                                             fontWeight: 'bold'
                                         }}
                                     />
@@ -148,8 +153,8 @@ const SortableModule: React.FC<SortableModuleProps> = ({ module, controls, heade
                                         sx={{
                                             height: '18px',
                                             fontSize: '0.65rem',
-                                            backgroundColor: '#5e35b1',
-                                            color: 'white',
+                                            backgroundColor: theme.palette.secondary.dark,
+                                            color: theme.palette.secondary.contrastText,
                                             fontWeight: 'bold'
                                         }}
                                     />

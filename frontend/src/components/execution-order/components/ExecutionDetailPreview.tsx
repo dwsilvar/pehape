@@ -1,4 +1,4 @@
-import { Box, Typography, Paper, Chip, IconButton, Tooltip, Button } from '@mui/material';
+import { Box, Typography, Paper, Chip, IconButton, Tooltip, Button, useTheme } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import CloseIcon from '@mui/icons-material/Close';
@@ -44,6 +44,7 @@ const ExecutionDetailPreview: React.FC<ExecutionDetailPreviewProps> = ({
     onClose
 }) => {
     const { t } = useTranslation();
+    const theme = useTheme();
     const { taskStatuses } = useLayout();
 
     if (!selectedScenario) {
@@ -53,12 +54,13 @@ const ExecutionDetailPreview: React.FC<ExecutionDetailPreviewProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                backgroundColor: '#F8FAFC',
+                backgroundColor: alpha(theme.palette.action.hover, 0.3),
                 borderRadius: 2,
-                border: '1px dashed #CBD5E1',
+                border: '1px dashed',
+                borderColor: theme.palette.divider,
                 m: 1
             }}>
-                <Typography variant="body2" sx={{ color: '#64748B' }}>
+                <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>
                     {t('orchestrator.details_preview.empty_state', { defaultValue: 'Select a scenario to view details' })}
                 </Typography>
             </Box>
@@ -75,35 +77,36 @@ const ExecutionDetailPreview: React.FC<ExecutionDetailPreviewProps> = ({
                 height: '100%',
                 overflowY: 'auto',
                 p: 2,
-                backgroundColor: '#F8FAFC',
+                backgroundColor: theme.palette.background.default,
                 borderRadius: 2,
-                border: '1px solid #E2E8F0',
+                border: '1px solid',
+                borderColor: theme.palette.divider,
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 2,
                 m: 1
             }}>
                 {/* Module Header */}
-                <Box sx={{ borderBottom: '1px solid #E2E8F0', pb: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <Box sx={{ borderBottom: '1px solid', borderColor: theme.palette.divider, pb: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <Box>
-                        <Typography variant="h6" sx={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#1E293B' }}>
+                        <Typography variant="h6" sx={{ fontSize: '1.1rem', fontWeight: 'bold', color: theme.palette.text.primary }}>
                             {`${t('orchestrator.tasks.module', { defaultValue: 'Module' })}: ${module.module_name}`}
                         </Typography>
-                        <Typography variant="caption" sx={{ color: '#64748B', display: 'block', mt: 0.2, fontSize: '0.75rem' }}>
+                        <Typography variant="caption" sx={{ color: theme.palette.text.secondary, display: 'block', mt: 0.2, fontSize: '0.75rem' }}>
                             {t('orchestrator.details_preview.module_info', { defaultValue: 'Global configuration for all features' })}
                         </Typography>
                     </Box>
-                    <IconButton onClick={onClose} size="small" sx={{ color: '#64748B' }}>
+                    <IconButton onClick={onClose} size="small" sx={{ color: theme.palette.text.secondary }}>
                         <CloseIcon fontSize="small" />
                     </IconButton>
                 </Box>
 
                 {/* Setup Hooks */}
-                <Paper variant="outlined" sx={{ backgroundColor: '#F8FAFC', borderRadius: 1, p: 1.2, borderColor: '#7e57c2', borderLeftWidth: '4px' }}>
+                <Paper variant="outlined" sx={{ backgroundColor: alpha(theme.palette.secondary.main, 0.05), borderRadius: 1, p: 1.2, borderColor: theme.palette.secondary.main, borderLeftWidth: '4px' }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
                             <Typography variant="body2" sx={{ fontSize: '0.9rem' }}>🏗️</Typography>
-                            <Typography variant="caption" sx={{ color: '#5e35b1', fontWeight: 'bold', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            <Typography variant="caption" sx={{ color: theme.palette.secondary.dark, fontWeight: 'bold', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                 {t('orchestrator.sections.setup')}
                             </Typography>
                         </Box>
@@ -117,7 +120,7 @@ const ExecutionDetailPreview: React.FC<ExecutionDetailPreviewProps> = ({
                                 px: 1,
                                 height: '24px',
                                 textTransform: 'none',
-                                color: '#7e57c2',
+                                color: theme.palette.secondary.main,
                             }}
                         >
                             {t('orchestrator.tasks.add_hook', { defaultValue: 'add hook' })}
@@ -138,15 +141,15 @@ const ExecutionDetailPreview: React.FC<ExecutionDetailPreviewProps> = ({
                                             display: 'flex',
                                             alignItems: 'center',
                                             justifyContent: 'space-between',
-                                            borderColor: '#E2E8F0',
-                                            '&:hover': { backgroundColor: '#F1F5F9' }
+                                            borderColor: theme.palette.divider,
+                                            '&:hover': { backgroundColor: theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.05) : alpha(theme.palette.common.black, 0.04) }
                                         }}
                                     >
                                         <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>{hookName}</Typography>
                                         <IconButton
                                             size="small"
                                             onClick={(e) => { e.stopPropagation(); onDeleteHook(module.module_name, 'setup', index); }}
-                                            sx={{ color: '#64748B' }}
+                                            sx={{ color: theme.palette.text.secondary }}
                                         >
                                             <CloseIcon fontSize="small" />
                                         </IconButton>
@@ -154,7 +157,7 @@ const ExecutionDetailPreview: React.FC<ExecutionDetailPreviewProps> = ({
                                 );
                             })
                         ) : (
-                            <Typography variant="caption" sx={{ color: '#94A3B8', fontStyle: 'italic' }}>
+                            <Typography variant="caption" sx={{ color: theme.palette.text.disabled, fontStyle: 'italic' }}>
                                 {t('orchestrator.details_preview.no_setup', { defaultValue: 'No setup hooks configured' })}
                             </Typography>
                         )}
@@ -162,7 +165,7 @@ const ExecutionDetailPreview: React.FC<ExecutionDetailPreviewProps> = ({
                 </Paper>
 
                 {/* Teardown Hooks */}
-                <Paper variant="outlined" sx={{ backgroundColor: '#F8FAFC', borderRadius: 1, p: 1.2, borderColor: '#7e57c2', borderLeftWidth: '4px' }}>
+                <Paper variant="outlined" sx={{ backgroundColor: alpha(theme.palette.secondary.main, 0.05), borderRadius: 1, p: 1.2, borderColor: theme.palette.secondary.main, borderLeftWidth: '4px' }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
                             <Typography variant="body2" sx={{ fontSize: '0.9rem' }}>🧹</Typography>
@@ -262,24 +265,25 @@ const ExecutionDetailPreview: React.FC<ExecutionDetailPreviewProps> = ({
             height: '100%',
             overflowY: 'auto',
             p: 2,
-            backgroundColor: '#F8FAFC',
+            backgroundColor: theme.palette.background.default,
             borderRadius: 2,
-            border: '1px solid #E2E8F0',
+            border: '1px solid',
+            borderColor: theme.palette.divider,
             display: 'flex',
             flexDirection: 'column',
             gap: 2,
             m: 1
         }}>
             {/* Header */}
-            <Box sx={{ borderBottom: '1px solid #E2E8F0', pb: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <Box sx={{ borderBottom: '1px solid', borderColor: theme.palette.divider, pb: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <Box>
-                    <Typography variant="h6" sx={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#1E293B' }}>
+                    <Typography variant="h6" sx={{ fontSize: '1.1rem', fontWeight: 'bold', color: theme.palette.text.primary }}>
                         {selectedScenario.scenarioName
                             ? `${t('orchestrator.tasks.scenario')}: ${selectedScenario.scenarioName}`
                             : `${t('orchestrator.tasks.feature')}: ${feature.feature_file}`
                         }
                     </Typography>
-                    <Typography variant="caption" sx={{ color: '#64748B', display: 'block', mt: 0.2, fontSize: '0.75rem', wordBreak: 'break-all' }}>
+                    <Typography variant="caption" sx={{ color: theme.palette.text.secondary, display: 'block', mt: 0.2, fontSize: '0.75rem', wordBreak: 'break-all' }}>
                         {[feature.feature_dir, feature.feature_file].filter(Boolean).join('/')}
                     </Typography>
                     {scenarioTags.length > 0 && (
@@ -306,7 +310,7 @@ const ExecutionDetailPreview: React.FC<ExecutionDetailPreviewProps> = ({
                                 onEditFeature(fullPath);
                             }}
                             size="small"
-                            sx={{ color: '#64748B' }}
+                            sx={{ color: theme.palette.text.secondary }}
                         >
                             <EditIcon fontSize="small" />
                         </IconButton>
@@ -320,11 +324,11 @@ const ExecutionDetailPreview: React.FC<ExecutionDetailPreviewProps> = ({
             {/* Before Feature */}
             {!selectedScenario.scenarioName && (
                 featureBeforeTasks.length > 0 ? (
-                    <Paper variant="outlined" sx={{ backgroundColor: '#F8FAFC', borderRadius: 1, p: 1.2, borderColor: '#3b82f6', borderLeftWidth: '4px' }}>
+                    <Paper variant="outlined" sx={{ backgroundColor: alpha(theme.palette.primary.main, 0.05), borderRadius: 1, p: 1.2, borderColor: theme.palette.primary.main, borderLeftWidth: '4px' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
                                 <Typography variant="body2" sx={{ fontSize: '0.9rem' }}>⏮️</Typography>
-                                <Typography variant="caption" sx={{ color: '#1e40af', fontWeight: 'bold', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                <Typography variant="caption" sx={{ color: theme.palette.primary.dark, fontWeight: 'bold', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                     Before Feature
                                 </Typography>
                             </Box>
@@ -339,7 +343,7 @@ const ExecutionDetailPreview: React.FC<ExecutionDetailPreviewProps> = ({
                                         px: 1,
                                         height: '24px',
                                         textTransform: 'none',
-                                        color: '#3b82f6',
+                                        color: theme.palette.primary.main,
                                     }}
                                 >
                                     {t('orchestrator.tasks.add_task').toLowerCase()}
@@ -386,9 +390,9 @@ const ExecutionDetailPreview: React.FC<ExecutionDetailPreviewProps> = ({
                             onClick={(e) => onAddTask(selectedScenario.moduleName, feature, undefined, e, 'before')}
                             sx={{
                                 fontSize: '0.7rem',
-                                borderColor: 'rgba(59, 130, 246, 0.2)',
-                                color: '#3b82f6',
-                                '&:hover': { borderColor: '#3b82f6' }
+                                borderColor: alpha(theme.palette.primary.main, 0.2),
+                                color: theme.palette.primary.main,
+                                '&:hover': { borderColor: theme.palette.primary.main }
                             }}
                         >
                             {t('orchestrator.tasks.add_before_feature_task', { defaultValue: 'Add Before Feature Task' })}
@@ -400,11 +404,11 @@ const ExecutionDetailPreview: React.FC<ExecutionDetailPreviewProps> = ({
             {/* Before Scenario */}
             {selectedScenario.scenarioName && (
                 scenarioBeforeTasks.length > 0 ? (
-                    <Paper variant="outlined" sx={{ backgroundColor: '#FFF7ED', borderRadius: 1, p: 1.2, borderColor: '#fb923c', borderLeftWidth: '4px' }}>
+                    <Paper variant="outlined" sx={{ backgroundColor: alpha(theme.palette.warning.main, 0.05), borderRadius: 1, p: 1.2, borderColor: theme.palette.warning.main, borderLeftWidth: '4px' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
                                 <Typography variant="body2" sx={{ fontSize: '0.9rem' }}>📋</Typography>
-                                <Typography variant="caption" sx={{ color: '#9a3412', fontWeight: 'bold', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                <Typography variant="caption" sx={{ color: theme.palette.warning.dark, fontWeight: 'bold', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                     Before Scenario
                                 </Typography>
                             </Box>
@@ -419,7 +423,7 @@ const ExecutionDetailPreview: React.FC<ExecutionDetailPreviewProps> = ({
                                         px: 1,
                                         height: '24px',
                                         textTransform: 'none',
-                                        color: '#f97316',
+                                        color: theme.palette.warning.main,
                                     }}
                                 >
                                     {t('orchestrator.tasks.add_task').toLowerCase()}
@@ -466,9 +470,9 @@ const ExecutionDetailPreview: React.FC<ExecutionDetailPreviewProps> = ({
                             onClick={(e) => onAddTask(selectedScenario.moduleName, feature, selectedScenario.scenarioName, e, 'before')}
                             sx={{
                                 fontSize: '0.7rem',
-                                borderColor: 'rgba(249, 115, 22, 0.2)',
-                                color: '#f97316',
-                                '&:hover': { borderColor: '#f97316' }
+                                borderColor: alpha(theme.palette.warning.main, 0.2),
+                                color: theme.palette.warning.main,
+                                '&:hover': { borderColor: theme.palette.warning.main }
                             }}
                         >
                             {t('orchestrator.tasks.add_before_scenario_task', { defaultValue: 'Add Before Scenario Task' })}
@@ -480,11 +484,11 @@ const ExecutionDetailPreview: React.FC<ExecutionDetailPreviewProps> = ({
             {/* After Scenario */}
             {selectedScenario.scenarioName && (
                 scenarioAfterTasks.length > 0 ? (
-                    <Paper variant="outlined" sx={{ backgroundColor: '#F0FDF4', borderRadius: 1, p: 1.2, borderColor: '#22c55e', borderLeftWidth: '4px' }}>
+                    <Paper variant="outlined" sx={{ backgroundColor: alpha(theme.palette.success.main, 0.05), borderRadius: 1, p: 1.2, borderColor: theme.palette.success.main, borderLeftWidth: '4px' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
                                 <Typography variant="body2" sx={{ fontSize: '0.9rem' }}>📋</Typography>
-                                <Typography variant="caption" sx={{ color: '#166534', fontWeight: 'bold', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                <Typography variant="caption" sx={{ color: theme.palette.success.dark, fontWeight: 'bold', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                     After Scenario
                                 </Typography>
                             </Box>
@@ -499,7 +503,7 @@ const ExecutionDetailPreview: React.FC<ExecutionDetailPreviewProps> = ({
                                         px: 1,
                                         height: '24px',
                                         textTransform: 'none',
-                                        color: '#22c55e',
+                                        color: theme.palette.success.main,
                                     }}
                                 >
                                     {t('orchestrator.tasks.add_task').toLowerCase()}
@@ -546,9 +550,9 @@ const ExecutionDetailPreview: React.FC<ExecutionDetailPreviewProps> = ({
                             onClick={(e) => onAddTask(selectedScenario.moduleName, feature, selectedScenario.scenarioName, e, 'after')}
                             sx={{
                                 fontSize: '0.7rem',
-                                borderColor: 'rgba(34, 197, 94, 0.2)',
-                                color: '#22c55e',
-                                '&:hover': { borderColor: '#22c55e' }
+                                borderColor: alpha(theme.palette.success.main, 0.2),
+                                color: theme.palette.success.main,
+                                '&:hover': { borderColor: theme.palette.success.main }
                             }}
                         >
                             {t('orchestrator.tasks.add_after_scenario_task', { defaultValue: 'Add After Scenario Task' })}
@@ -560,11 +564,11 @@ const ExecutionDetailPreview: React.FC<ExecutionDetailPreviewProps> = ({
             {/* After Feature */}
             {!selectedScenario.scenarioName && (
                 featureAfterTasks.length > 0 ? (
-                    <Paper variant="outlined" sx={{ backgroundColor: '#F0FDFA', borderRadius: 1, p: 1.2, borderColor: '#14b8a6', borderLeftWidth: '4px' }}>
+                    <Paper variant="outlined" sx={{ backgroundColor: alpha(theme.palette.info.main, 0.05), borderRadius: 1, p: 1.2, borderColor: theme.palette.info.main, borderLeftWidth: '4px' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
                                 <Typography variant="body2" sx={{ fontSize: '0.9rem' }}>⏭️</Typography>
-                                <Typography variant="caption" sx={{ color: '#134e48', fontWeight: 'bold', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                <Typography variant="caption" sx={{ color: theme.palette.info.dark, fontWeight: 'bold', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                     After Feature
                                 </Typography>
                             </Box>
@@ -579,7 +583,7 @@ const ExecutionDetailPreview: React.FC<ExecutionDetailPreviewProps> = ({
                                         px: 1,
                                         height: '24px',
                                         textTransform: 'none',
-                                        color: '#14b8a6',
+                                        color: theme.palette.info.main,
                                     }}
                                 >
                                     {t('orchestrator.tasks.add_task').toLowerCase()}
@@ -626,9 +630,9 @@ const ExecutionDetailPreview: React.FC<ExecutionDetailPreviewProps> = ({
                             onClick={(e) => onAddTask(selectedScenario.moduleName, feature, undefined, e, 'after')}
                             sx={{
                                 fontSize: '0.7rem',
-                                borderColor: 'rgba(20, 184, 166, 0.2)',
-                                color: '#14b8a6',
-                                '&:hover': { borderColor: '#14b8a6' }
+                                borderColor: alpha(theme.palette.info.main, 0.2),
+                                color: theme.palette.info.main,
+                                '&:hover': { borderColor: theme.palette.info.main }
                             }}
                         >
                             {t('orchestrator.tasks.add_after_feature_task', { defaultValue: 'Add After Feature Task' })}

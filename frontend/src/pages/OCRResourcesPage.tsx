@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Box, Typography, Card, CardContent, Grid, Chip, CircularProgress, Button, IconButton, Snackbar, Alert } from '@mui/material';
-import { Image as ImageIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { Box, Typography, Card, CardContent, Grid, Chip, CircularProgress, Button, IconButton, Snackbar, Alert, TextField, FormControl, InputLabel, Select, MenuItem } from '@mui/material';
+import { Image as ImageIcon, Delete as DeleteIcon, Search as SearchIcon } from '@mui/icons-material';
 import AppToolbar from '../components/AppToolbar';
 
 interface OCRImage {
@@ -21,6 +21,10 @@ const OCRResourcesPage: React.FC = () => {
     const [images, setImages] = useState<OCRImage[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
+
+    // Search and filter states
+    const [searchQuery, setSearchQuery] = useState<string>('');
+    const [filterType, setFilterType] = useState<'all' | 'generic' | 'specific'>('all');
 
     // Snackbar state
     const [snackbarOpen, setSnackbarOpen] = useState(false);
@@ -45,10 +49,48 @@ const OCRResourcesPage: React.FC = () => {
         fetchImages();
     }, []);
 
-    // Sorting logic: Sort alphabetically by key_text
+    // Sorting and filtering logic
     const sortedImages = [...images].sort((a, b) =>
         (a.key_text || "").localeCompare(b.key_text || "")
     );
+
+    const filteredImages = sortedImages.filter(img => {
+        // Search filter
+        if (searchQuery) {
+            const query = searchQuery.toLowerCase();
+            const matchesFilename = img.filename.toLowerCase().includes(query);
+            const matchesKeyText = img.key_text?.toLowerCase().includes(query);
+            const matchesAssociated = img.associated_texts?.some(text =>
+                text.toLowerCase().includes(query)
+            );
+            const matchesMapped = img.mapped_to?.some(m =>
+                m.feature.toLowerCase().includes(query) ||
+                m.text?.toLowerCase().includes(query)
+            );
+
+            if (!matchesFilename && !matchesKeyText && !matchesAssociated && !matchesMapped) {
+                return false;
+            }
+        }
+
+
+        // Filter by type
+        if (filterType === 'generic') {
+            const isGeneric = img.full_path_parts[1] === 'generic' ||
+                img.mapped_to?.some(m => m.feature === 'generic');
+            if (!isGeneric) {
+                return false;
+            }
+        } else if (filterType === 'specific') {
+            const isGeneric = img.full_path_parts[1] === 'generic' ||
+                img.mapped_to?.some(m => m.feature === 'generic');
+            if (isGeneric) {
+                return false;
+            }
+        }
+
+        return true;
+    });
 
     const handleDeleteImage = async (img: OCRImage) => {
         if (!window.confirm(t('editor.gallery.delete_confirm', { name: img.key_text }))) {
@@ -89,15 +131,54 @@ const OCRResourcesPage: React.FC = () => {
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
             <AppToolbar title={t('editor.gallery.title')} icon={<ImageIcon sx={{ fontSize: 32 }} />} />
             <Box sx={{ p: 4, flex: 1, overflowY: 'auto' }}>
-                <Typography variant="body1" sx={{ mb: 4, color: 'text.secondary' }}>
+                <Typography variant="body1" sx={{ mb: 3, color: 'text.secondary' }}>
                     {t('editor.gallery.subtitle')}
                 </Typography>
 
-                {sortedImages.length === 0 ? (
-                    <Typography variant="body1">{t('editor.gallery.no_images')}</Typography>
+                {/* Search and Filter Bar */}
+                <Box sx={{ mb: 3, display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <TextField
+                        size="small"
+                        placeholder={t('editor.gallery.search_placeholder', { defaultValue: 'Buscar por nombre, texto o feature...' })}
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        sx={{ flex: '1 1 300px', minWidth: '200px' }}
+                        InputProps={{
+                            startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
+                        }}
+                    />
+                    <FormControl size="small" sx={{ minWidth: 200 }}>
+                        <InputLabel>{t('editor.gallery.filter_label', { defaultValue: 'Filtrar' })}</InputLabel>
+                        <Select
+                            value={filterType}
+                            label={t('editor.gallery.filter_label', { defaultValue: 'Filtrar' })}
+                            onChange={(e) => setFilterType(e.target.value as 'all' | 'generic' | 'specific')}
+                        >
+                            <MenuItem value="all">{t('editor.gallery.filter_all', { defaultValue: 'Todo' })}</MenuItem>
+                            <MenuItem value="generic">{t('editor.gallery.filter_generic', { defaultValue: 'Imágenes genéricas' })}</MenuItem>
+                            <MenuItem value="specific">{t('editor.gallery.filter_specific', { defaultValue: 'Imágenes específicas' })}</MenuItem>
+                        </Select>
+                    </FormControl>
+                </Box>
+
+                {/* Results Counter */}
+                <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
+                    {t('editor.gallery.showing_results', {
+                        defaultValue: 'Mostrando {{count}} de {{total}} imágenes',
+                        count: filteredImages.length,
+                        total: images.length
+                    })}
+                </Typography>
+
+                {filteredImages.length === 0 ? (
+                    <Typography variant="body1">
+                        {searchQuery || filterType !== 'all'
+                            ? t('editor.gallery.no_results', { defaultValue: 'No se encontraron imágenes con los filtros aplicados' })
+                            : t('editor.gallery.no_images')}
+                    </Typography>
                 ) : (
                     <Grid container spacing={3}>
-                        {sortedImages.map((img) => (
+                        {filteredImages.map((img) => (
                             <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={img.relative_path}>
                                 <Card elevation={2}>
                                     <Box sx={{

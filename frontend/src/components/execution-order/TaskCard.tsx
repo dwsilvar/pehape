@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Typography, Paper, Tooltip, IconButton, CircularProgress } from '@mui/material';
+import { Box, Typography, Paper, Tooltip, IconButton, CircularProgress, alpha, useTheme } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -26,10 +26,11 @@ const TaskCard: React.FC<TaskCardProps> = ({
     onDelete,
     onEdit
 }) => {
+    const theme = useTheme();
     const Icon = status === 'passed' ? CheckCircleIcon : (status === 'failed' ? ErrorIcon : undefined);
 
     // Determine timing badge
-    const timingColor = task.hook === 'before' ? '#1976d2' : task.hook === 'after' ? '#388e3c' : '#757575';
+    const timingColor = task.hook === 'before' ? theme.palette.primary.main : task.hook === 'after' ? theme.palette.success.main : theme.palette.text.secondary;
     const timingLabel = task.hook === 'before' ? '⏮️ BEFORE' : task.hook === 'after' ? '⏭️ AFTER' : task.hook?.toUpperCase() || 'N/A';
 
     // Determine scope with icon
@@ -74,12 +75,12 @@ const TaskCard: React.FC<TaskCardProps> = ({
                     width: '200px',
                     position: 'relative',
                     border: '1px solid',
-                    borderColor: '#e2e8f0', // slate-200 matching scenario child
+                    borderColor: theme.palette.divider,
                     borderLeft: `4px solid ${timingColor}`,
                     pl: 1,
-                    pr: 3, // Space for delete button
+                    pr: 3,
                     py: 0.5,
-                    backgroundColor: status === 'running' ? '#e3f2fd' : '#FFFFFF',
+                    backgroundColor: status === 'running' ? alpha(theme.palette.primary.main, 0.08) : theme.palette.background.paper,
                 }}
                 onClick={(e) => {
                     e.stopPropagation();
@@ -128,7 +129,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
                         opacity: 0.6,
                         '&:hover': {
                             opacity: 1,
-                            backgroundColor: 'rgba(0,0,0,0.05)',
+                            backgroundColor: alpha(theme.palette.action.hover, 0.5),
                         },
                     }}
                 >

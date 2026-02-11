@@ -15,6 +15,7 @@ import {
     Divider,
     alpha,
     Button,
+    useTheme,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
@@ -88,6 +89,7 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
     missingFiles,
 }) => {
     const { t } = useTranslation();
+    const theme = useTheme();
     const { scenarioStatuses, taskStatuses, scenarioGifs } = useLayout();
     const {
         attributes,
@@ -193,18 +195,24 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
                     display: 'flex',
                     alignItems: 'center',
                     opacity: isDragging ? 0.5 : (item.active ? 1 : 0.6),
-                    backgroundColor: isSelected && !selectedScenario?.scenarioName ? '#F8FAFC' : (item.active ? 'background.default' : 'action.disabledBackground'),
+                    backgroundColor: isSelected && !selectedScenario?.scenarioName ? alpha(theme.palette.primary.main, 0.08) : (item.active ? 'background.default' : 'action.disabledBackground'),
                     position: 'relative',
                     border: isRunning ? '2px solid' : (isSelected && !selectedScenario?.scenarioName ? '2px solid' : 'none'),
-                    borderColor: isRunning ? 'primary.main' : (isSelected && !selectedScenario?.scenarioName ? '#3b82f6' : 'transparent'),
+                    borderColor: isRunning ? 'primary.main' : (isSelected && !selectedScenario?.scenarioName ? theme.palette.primary.main : 'transparent'),
                     pl: '30px',
                     py: 1,
                     pr: 1,
                     cursor: item.active ? 'pointer' : 'default',
                     transition: 'all 0.2s ease',
                     '&:hover': {
-                        backgroundColor: item.active ? (isSelected && !selectedScenario?.scenarioName ? '#F0F9FF' : '#F8FAFC') : undefined,
-                        borderColor: isRunning ? 'primary.main' : (isSelected && !selectedScenario?.scenarioName ? '#2563eb' : '#CBD5E1'),
+                        backgroundColor: item.active
+                            ? (isSelected && !selectedScenario?.scenarioName
+                                ? alpha(theme.palette.primary.main, 0.12)
+                                : (theme.palette.mode === 'dark'
+                                    ? alpha(theme.palette.common.white, 0.05)
+                                    : alpha(theme.palette.common.black, 0.04)))
+                            : undefined,
+                        borderColor: isRunning ? 'primary.main' : (isSelected && !selectedScenario?.scenarioName ? theme.palette.primary.dark : theme.palette.divider),
                     }
                 }}
             >
@@ -274,9 +282,9 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
                                     sx={{
                                         height: '20px',
                                         fontSize: '0.65rem',
-                                        borderColor: alpha('#A855F7', 0.3),
-                                        backgroundColor: alpha('#A855F7', 0.05),
-                                        color: '#6B21A8',
+                                        borderColor: alpha(theme.palette.secondary.main, 0.3),
+                                        backgroundColor: alpha(theme.palette.secondary.main, 0.05),
+                                        color: theme.palette.secondary.dark,
                                         '& .MuiChip-label': { px: 0.8 }
                                     }}
                                 />
@@ -347,10 +355,10 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
 
                                         {/* Scenarios List */}
                                         {item.scenarios && item.scenarios.length > 0 && (
-                                            <Paper variant="outlined" sx={{ backgroundColor: '#F3E8FF', borderRadius: 2, p: 1.5, borderColor: '#A855F7', mt: 0.5, mb: 0.5 }}>
+                                            <Paper variant="outlined" sx={{ backgroundColor: alpha(theme.palette.secondary.main, 0.08), borderRadius: 2, p: 1.5, borderColor: theme.palette.secondary.main, mt: 0.5, mb: 0.5 }}>
                                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, mb: 0.8 }}>
                                                     <Typography variant="h6" sx={{ fontSize: '1rem' }}>📋</Typography>
-                                                    <Typography variant="caption" sx={{ color: '#6B21A8', fontWeight: 'bold', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                                    <Typography variant="caption" sx={{ color: theme.palette.secondary.dark, fontWeight: 'bold', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                                         Scenarios
                                                     </Typography>
                                                 </Box>
@@ -390,14 +398,14 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
                                                                 onClick={(e) => { e.stopPropagation(); onSelectScenario?.(moduleName, item.id, scenarioName); }}
                                                                 sx={{
                                                                     p: 1.5,
-                                                                    borderRadius: 1, // Harmonized with tag shape (4px)
-                                                                    borderColor: isSelected ? '#3b82f6' : (status !== 'untested' ? statusColor : '#e2e8f0'),
+                                                                    borderRadius: 1,
+                                                                    borderColor: isSelected ? theme.palette.primary.main : (status !== 'untested' ? statusColor : theme.palette.divider),
                                                                     borderWidth: isSelected || status !== 'untested' ? '2px' : '1px',
-                                                                    borderLeft: status !== 'untested' ? `6px solid ${statusColor}` : isSelected ? '2px solid #3b82f6' : '1px solid #e2e8f0',
+                                                                    borderLeft: status !== 'untested' ? `6px solid ${statusColor}` : isSelected ? `2px solid ${theme.palette.primary.main}` : `1px solid ${theme.palette.divider}`,
                                                                     backgroundImage: status === 'running'
-                                                                        ? `linear-gradient(90deg, transparent 0%, rgba(59, 130, 246, 0.2) 50%, transparent 100%)`
+                                                                        ? `linear-gradient(90deg, transparent 0%, ${alpha(theme.palette.primary.main, 0.2)} 50%, transparent 100%)`
                                                                         : 'none',
-                                                                    backgroundColor: isSelected ? '#eff6ff' : '#FFFFFF',
+                                                                    backgroundColor: isSelected ? alpha(theme.palette.primary.main, 0.08) : theme.palette.background.paper,
                                                                     backgroundSize: '200% 100%',
                                                                     animation: status === 'running' ? 'progress-animation 2s linear infinite' : 'none',
                                                                     '@keyframes progress-animation': {
@@ -410,14 +418,18 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
                                                                     cursor: 'pointer',
                                                                     transition: 'all 0.2s',
                                                                     '&:hover': {
-                                                                        borderColor: isSelected ? '#2563eb' : (status !== 'untested' ? statusColor : '#cbd5e1'),
-                                                                        backgroundColor: isSelected ? '#dbeafe' : '#f8fafc',
+                                                                        borderColor: isSelected ? theme.palette.primary.dark : (status !== 'untested' ? statusColor : theme.palette.action.hover),
+                                                                        backgroundColor: isSelected
+                                                                            ? alpha(theme.palette.primary.main, 0.12)
+                                                                            : (theme.palette.mode === 'dark'
+                                                                                ? alpha(theme.palette.common.white, 0.05)
+                                                                                : alpha(theme.palette.common.black, 0.04)),
                                                                     }
                                                                 }}
                                                             >
                                                                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pr: 0.5 }}>
                                                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                                        <Typography variant="body2" sx={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#334155', px: 0.5 }}>
+                                                                        <Typography variant="body2" sx={{ fontSize: '0.85rem', fontWeight: 'bold', color: theme.palette.text.primary, px: 0.5 }}>
                                                                             {`${t('orchestrator.tasks.scenario')}: ${scenarioName}`}
                                                                         </Typography>
                                                                         {hasTasks && (
@@ -431,8 +443,8 @@ const ExecutionItem: React.FC<ExecutionItemProps> = ({
                                                                                     sx={{
                                                                                         height: '20px',
                                                                                         fontSize: '0.65rem',
-                                                                                        borderColor: alpha('#3b82f6', 0.3),
-                                                                                        backgroundColor: alpha('#3b82f6', 0.05),
+                                                                                        borderColor: alpha(theme.palette.primary.main, 0.3),
+                                                                                        backgroundColor: alpha(theme.palette.primary.main, 0.05),
                                                                                         '& .MuiChip-label': { px: 0.8 }
                                                                                     }}
                                                                                 />
