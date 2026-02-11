@@ -35,7 +35,7 @@ def step_impl_click_element(context, element_name):
     logger.info(f"Clicking on the element '{element_name}'...")
     dirpath = context.feature.filename
     scenario_tags = context.scenario.tags
-    folder_step_path =get_image_path_from_feature_and_tag(dirpath, scenario_tags, element_name, context.step.name)
+    folder_step_path =get_image_path_from_feature_and_tag(dirpath, scenario_tags, element_name, None)
     success = executor.driver.click_on_element_by_text(element_name, folder_step_path)
     assert success, f"Could not click on the element '{element_name}'"
 
@@ -49,7 +49,7 @@ def step_impl_click_element_in_app(context, app_name, element_name):
     logger.info(f"In '{app_name}', clicking on the element '{element_name}'...")
     dirpath = context.feature.filename
     scenario_tags = context.scenario.tags
-    folder_step_path =get_image_path_from_feature_and_tag(dirpath, scenario_tags, element_name, context.step.name)
+    folder_step_path =get_image_path_from_feature_and_tag(dirpath, scenario_tags, element_name, None)
     success = executor.driver.click_on_element_by_text_in_app(element_name, app_name, folder_step_path)
     assert success, f"Could not click on the element '{element_name}' in the application '{app_name}'."
 
@@ -63,7 +63,7 @@ def step_impl_type_in_field(context, text_to_type, field_name):
     # Try to focus the field first by clicking its image (if available)
     dirpath = context.feature.filename
     scenario_tags = context.scenario.tags
-    folder_step_path = get_image_path_from_feature_and_tag(dirpath, scenario_tags, field_name, context.step.name)
+    folder_step_path = get_image_path_from_feature_and_tag(dirpath, scenario_tags, field_name, None)
     try:
         executor.driver.click_on_element_by_text(field_name, folder_step_path)
     except Exception:
@@ -83,7 +83,7 @@ def step_impl_see_text(context, text_to_find):
     # We use the system utility that searches for exact phrases with OCR
     dirpath = context.feature.filename
     scenario_tags = context.scenario.tags
-    folder_step_path =get_image_path_from_feature_and_tag(dirpath, scenario_tags, text_to_find, context.step.name)
+    folder_step_path =get_image_path_from_feature_and_tag(dirpath, scenario_tags, text_to_find, None)
     result = executor.driver.find_text_on_screen(text_to_find, folder_step_path)
     assert result, f"The text '{text_to_find}' was not found on the screen."
 
@@ -117,7 +117,7 @@ def step_impl_see_text_on_app(context, app_name, text_to_find):
     # We use the system utility that searches for exact phrases with OCR
     dirpath = context.feature.filename
     scenario_tags = context.scenario.tags
-    folder_step_path =get_image_path_from_feature_and_tag(dirpath, scenario_tags, text_to_find, context.step.name)
+    folder_step_path =get_image_path_from_feature_and_tag(dirpath, scenario_tags, text_to_find, None)
     result = executor.driver.find_text_on_app(app_name, text_to_find, folder_step_path)
     assert result, f"The text '{text_to_find}' was not found in the application '{app_name}'."
 
@@ -131,7 +131,7 @@ def step_impl_see_option_in_screen(context, option_name):
     # We use the system utility that searches for exact phrases with OCR
     dirpath = context.feature.filename
     scenario_tags = context.scenario.tags
-    folder_step_path =get_image_path_from_feature_and_tag(dirpath, scenario_tags, option_name, context.step.name)
+    folder_step_path =get_image_path_from_feature_and_tag(dirpath, scenario_tags, option_name, None)
     result = executor.driver.find_text_on_screen(option_name, folder_step_path)
     assert result, f"The option '{option_name}' was not found on the screen."
 

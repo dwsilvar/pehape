@@ -36,6 +36,33 @@ class PyTesseractWorker:
                 "pytesseract or Pillow not installed. "
                 "Install with: pip install pytesseract Pillow"
             )
+    
+    def _normalize_text(self, text: str) -> str:
+        """
+        Normaliza texto para comparación OCR.
+        
+        OCR a menudo detecta caracteres especiales como espacios o los omite.
+        Esta función normaliza el texto para mejorar la coincidencia.
+        
+        Transformaciones:
+        - Convierte a minúsculas
+        - Reemplaza guiones (-), guiones bajos (_), puntos (.), barras (/) por espacios
+        - Elimina espacios múltiples
+        - Elimina espacios al inicio/final
+        
+        Ejemplos:
+            "boton-card" -> "boton card"
+            "Usuario_Admin" -> "usuario admin"
+            "github/awesome-copilot" -> "github awesome copilot"
+            "Retirar  Dinero" -> "retirar dinero"
+        """
+        import re
+        normalized = text.lower()
+        # Reemplazar caracteres especiales por espacios (incluyendo /)
+        normalized = re.sub(r'[-_./]', ' ', normalized)
+        # Eliminar espacios múltiples
+        normalized = re.sub(r'\s+', ' ', normalized)
+        return normalized.strip()
         
 
     def find_text_coordinates(
@@ -73,16 +100,16 @@ class PyTesseractWorker:
 
         logger.debug(f"OCR search (region provided: {coordinates_origin is not None})")
 
-        # First attempt: word startswith
-        coords = self._find_word_startswith(data_ocr, text_to_find, coordinates_origin)
+        # First attempt: exact word match
+        coords = self._find_exact_word(data_ocr, text_to_find, coordinates_origin)
         if coords is not None:
-            logger.info(f"OCR: Match found via 'startswith' strategy for '{text_to_find}'")
+            logger.info(f"OCR: Exact word match found for '{text_to_find}'")
             return coords
 
-        # Second attempt: join words to match phrase
+        # Second attempt: join words to match exact phrase
         coords = self._find_text_by_joined_words(data_ocr, text_to_find, coordinates_origin)
         if coords is not None:
-            logger.info(f"OCR: Match found via 'joined-words' strategy for '{text_to_find}'")
+            logger.info(f"OCR: Exact phrase match found for '{text_to_find}'")
             return coords
 
         # Not found: optionally save screenshot and log words/confidences
@@ -111,9 +138,16 @@ class PyTesseractWorker:
     ) -> Optional[Tuple[int, int]]:
         """
         Attempt to find a multi-word phrase by reconstructing the OCR words
-        (filtering by confidence) and matching the target phrase. Returns
-        the center coordinates of the bounding box that contains the phrase.
+        (filtering by confidence) and matching the target phrase using exact
+        word boundaries. Returns the center coordinates of the bounding box 
+        that contains the phrase.
+        
+        This method concatenates separate OCR words (e.g., "boton" + "card")
+        and uses exact phrase matching with word boundaries to avoid false
+        positives (e.g., "Retirar dinero" won't match "Retirar dinero y voucher").
         """
+        import re
+        
         words_data = []
         for i in range(len(data.get('text', []))):
             try:
@@ -130,15 +164,26 @@ class PyTesseractWorker:
                     'height': data['height'][i]
                 })
 
-        full_text = " ".join([w['text'] for w in words_data]).lower()
-        target = text_to_find.lower()
-        logger.debug("Searching joined phrase '%s' in OCR text.", target)
+        # Construir texto completo y normalizar
+        full_text = " ".join([w['text'] for w in words_data])
+        full_text_normalized = self._normalize_text(full_text)
+        target_normalized = self._normalize_text(text_to_find)
+        
+        logger.debug(f"Searching exact phrase '{target_normalized}' in OCR text: '{full_text_normalized}'")
 
-        if target in full_text:
-            target_words = target.split()
-            ocr_words = [w['text'].lower() for w in words_data]
-            for i in range(len(ocr_words) - len(target_words) + 1):
-                if ocr_words[i:i + len(target_words)] == target_words:
+        # Buscar con word boundaries para coincidencia exacta de frase
+        # \b asegura que coincida con palabras completas, no subcadenas
+        pattern = r'\b' + re.escape(target_normalized) + r'\b'
+        match = re.search(pattern, full_text_normalized)
+        
+        if match:
+            # Encontrar las palabras que forman la frase exacta
+            target_words = target_normalized.split()
+            ocr_words_normalized = [self._normalize_text(w['text']) for w in words_data]
+            
+            # Buscar la secuencia exacta de palabras
+            for i in range(len(ocr_words_normalized) - len(target_words) + 1):
+                if ocr_words_normalized[i:i + len(target_words)] == target_words:
                     start = words_data[i]
                     end = words_data[i + len(target_words) - 1]
 
@@ -154,24 +199,29 @@ class PyTesseractWorker:
 
                     center_x = x + w // 2
                     center_y = y + h // 2
-                    logger.info("Phrase '%s' found at (%s, %s).", text_to_find, center_x, center_y)
+                    logger.info("Exact phrase '%s' found at (%s, %s).", text_to_find, center_x, center_y)
                     return (center_x, center_y)
 
-        logger.debug("Joined-words search did not match.")
+        logger.debug("Exact phrase match not found.")
         return None
 
-    def _find_word_startswith(
+    def _find_exact_word(
         self,
         data: Dict[str, Any],
         text_to_find: str,
         region_origin: Optional[Tuple[int, int, int, int]] = None,
     ) -> Optional[Tuple[int, int]]:
         """
-        Find the first OCR word whose text starts with the requested text.
-        Returns the center coordinates of that word's bounding box.
+        Find the first OCR word that exactly matches the requested text
+        (not startswith, not substring). Returns the center coordinates 
+        of that word's bounding box.
+        
+        Applies character normalization to handle special characters that
+        OCR may detect differently (e.g., "boton-card" matches "boton card").
         """
         n_boxes = len(data.get('level', []))
-        logger.debug("_find_word_startswith scanning %d boxes.", n_boxes)
+        target_normalized = self._normalize_text(text_to_find)
+        logger.debug("_find_exact_word scanning %d boxes for '%s'.", n_boxes, target_normalized)
 
         for i in range(n_boxes):
             try:
@@ -181,7 +231,10 @@ class PyTesseractWorker:
 
             if conf > configurator.CONFIDENCE_THRESHOLD:
                 word_text = data['text'][i].strip()
-                if word_text.lower().startswith(text_to_find.lower()):
+                word_normalized = self._normalize_text(word_text)
+                
+                # Exact match (not startswith)
+                if word_normalized == target_normalized:
                     x = data['left'][i]
                     y = data['top'][i]
                     w = data['width'][i]
@@ -194,11 +247,11 @@ class PyTesseractWorker:
 
                     center_x = x + w // 2
                     center_y = y + h // 2
-                    logger.info("Word starting with '%s' found: '%s' at (%s,%s).",
-                                text_to_find, word_text, center_x, center_y)
+                    logger.info("Exact word match: '%s' (normalized: '%s') found at (%s,%s).",
+                                word_text, word_normalized, center_x, center_y)
                     return (center_x, center_y)
 
-        logger.debug("No word starts with '%s'.", text_to_find)
+        logger.debug("No exact word match for '%s'.", target_normalized)
         return None
     
     

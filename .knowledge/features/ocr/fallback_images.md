@@ -62,9 +62,61 @@ Si lo hace manualmente:
 3.  Cree una carpeta con el nombre del tag (sin @).
 4.  Guarde la imagen con el nombre exacto del texto buscado (`.png`).
 
+
 ## Fallback Genérico
 
 Adicionalmente, el driver soporta un fallback genérico. Si no encuentra la imagen específica del escenario, buscará en:
 `resources/images/features/generic/<texto_buscado>.png`
 
 Esto es útil para botones comunes como "Aceptar", "Cancelar", etc. que son iguales en toda la aplicación.
+
+## Comportamiento de Coincidencia de Texto OCR
+
+El motor OCR utiliza **coincidencia exacta de frases** con normalización de caracteres para evitar falsos positivos.
+
+### Estrategias de Búsqueda
+
+El OCR intenta dos estrategias en orden:
+
+1. **Coincidencia de Palabra Exacta**: Busca una palabra individual que coincida exactamente con el texto buscado.
+2. **Coincidencia de Frase Exacta**: Une palabras detectadas por OCR y busca la frase completa usando límites de palabra (`\b`).
+
+### Normalización de Caracteres
+
+OCR a menudo detecta caracteres especiales como espacios o los omite. El sistema normaliza automáticamente:
+
+- Guiones (`-`) → Espacios
+- Guiones bajos (`_`) → Espacios
+- Puntos (`.`) → Espacios
+- Barras (`/`) → Espacios
+- Múltiples espacios → Un solo espacio
+- Mayúsculas → Minúsculas (case-insensitive)
+
+**Ejemplos**:
+- Buscar `"boton-card"` → Encuentra `"boton card"` en pantalla ✅
+- Buscar `"Usuario_Admin"` → Encuentra `"usuario admin"` ✅
+- Buscar `"awesome-copilot"` → Encuentra `"github/awesome copilot"` ✅
+
+### Coincidencia Exacta (No Subcadenas)
+
+El sistema **NO** coincide con subcadenas para evitar falsos positivos:
+
+- Buscar `"Retirar dinero"` → Encuentra solo `"Retirar dinero"` ✅
+- Buscar `"Retirar dinero"` → **NO** encuentra `"Retirar dinero y voucher"` ❌
+- Buscar `"OK"` → Encuentra solo `"OK"` ✅
+- Buscar `"OK"` → **NO** encuentra `"BOOK"` o `"OKAY"` ❌
+
+### Concatenación de Palabras
+
+El OCR puede detectar palabras separadas que visualmente están juntas. El sistema las concatena automáticamente:
+
+**Ejemplo**:
+```
+OCR detecta: ["boton", "card"] (dos palabras separadas)
+Texto unido: "boton card"
+Buscar: "boton-card" (normalizado a "boton card")
+Resultado: ✅ MATCH
+Click: En la primera palabra detectada ("boton")
+```
+
+Esto permite encontrar elementos incluso cuando OCR los detecta fragmentados.
