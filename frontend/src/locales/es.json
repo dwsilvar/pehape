@@ -1,0 +1,231 @@
+{
+    "common": {
+        "explorer": "Explorador",
+        "editor": "Editor de Feature",
+        "modules": "Revisar Módulos",
+        "orchestrator": "Orquestrador (Ejecución)",
+        "save": "Guardar",
+        "loading": "Cargando...",
+        "error": "Error",
+        "delete": "Eliminar",
+        "rename": "Renombrar",
+        "cancel": "Cancelar",
+        "confirm": "Confirmar",
+        "active": "Activar",
+        "inactive": "Desactivar",
+        "running": "En ejecución",
+        "finished": "Finalizado",
+        "stopped": "Detenido",
+        "view": "Vista",
+        "theme": "Tema",
+        "language": "Idioma",
+        "console": "Consola",
+        "view_options": "Opciones de vista",
+        "file_explorer": "Explorador de Archivos",
+        "review_modules": "Revisar Módulos",
+        "execution_order": "Orden de Ejecución",
+        "search": "Buscar...",
+        "rename_success": "¡Renombrado exitosamente!",
+        "rename_success_with_images": "¡Renombrado exitosamente!\\n\\n{{count}} imagen(es) OCR migrada(s) a la nueva ubicación.",
+        "rename_success_with_modules": "¡Renombrado exitosamente!\\n\\n{{count}} referencia(s) de feature actualizada(s) en módulo(s): {{modules}}",
+        "rename_success_complete": "¡Renombrado exitosamente!\\n\\n{{imageCount}} imagen(es) OCR migrada(s) a la nueva ubicación.\\n\\n{{moduleCount}} referencia(s) de feature actualizada(s) en módulo(s): {{modules}}",
+        "rename_warning": "Renombrado exitosamente, pero con advertencias:\\n\\n{{warnings}}",
+        "rename_error": "Error al renombrar recurso",
+        "move_success": "¡Movido exitosamente!",
+        "move_success_with_images": "¡Movido exitosamente!\\n\\n{{count}} imagen(es) OCR migrada(s) a la nueva ubicación.",
+        "move_success_with_modules": "¡Movido exitosamente!\\n\\n{{count}} referencia(s) de feature actualizada(s) en módulo(s): {{modules}}",
+        "move_success_complete": "¡Movido exitosamente!\\n\\n{{imageCount}} imagen(es) OCR migrada(s).\\n\\n{{moduleCount}} referencia(s) de feature actualizada(s) en módulo(s): {{modules}}",
+        "move_error": "Error al mover recurso",
+        "move_error_conflict": "Ya existe un recurso con ese nombre en el destino",
+        "move_error_invalid": "No se puede mover una carpeta dentro de sí misma o sus hijos",
+        "sidebar": {
+            "editor": "Editor",
+            "execution": "Orden de Ejecución",
+            "maintenance": "Mantenimiento",
+            "tasks": "Tareas",
+            "ocr": "Imágenes OCR",
+            "apps": "Apps en Ejecución",
+            "reports": "Reportes",
+            "feedback": "Reportar Error / Mejora"
+        }
+    },
+    "editor": {
+        "tabs": {
+            "code": "Código",
+            "modules": "Módulos"
+        },
+        "feature_editor": "Editor de Feature",
+        "dirty_marker": "* (Sin guardar)",
+        "loading_file": "Cargando {{path}}...",
+        "error_loading": "Error al cargar {{path}}.",
+        "placeholder": "Seleccione un archivo del explorador para editar",
+        "validate": "Validar",
+        "upload_ocr_image": "Subir Imagen OCR",
+        "link_ocr_image": "Vincular Imagen OCR Existente",
+        "add_to_validation": "Añadir a lista de validación",
+        "step_catalog": "Catálogo de Pasos",
+        "hide_steps": "Ocultar Pasos",
+        "validation_texts": "Textos a Validar",
+        "undefined_step": "Paso no definido",
+        "validation_failed": "La validación ha fallado. Se detectaron {{count}} pasos no definidos o errores.",
+        "validation_success": "Validación exitosa: Todos los pasos están correctamente definidos.",
+        "copy_snippet": "Copiar snippet",
+        "insert_in_editor": "Insertar en editor",
+        "clean_filters": "Limpiar filtros",
+        "no_steps_found": "No se encontraron pasos definidos",
+        "upload_dialog": {
+            "title": "Subir Imagen de Respaldo OCR",
+            "text_label": "Texto Seleccionado / Nombre de Imagen",
+            "text_hint": "Este será el nombre del archivo (ej. 'Botón Enviar.png')",
+            "tag_label": "Tag del Escenario",
+            "tag_hint": "El tag asociado con el escenario (ej. @login)",
+            "tag_placeholder": "@tag",
+            "select_image": "Seleccionar Imagen",
+            "selected": "Seleccionado",
+            "paste_hint": "O pegue una imagen desde el portapapeles",
+            "clipboard_image": "imagen-portapapeles.png",
+            "error_tag": "Por favor especifique un tag (ej. @mitag).",
+            "error_file": "Por favor seleccione un archivo de imagen.",
+            "error_upload": "Fallo al subir.",
+            "uploading": "Subiendo...",
+            "upload": "Subir",
+            "generic_label": "Imagen Genérica",
+            "generic_hint": "Marque esta opción para subir una imagen genérica que se usará como fallback cuando OCR falle. Se guardará en resources/images/features/generic/"
+        },
+        "validation_texts_hint": "Estos textos se pre-cargarán al agregar la tarea \"verificar_texto_archivo\"",
+        "steps_snippet_hint": "Copia estos snippets en tu archivo de steps para definir el comportamiento de los nuevos pasos:",
+        "ocr_association": {
+            "direct": "Imagen OCR asociada (Específica)",
+            "generic": "Imagen OCR asociada (Genérica)"
+        },
+        "ocr_restriction_error": "Solo puedes asociar imágenes OCR a textos encerrados entre comillas (variables de los pasos).",
+        "link_dialog": {
+            "title": "Vincular Imagen OCR Existente"
+        },
+        "gallery": {
+            "title": "Recursos de Imágenes OCR",
+            "subtitle": "Imágenes de respaldo para el reconocimiento OCR, ordenadas por nombre.",
+            "no_images": "No se encontraron imágenes en resources/images/.",
+            "delete_confirm": "¿Estás seguro de que deseas eliminar la imagen \"{{name}}\"? Esta acción no se puede deshacer.",
+            "delete_success": "Imagen eliminada correctamente.",
+            "delete_error": "Error al eliminar la imagen",
+            "delete_tooltip": "Eliminar imagen",
+            "associated_steps": "Pasos asociados:",
+            "usage_in_features": "Uso en features:",
+            "no_text": "Sin texto"
+        }
+    },
+    "orchestrator": {
+        "title": "Plan de Ejecución",
+        "run_tests": "Ejecutar Pruebas",
+        "stop_tests": "Detener Pruebas",
+        "schedule": "Programar",
+        "no_modules": "No hay módulos en el plan de ejecución. Comience agregando un módulo o arrastrando un feature a esta área.",
+        "sections": {
+            "setup": "Configuración (Setup)",
+            "teardown": "Limpieza (Teardown)",
+            "execution": "Secuencia de Ejecución"
+        },
+        "hooks": {
+            "add_hook": "Añadir Hook"
+        },
+        "tasks": {
+            "associated_tasks": "Tareas Asociadas:",
+            "add_task": "Agregar Tarea",
+            "edit_task": "Editar Tarea",
+            "select_task": "Seleccionar Tarea",
+            "choose_task_placeholder": "Seleccione una tarea...",
+            "scope": "Alcance (Scope)",
+            "feature": "Feature",
+            "scenario": "Escenario",
+            "hook": "Momento (Hook)",
+            "before": "Antes (Before)",
+            "after": "Después (After)",
+            "select_scenario": "Seleccionar Escenario",
+            "choose_scenario_placeholder": "Seleccione un escenario...",
+            "configuration": "Configuración",
+            "enter_text_placeholder": "Ingrese texto...",
+            "add_task_to": "Añadir Tarea a {{file}}"
+        },
+        "connecting_logs": "Conectando al flujo de logs...",
+        "watchdog_terminated": "Ejecución terminada por el Watchdog",
+        "starting_execution": "Iniciando ejecución..."
+    },
+    "modules": {
+        "title": "Gestión de Módulos",
+        "create_module": "Crear Módulo",
+        "refresh": "Sincronizar Scenarios y Tags",
+        "refreshing": "Refrescando módulos...",
+        "add_module": "Añadir Módulo"
+    },
+    "statusBar": {
+        "ready": "Listo",
+        "executing": "Ejecutando...",
+        "loading": "Actualizando..."
+    },
+    "pages": {
+        "runningApps": {
+            "title": "Herramientas en Ejecución",
+            "subtitle": "Ventanas activas detectadas por PyAutoGUI/PyGetWindow (Solo Windows).",
+            "refresh": "Actualizar Lista",
+            "columns": {
+                "title": "Título de Ventana",
+                "handle": "Identificador",
+                "state": "Estado",
+                "geometry": "Geometría (x, y, w, h)"
+            },
+            "states": {
+                "active": "Activa",
+                "minimized": "Minimizada",
+                "maximized": "Maximizada"
+            },
+            "loading": "Cargando aplicaciones en ejecución...",
+            "noApps": "No se detectaron aplicaciones en ejecución."
+        },
+        "reports": {
+            "title": "Reportes de Ejecución de Pruebas",
+            "subtitle": "Ver reportes detallados de Allure de las últimas ejecuciones de pruebas.",
+            "refresh": "Actualizar",
+            "openNewTab": "Abrir en Nueva Pestaña",
+            "loading": "Verificando estado del reporte...",
+            "noReport": "No hay reporte disponible aún. Ejecute pruebas para generar un reporte."
+        },
+        "maintenance": {
+            "title": "Mantenimiento del Sistema",
+            "refresh": "Actualizar",
+            "diskUsage": "Uso de Disco",
+            "results": "Resultados de Pruebas",
+            "reports": "Reportes Allure",
+            "screenshots": "Capturas de Pantalla",
+            "videos": "Videos",
+            "cleanAll": "Limpiar Todos los Datos",
+            "cleanDirectory": "Limpiar Directorio",
+            "confirmTitle": "Confirmar Eliminación",
+            "confirmMessage": "¿Está seguro de que desea eliminar estos datos? Esta acción no se puede deshacer.",
+            "confirmAll": "¿Está seguro de que desea eliminar TODOS los datos de prueba? Esta acción no se puede deshacer.",
+            "loading": "Cargando uso de disco..."
+        },
+        "tasks": {
+            "title": "Tareas y Herramientas",
+            "tabExecute": "Ejecutar Tareas",
+            "tabDocs": "Documentación de Hooks",
+            "availableTasks": "Tareas Disponibles",
+            "description": "Descripción",
+            "parameters": "Parámetros",
+            "literalSearch": "Herramienta de Búsqueda Literal",
+            "searchPlaceholder": "Ingrese texto a buscar...",
+            "searchButton": "Buscar",
+            "searchResults": "Resultados de Búsqueda",
+            "noResults": "No se encontraron ocurrencias.",
+            "loading": "Cargando tareas..."
+        },
+        "ocrResources": {
+            "title": "Recursos de Imágenes OCR",
+            "subtitle": "Imágenes de respaldo utilizadas cuando falla el reconocimiento de texto OCR.",
+            "totalImages": "Total de Imágenes",
+            "editFeature": "Editar Feature",
+            "loading": "Cargando imágenes OCR...",
+            "noImages": "No se encontraron imágenes OCR."
+        }
+    }
+}

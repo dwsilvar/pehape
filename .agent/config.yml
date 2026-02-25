@@ -1,0 +1,70 @@
+# .agent/config.yml
+
+agent:
+  name: "ReactArch-01"
+  role: "Senior Frontend Architect"
+  version: "1.2.0"
+  avatar: "⚛️"
+
+# CONFIGURACIÓN DEL MODELO
+llm:
+  provider: "google" # o "openai", "anthropic"
+  model: "gemini-1.5-pro-latest" # Se recomienda un modelo con ventana de contexto grande y alto razonamiento
+  temperature: 0.1 # CRÍTICO: Mantener bajo (0-0.2) para código determinista y preciso
+  max_output_tokens: 8192
+  timeout: 60
+
+# COMPORTAMIENTO Y PERMISOS
+behavior:
+  mode: "interactive" # Opciones: "autonomous" (peligroso para refactor), "interactive" (pregunta antes de escribir)
+  language: "es"      # Idioma principal de interacción
+  context_window: 10  # Cuántos mensajes previos recuerda en el chat
+  
+  # Sistema de seguridad para evitar desastres
+  safety_rails:
+    allow_file_deletion: false
+    confirm_large_changes: true # Si cambia >50 líneas, pide confirmación extra
+    backup_before_write: true   # Crea un .bak antes de modificar archivos
+
+# GESTIÓN DE SKILLS (La parte clave para Antigravity)
+skills:
+  auto_load: true
+  path: "./.agent/skills" # Ruta donde guardaste la carpeta 'react-refactor'
+  
+  # Configuración específica para el skill de React (si el skill acepta params)
+  overrides:
+    react-refactor:
+      prefer_typescript: true
+      style_guide: "airbnb" # Opcional: si tu skill soporta guías de estilo
+
+# ENTORNO DE TRABAJO
+workspace:
+  root_dir: "./src" # Limita al agente a trabajar solo dentro de /src
+  exclude:
+    - "node_modules/**"
+    - ".next/**"
+    - "build/**"
+    - "**/*.test.tsx" # Opcional: si no quieres que toque tests aún
+
+# MEMORIA Y CONTEXTO
+memory:
+  backend: "local_vector_store" # Permite al agente recordar refactorizaciones previas en la misma sesión
+  persist: true
+
+# SYSTEM PROMPT GLOBAL
+# Este prompt "envuelve" a todos los skills cargados.
+system_prompt: |
+  Actúas como el arquitecto principal de este repositorio.
+  
+  TU MISIÓN:
+  Mantener la base de código limpia, moderna y eficiente.
+  
+  PROTOCOLOS:
+  1. Si ves código en JavaScript, asume que debe migrarse a TypeScript si es posible.
+  2. Nunca elimines comentarios que expliquen "por qué" se hizo algo (Business Logic).
+  3. Si un archivo tiene más de 200 líneas, sugiere dividirlo.
+  4. Utiliza el skill 'react-refactor' siempre que detectes 'class components' o 'useEffect' complejos.
+  
+  FORMATO DE RESPUESTA:
+  - Muestra siempre el "diff" o el código completo.
+  - Explica los cambios en bullet points concisos.

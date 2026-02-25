@@ -6,6 +6,7 @@ to find and interact with elements based on their text.
 from executor.worker.pyautogui_worker import PyAutoGUIWorker
 from executor.worker.pytesseract_worker import PyTesseractWorker
 from util.system_utils import get_screenshot_path
+from pathlib import Path
 import logging
 import io
 from executor.driver.driver_abstract_ui import DriverAbstractUI
@@ -50,13 +51,18 @@ class OCRDriver(DriverAbstractUI):
             # Create screenshots folder if it doesn't exist
             screenshot_total_path = get_screenshot_path()          
             screenshot = self.pyAutoGUIWorker.capture_screenshot()
-            logger.info("Get coordinates screen absolute")
+            logger.info(f"--- Strategy 1: OCR Search for '{text_to_find}' ---")
             center_coordinates = self.tesseractWorker.find_text_coordinates(screenshot, screenshot_total_path, text_to_find)
 
-            if center_coordinates is None:
-                logger.info(f"Phrase '{text_to_find}' not found on the full screen")
-                if image_text_path is not None:                
-                    center_coordinates = self._get_element_coordinates_by_img(image_text_path, screenshot, screenshot_total_path)
+            if center_coordinates:
+                logger.info(f"✓ Found '{text_to_find}' via OCR at {center_coordinates}")
+                return center_coordinates
+            
+            logger.info(f"Phrase '{text_to_find}' not found via OCR. Trying Strategy 2: Image Search.")
+            if image_text_path is not None:                
+                center_coordinates = self._get_element_coordinates_by_img(image_text_path, screenshot, screenshot_total_path)
+                if center_coordinates:
+                    logger.info(f"✓ Found '{text_to_find}' via Image Search at {center_coordinates}")
 
             return center_coordinates
 
@@ -85,19 +91,27 @@ class OCRDriver(DriverAbstractUI):
 
             screenshot = self.pyAutoGUIWorker.get_screenshot_of_app(app_name)
             
-            logger.info("Getting coordinates from ABSOLUTE screen")
+            logger.info(f"--- Strategy 1: OCR Search for '{text_to_find}' inside '{app_name}' ---")
             center_coordinates = self.tesseractWorker.find_text_coordinates(screenshot, screenshot_total_path, text_to_find)
 
-            if center_coordinates is None:
-                logger.info("Getting coordinates from screen SECTION")
-                data_screenshoot= self.pyAutoGUIWorker.get_region_screenshot_window(app_name)
-                if data_screenshoot is not None:
-                    screenshot_region, region = data_screenshoot
-                    center_coordinates = self.tesseractWorker.find_text_coordinates(screenshot_region, screenshot_section_path, text_to_find,region)
-                    if center_coordinates is None:
-                        logger.info(f"Phrase '{text_to_find}' not found on the full screen or in the app's screen section '{app_name}'")
-                        if image_text_path is not None:                
-                            center_coordinates = self._get_element_coordinates_by_img(image_text_path, screenshot, screenshot_total_path)
+            if center_coordinates:
+                 logger.info(f"✓ Found '{text_to_find}' via OCR at {center_coordinates}")
+                 return center_coordinates
+
+            logger.info(f"Phrase '{text_to_find}' not found via OCR in '{app_name}'. Trying Strategy 2: Screen Section OCR.")
+            data_screenshoot= self.pyAutoGUIWorker.get_region_screenshot_window(app_name)
+            if data_screenshoot is not None:
+                screenshot_region, region = data_screenshoot
+                center_coordinates = self.tesseractWorker.find_text_coordinates(screenshot_region, screenshot_section_path, text_to_find,region)
+                if center_coordinates:
+                    logger.info(f"✓ Found '{text_to_find}' via Section OCR at {center_coordinates}")
+                    return center_coordinates
+                
+                logger.info(f"Phrase '{text_to_find}' not found via Section OCR. Trying Strategy 3: Image Search in Section.")
+                if image_text_path is not None:                
+                    center_coordinates = self._get_element_coordinates_by_img(image_text_path, screenshot, screenshot_total_path, region=region)
+                    if center_coordinates:
+                        logger.info(f"✓ Found '{text_to_find}' via Image Search in Section at {center_coordinates}")
 
  
             return center_coordinates
@@ -106,27 +120,107 @@ class OCRDriver(DriverAbstractUI):
             logger.error(f"An error occurred during text recognition. Cause: {e}")
             return None
 
-    def _get_element_coordinates_by_img(self,image_text_path:str, screenshot=None, screenshot_path:str = None):
+    def _get_element_coordinates_by_img(self, image_text_path: str, screenshot=None, screenshot_path: str = None, region: tuple = None) -> tuple[int, int] | None:
         """
-        Searches for an image on the screen and returns the coordinates of its center.
+        Search for an image on the screen and return the coordinates of its center.
 
-        Paremeters:
-            image_text_path: The path to the image file to search for.
-            screenshot: PIL Image to search within. If None, a full screenshot is taken.
-            screenshot_path: Path to save the screenshot if the image is not found.
-        Returns:
-            A tuple (x, y) with the coordinates of the image's center, or None if not found.
+        Parameters
+        ----------
+        image_text_path : str
+            The path to the image file to search for. The method will first
+            try a direct search using this path. If not found, it will extract
+            the image base name (without extension) and try to locate the
+            image inside the generic resources folder by delegating to
+            `_find_generic_image_coordinates`.
+
+        screenshot : PIL.Image.Image | None
+            Optional screenshot to use or save when the image isn't found.
+
+        screenshot_path : str | None
+            Path where to save the screenshot in case the image is not found.
+
+        region : tuple | None
+            Optional (left, top, width, height) to restrict the search.
+
+        Returns
+        -------
+        tuple[int, int] | None
+            (x, y) coordinates of the image's center if found, otherwise
+            `None`.
         """
-        logger.info(f"Attempting to find the phrase on the full screen by image")                
-        center_coordinates = self.pyAutoGUIWorker.get_element_coordinates_by_img(image_text_path)
+        logger.info("Attempting to find the element on the full screen by image")
+
+        # First, try a direct lookup using the provided path
+        center_coordinates = None
+        try:
+            if image_text_path:
+                center_coordinates = self.pyAutoGUIWorker.get_element_coordinates_by_img(image_text_path, region=region)
+        except Exception as e:
+            # Keep behavior tolerant: log and continue to fallback
+            logger.debug(f"Direct image search failed for '{image_text_path}': {e}")
+            center_coordinates = None
+
         if center_coordinates is not None:
-            logger.info(f"Successfully found phrase by image, coordinates: {center_coordinates}")
+            logger.info(f"Successfully found image by exact path, coordinates: {center_coordinates}")
+            return center_coordinates
+
+        # Fallback: derive the image name (stem) and try the generic images folder
+        if image_text_path:
+            try:
+                image_name = Path(image_text_path).stem
+                logger.info(f"Falling back to generic image search using name '{image_name}'")
+                center_coordinates = self._find_generic_image_coordinates(image_name, region=region)
+                if center_coordinates is not None:
+                    logger.info(f"Successfully found phrase by generic image '{image_name}', coordinates: {center_coordinates}")
+                    return center_coordinates
+            except Exception as e:
+                logger.error(f"Error while attempting generic image lookup for '{image_text_path}': {e}")
+
+        logger.info("Phrase not found on the full screen, not even by image")
+        if screenshot is not None and screenshot_path:
+            try:
+                screenshot.save(screenshot_path)
+            except Exception as e:
+                logger.debug(f"Could not save screenshot to '{screenshot_path}': {e}")
+
+        return None
+    
+    def _find_generic_image_coordinates(self, name_image: str, region: tuple = None) -> tuple[int, int] | None:
+        """
+        Search for an image inside the project's generic images folder and return its center coordinates.
+
+        Parameters
+        ----------
+        name_image : str
+            Image base name (without extension) to search for in
+            `resources/images/features/generic/`. For example, passing
+            `'ok_button'` will look for
+            `resources/images/features/generic/ok_button.png`.
+        
+        region : tuple | None
+            Optional region to restrict the search.
+
+        Returns
+        -------
+        tuple[int, int] | None
+            (x, y) coordinates of the image center on screen if found,
+            otherwise `None`.
+
+        Notes
+        -----
+        - This is a convenience helper that builds the path for images
+          stored in the generic features folder and delegates the actual
+          image search to `PyAutoGUIWorker.get_element_coordinates_by_img`.
+        """
+        logger.info("Attempting to find element by image in generic resources folder")
+        image_text_path = f"resources/images/features/generic/{name_image}.png"
+        center_coordinates = self.pyAutoGUIWorker.get_element_coordinates_by_img(image_text_path, region=region)
+        if center_coordinates is not None:
+            logger.info(f"Found image '{image_text_path}' at {center_coordinates}")
         else:
-            logger.info(f"Phrase not found on the full screen, not even by image")
-            screenshot.save(screenshot_path)
+            logger.info(f"Image '{image_text_path}' not found in generic resources")
 
         return center_coordinates
-    
 
     def click_on_element_by_text(self, text: str, image_text_path:str = None) -> bool:
         """

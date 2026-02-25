@@ -4,3 +4,36 @@ reports/*
 *.code-workspace
 .venv/
 __pycache__
+
+frontend/node_modules/
+*.feature
+*.png
+*.jpg
+*.jpeg
+
+# Offline package
+offline-package/
+package-offline/
+package_offline/
+
+# Frontend build artifacts
+frontend/dist/
+frontend/build/
+frontend/.npm-cache-local
+
+# Ignore all images in frontend/public except branding icons
+frontend/public/*.png
+frontend/public/*.jpg
+frontend/public/*.jpeg
+frontend/public/*.gif
+frontend/public/*.svg
+frontend/public/*.webp
+frontend/public/*.ico
+
+# Allow specific branding icons
+!frontend/public/bird-icon.png
+!frontend/public/chavin-head.png
+
+pehape-package-offline*/
+pehape-package-offline*
+allure-commandline/

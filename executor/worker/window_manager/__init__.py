@@ -1,0 +1,1 @@
+from .window_manager_factory import get_window_manager

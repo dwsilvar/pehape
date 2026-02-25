@@ -11,13 +11,14 @@ def setup_logging():
     logger.setLevel(logging.DEBUG)  
     
     if not logger.handlers:
-        file_handler = logging.FileHandler('app.log', mode='w', encoding='utf-8')
-        file_handler.setLevel(logging.DEBUG)
-        handler = RotatingFileHandler("app.log", maxBytes=1024 * 1024, backupCount=5)
+        # Solo usamos RotatingFileHandler para app.log. 
+        # No agregamos StreamHandler (consola) para que la pantalla de Execution Order 
+        # no se llene de trazas internas (DEBUG/INFO) y solo muestre la salida de Behave.
+        handler = RotatingFileHandler("app.log", maxBytes=10*1024*1024, backupCount=5, encoding='utf-8')
         formatter = logging.Formatter(
             '%(asctime)s %(levelname)s %(name)s:%(funcName)s: %(message)s'
         )
-        file_handler.setFormatter(formatter)
         handler.setFormatter(formatter)
-        logger.addHandler(file_handler)
         logger.addHandler(handler)
+        
+        # El backend se encargará de reenviar la salida estándar de Behave a la cola log_queue.

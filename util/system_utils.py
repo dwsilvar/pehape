@@ -133,40 +133,83 @@ def get_screenshot_path(image_name: str =None) -> str:
         screenshot_total_path = os.path.join(screenshots_dir, f"{image_name}_{timestamp}.png")
         return screenshot_total_path
 
-def get_image_path_from_feature_and_tag(feature_path_full: str, scenario_tags, text_to_find: str) -> str:
+def get_image_path_from_feature_and_tag(feature_path_full: str, scenario_tags, text_to_find: str, full_step_text: str = None) -> str:
     """
-    Obtiene el directorio base del feature, el primer tag del scenario, 
-    y construye una ruta de archivo .png a partir de ellos.
+    Obtiene la ruta de la imagen OCR. Intenta primero usar ocr_mapping.json para una coincidencia
+    precisa y luego recurre a la lógica basada en nombres de archivo.
 
     Paremeters:
-        context: El objeto 'context' de behave.
-        text_to_find: El texto que se busca, usado como nombre del archivo de imagen.
+        feature_path_full: Ruta completa al archivo .feature.
+        scenario_tags: Tags del escenario actual.
+        text_to_find: El texto que se busca (parámetro).
+        full_step_text: El texto completo de la línea del paso para desambiguación.
 
     Returns:
-        Un string con la ruta completa y el nombre del archivo de imagen.
-        Ej: 'features/modulo_A/critical/text_to_find.png'
+        Ruta completa al archivo de imagen.
     """
+    import json
     
-    # 1. Obtener el Directorio del Feature
-    # Esto asegura que la ruta sea relativa a la ubicación del archivo .feature
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    mapping_path = os.path.join(project_root, 'resources', 'images', 'ocr_mapping.json')
+    features_root = os.path.join(project_root, 'features')
     
-    logger.info(f"params feature_path_full: {feature_path_full}, scenario_tags: {scenario_tags}, text_to_find: {text_to_find}")
-    feature_dir_path = os.path.dirname(feature_path_full)
-    # a continuacion obtenemos el nombre del fichero sin la extension
-    feature_file_name = os.path.splitext(os.path.basename(feature_path_full))[0]
-    feature_dir_path = os.path.join(feature_dir_path, feature_file_name)
-    logger.info(f"Directorio del recurso a ubicar: {feature_dir_path}")
+    # 1. Intentar buscar en el mapeo (ocr_mapping.json)
+    if os.path.exists(mapping_path):
+        try:
+            with open(mapping_path, 'r', encoding='utf-8') as f:
+                mapping = json.load(f)
+            
+            # Normalizar feature_path_full para obtener la ruta relativa a 'features'
+            abs_feature_path = os.path.abspath(feature_path_full)
+            abs_features_root = os.path.abspath(features_root)
+            rel_feature_path = os.path.relpath(abs_feature_path, abs_features_root).replace('\\', '/')
+            
+            if rel_feature_path in mapping:
+                feature_mapping = mapping[rel_feature_path]
+                # Buscar en cada tag (incluyendo el primero de scenario_tags)
+                tags_to_check = [t.lstrip('@') for t in scenario_tags] if scenario_tags else ["untagged"]
+                
+                for tag in tags_to_check:
+                    # En el JSON los tags suelen guardarse con @ o sin él, seamos flexibles
+                    tag_key = tag if tag in feature_mapping else f"@{tag}"
+                    
+                    if tag_key in feature_mapping:
+                        tag_data = feature_mapping[tag_key]
+                        steps = tag_data.get('steps', [])
+                        
+                        for step_entry in steps:
+                            # Prioridad 1: Coincidencia exacta del texto completo del paso
+                            if full_step_text and full_step_text in step_entry.get('texts', []):
+                                img_id = step_entry.get('id')
+                                return os.path.join(project_root, 'resources', 'images', rel_feature_path.replace('.feature', ''), tag, img_id)
+                            
+                            # Prioridad 2: Coincidencia del original_text si no hay full_step_text
+                            if not full_step_text and step_entry.get('original_text') == text_to_find:
+                                img_id = step_entry.get('id')
+                                return os.path.join(project_root, 'resources', 'images', rel_feature_path.replace('.feature', ''), tag, img_id)
+        except Exception as e:
+            logger.error(f"Error reading ocr_mapping.json: {e}")
 
+    # 2. Fallback: Lógica antigua basada en nombres de archivos
+    logger.info(f"Fallback to legacy path generation for: {text_to_find}")
     
-    # Usamos el primer tag como identificador de la imagen
+    abs_feature_path = os.path.abspath(feature_path_full)
+    abs_features_root = os.path.abspath(features_root)
+    
+    try:
+        rel_path = os.path.relpath(abs_feature_path, abs_features_root)
+    except ValueError:
+        rel_path = os.path.basename(abs_feature_path)
+
+    rel_dir = os.path.dirname(rel_path)
+    feature_name = os.path.splitext(os.path.basename(rel_path))[0]
+    
     if not scenario_tags:
-        raise ValueError("El Scenario debe tener al menos un tag para nombrar la imagen.")
-        
-    # El tag suele incluir el '@', lo limpiamos para usarlo como nombre de archivo
-    tag = scenario_tags[0].lstrip('@')
+        tag = "untagged"
+    else:
+        tag = scenario_tags[0].lstrip('@')
     
-    # 3. Construir la Ruta Final
-    # Concatenamos el directorio base + el nombre del tag + la extensión
-    imagen_path = os.path.join(feature_dir_path, tag,f"{text_to_find}.png")
-    logger.info(f"Ruta de la imagen construida: {imagen_path}")
+    base_images_path = os.path.join(project_root, 'resources', 'images')
+    imagen_path = os.path.join(base_images_path, rel_dir, feature_name, tag, f"{text_to_find}.png")
+    
     return imagen_path

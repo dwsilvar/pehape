@@ -4,10 +4,12 @@ Implementation of the automation driver using PyAutoGUI.
 import os
 from typing import Any, Optional
 import pyautogui
+
 import config.config as configurator
 import logging
 from .worker_interface import WorkerInterface
 import time
+from .window_manager import get_window_manager # Import factory
 
 logger = logging.getLogger(__name__)
 
@@ -52,9 +54,27 @@ class PyAutoGUIWorker(WorkerInterface):
         """
         pyautogui.FAILSAFE = True
         pyautogui.PAUSE = 0.5
-        logger.info("PyAutoGUI driver initialized.")
+        
+        # Initialize WindowManager Strategy
+        self.window_manager = get_window_manager()
+        
+        logger.info(f"PyAutoGUI driver initialized with {type(self.window_manager).__name__}.")
 
 
+
+
+    def get_window_region(self, app_name: str) -> Optional[tuple]:
+        """
+        Gets the region (x, y, width, height) of the specified application window.
+        DELEGATES to WindowManager.
+        
+        Parameters:
+            app_name: The title (or partial title) of the window.
+            
+        Returns:
+            A tuple (left, top, width, height) or None if not found.
+        """
+        return self.window_manager.get_window_region(app_name)
 
     def click_at(self, point: tuple) -> bool:
         """
@@ -67,30 +87,43 @@ class PyAutoGUIWorker(WorkerInterface):
             True if the click was performed, False in case of an error.
         """
         try:
-            pyautogui.click(point)
-            logger.info(f"Successfully clicked at {point}.")
+            # Extraer coordenadas y asegurar que sean int puros (evitar np.int64)
+            if hasattr(point, 'x') and hasattr(point, 'y'):
+                x, y = int(point.x), int(point.y)
+            else:
+                x, y = int(point[0]), int(point[1])
+
+            logger.info(f"PyAutoGUI: Moving mouse to ({x}, {y}) for robust click...")
+            
+            # Mover antes de clickear para asegurar que el sistema registra el posicionamiento
+            pyautogui.moveTo(x, y, duration=0.1)
+            time.sleep(0.05) # Pausa mínima para que la App (Java) asimile el hover
+            
+            # Click con duración para simular pulsación real
+            pyautogui.click(x=x, y=y, duration=0.1)
+            
+            logger.info(f"Successfully clicked at ({x}, {y}).")
             return True
         except Exception as e:
             logger.exception(f"error clicking at {point}: {e}")
             return False
         
-    def click_on_image(self, image_path: str) -> bool:
+    def click_on_image(self, image_path: str, region: tuple = None) -> bool:
         """
         Locates an image on the screen and clicks its center.
 
         Parameters:
             image_path: Path to the reference image.
+            region: Optional tuple (left, top, width, height) to restrict the search.
 
         Returns:
             True if found and clicked, False otherwise.
         """
         try:
-            logger.info(f"Searching for image '{image_path}'...")
-            location = pyautogui.locateCenterOnScreen(image_path, confidence=(configurator.CONFIDENCE_THRESHOLD/100))
+            logger.info(f"Searching for image '{image_path}'..." + (f" in region {region}" if region else ""))
+            location = pyautogui.locateCenterOnScreen(image_path, confidence=(configurator.CONFIDENCE_THRESHOLD/100), region=region)
             if location is not None:
-                pyautogui.click(location)
-                logger.info(f"Successfully clicked at {location}.")
-                return True
+                return self.click_at(location)
             else:
                 logger.warning(f"Image '{image_path}' not found.")
                 return False
@@ -108,12 +141,13 @@ class PyAutoGUIWorker(WorkerInterface):
         Returns:
             True on success, False on error.
         """
-        try:
-            pyautogui.typewrite(text, interval=0.05)
-            logger.info(f"Text '{text}' typed successfully.")
+        # Delegate to WindowManager for potentially better text handling (ctypes/SendInput)
+        result = self.window_manager.send_text(text)
+        if result:
+            logger.info(f"Text '{text}' typed successfully (via WindowManager).")
             return True
-        except Exception as e:
-            logger.exception(f"enter_text: error typing text '{text}': {e}")
+        else:
+            logger.error(f"Failed to enter text '{text}' via WindowManager.")
             return False
 
     def capture_screenshot(self) -> Optional[Any]:
@@ -124,9 +158,14 @@ class PyAutoGUIWorker(WorkerInterface):
             Image object (PIL.Image) or None on error.
         """
         try:
-            screenshot = pyautogui.screenshot()
-            logger.info("Screenshot taken successfully.")
-            return screenshot
+            # Delegate to window manager (Strategy)
+            screenshot = self.window_manager.capture_screenshot()
+            if screenshot:
+                logger.info("Screenshot taken successfully (via WindowManager).")
+                return screenshot
+            else:
+                logger.error("Screenshot failed via WindowManager.")
+                return None
         except Exception as e:
             logger.exception(f"Error taking screenshot. Cause: {e}")
             return None
@@ -161,18 +200,21 @@ class PyAutoGUIWorker(WorkerInterface):
         """
         result = False
         if self.ensure_window_is_visible(app_name):
-            result = self.click_on_image(image_path)
+            # Optimización: Buscar solo dentro de la región de la ventana
+            region = self.get_window_region(app_name)
+            result = self.click_on_image(image_path, region=region)
 
         return result
     
     
 
-    def get_element_coordinates_by_img(self, image_path: str):
+    def get_element_coordinates_by_img(self, image_path: str, region: tuple = None):
         """
         Searches for an image on the screen and returns the coordinates of its center.
 
         Paremeters:
             image_path: The path to the image file to search for.
+            region: Optional tuple (left, top, width, height) to restrict the search.
 
         Returns:
             A tuple (x, y) with the coordinates of the image's center, or None if not found.
@@ -189,14 +231,14 @@ class PyAutoGUIWorker(WorkerInterface):
             return None
         
         try:
-            logger.info(f"PyAutoGUI: Searching for image '{image_path}'...")
+            logger.info(f"PyAutoGUI: Searching for image '{image_path}'..." + (f" in region {region}" if region else ""))
 
-            location = pyautogui.locateCenterOnScreen(image_path, confidence=(configurator.CONFIDENCE_THRESHOLD/100))
+            location = pyautogui.locateCenterOnScreen(image_path, confidence=(configurator.CONFIDENCE_THRESHOLD/100), region=region)
             if location:
-                logger.info(f"PyAutoGUI: Image found at {location}.")
+                logger.info(f"✓ PyAutoGUI: Image '{os.path.basename(image_path)}' found at {location}.")
                 return location
             else:
-                logger.warning(f"PyAutoGUI: Image '{image_path}' not found.")
+                logger.warning(f"✗ PyAutoGUI: Image '{os.path.basename(image_path)}' not found on screen.")
                 return None
         except pyautogui.PyAutoGUIException as e:
             logger.exception(f"PyAutoGUI: Error searching for image '{image_path}'. Cause: {e}")
@@ -228,7 +270,8 @@ class PyAutoGUIWorker(WorkerInterface):
             region=(x, y, ancho, alto)
 
             # Take the screenshot of the window's region
-            captura = pyautogui.screenshot(region=region)
+            # Delegate to window manager
+            captura = self.window_manager.capture_screenshot(region=region)
             logger.info("Screenshot region ok")
             return captura, region
             
@@ -240,47 +283,9 @@ class PyAutoGUIWorker(WorkerInterface):
 
     def ensure_window_is_visible(self, title_substring: str) -> bool:
         """
-        Finds a window by its title. If found and minimized,
-        it restores it and brings it to the front.
-
-        Paremeters:
-            title_substring: The text to search for in the window titles.
-
-        Returns:
-            True if the window was found (and restored if necessary), False otherwise.
+        Delegates to the Strategy WindowManager.
         """
-        logger.info(f"Ensuring window '{title_substring}' is visible...")
-        try:
-            # getWindowsWithTitle is more direct than iterating over all windows.
-            windows = pyautogui.getWindowsWithTitle(title_substring)
-            
-            if not windows:
-                logger.info(f"No window found with title '{title_substring}'.")
-                return False
-
-            # Use the first matching window
-            window = windows[0]
-            logger.info(f"Window found: '{window.title}'")
-
-            # If the window is minimized, restore it.
-            if window.isMinimized:
-                logger.info("Window is minimized. Restoring...")
-                window.restore()
-                time.sleep(0.5)  # Pause for the window to redraw.
-
-            # If not active, bring it to the front.
-            if not window.isActive:
-                logger.info("Window is not active. Bringing to front...")
-                window.activate()
-                time.sleep(0.5)  # Pause for the focus to change.
-
-            logger.info(f"Window '{window.title}' is visible and active.")
-            return True
-
-        except Exception as e:
-            # PyAutoGUI can raise exceptions if there are issues with permissions or the graphical environment.
-            logger.error(f"An error occurred while manipulating windows: {e}")
-            return False
+        return self.window_manager.ensure_window_is_visible(title_substring)
         
 
     def press_enter(self) -> bool:
