@@ -1980,6 +1980,110 @@ def serve_allure_report(path=None):
         
     return response
 
+@app.route('/api/reports/gherkin-results', methods=['GET'])
+def get_gherkin_results():
+    """
+    Parsea los archivos JSON de resultados de Allure para extraer
+    un listado estructurado de las pruebas Gherkin ejecutadas.
+    """
+    try:
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        allure_results_dir = os.path.join(project_root, 'reports', 'allure_results')
+
+        if not os.path.exists(allure_results_dir):
+            return jsonify({"features": [], "summary": {"total": 0, "passed": 0, "failed": 0, "broken": 0, "skipped": 0, "total_duration_ms": 0}})
+
+        # Buscar archivos de resultados de Allure (formato: *-result.json)
+        result_files = glob.glob(os.path.join(allure_results_dir, '*-result.json'))
+
+        if not result_files:
+            return jsonify({"features": [], "summary": {"total": 0, "passed": 0, "failed": 0, "broken": 0, "skipped": 0, "total_duration_ms": 0}})
+
+        features_map = {}  # Agrupar escenarios por feature
+        summary = {"total": 0, "passed": 0, "failed": 0, "broken": 0, "skipped": 0, "total_duration_ms": 0}
+
+        for result_file in result_files:
+            try:
+                with open(result_file, 'r', encoding='utf-8') as f:
+                    result_data = json.load(f)
+
+                # Extraer info del escenario desde Allure result JSON
+                scenario_name = result_data.get("name", "Unknown Scenario")
+                status = result_data.get("status", "unknown")
+                
+                # Duración: stop - start (en ms)
+                duration_ms = 0
+                if result_data.get("stop") and result_data.get("start"):
+                    duration_ms = result_data["stop"] - result_data["start"]
+
+                # Feature name: extraer de labels
+                feature_name = "Unknown Feature"
+                tags = []
+                for label in result_data.get("labels", []):
+                    if label.get("name") == "feature":
+                        feature_name = label.get("value", feature_name)
+                    elif label.get("name") == "tag":
+                        tag_value = label.get("value", "")
+                        if tag_value:
+                            tags.append(f"@{tag_value}" if not tag_value.startswith("@") else tag_value)
+
+                # Steps
+                steps_data = []
+                for step in result_data.get("steps", []):
+                    step_name = step.get("name", "")
+                    step_status = step.get("status", "unknown")
+                    # Extraer keyword del nombre del paso (Given/When/Then/And)
+                    keyword = ""
+                    for kw in ["Given ", "When ", "Then ", "And ", "But "]:
+                        if step_name.startswith(kw):
+                            keyword = kw.strip()
+                            step_name = step_name[len(kw):]
+                            break
+                    steps_data.append({
+                        "name": step_name,
+                        "keyword": keyword,
+                        "status": step_status
+                    })
+
+                # Agrupar por feature
+                if feature_name not in features_map:
+                    features_map[feature_name] = []
+
+                features_map[feature_name].append({
+                    "name": scenario_name,
+                    "status": status,
+                    "duration_ms": duration_ms,
+                    "tags": tags,
+                    "steps": steps_data
+                })
+
+                # Summary
+                summary["total"] += 1
+                summary["total_duration_ms"] += duration_ms
+                if status in summary:
+                    summary[status] += 1
+
+            except Exception as e:
+                logger.error(f"Error parsing Allure result file {result_file}: {e}")
+                continue
+
+        # Convertir a lista ordenada
+        features_list = []
+        for feature_name, scenarios in sorted(features_map.items()):
+            features_list.append({
+                "name": feature_name,
+                "scenarios": scenarios
+            })
+
+        return jsonify({
+            "features": features_list,
+            "summary": summary
+        })
+
+    except Exception as e:
+        logger.error(f"Error in get_gherkin_results: {e}")
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/reports/usage', methods=['GET'])
 def get_reports_usage():
     """
