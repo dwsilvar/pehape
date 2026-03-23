@@ -34,6 +34,8 @@ interface ExecutionOrderProps {
     scheduledExecutionTime: Date | null;
     onCancelSchedule: () => void;
     validationTexts?: string[];
+    stopOnFailure: boolean;
+    onStopOnFailureChange: (checked: boolean) => void;
 }
 
 const ExecutionOrder: React.FC<ExecutionOrderProps> = (props) => {
@@ -126,6 +128,8 @@ const ExecutionOrder: React.FC<ExecutionOrderProps> = (props) => {
                 scheduledExecutionTime={props.scheduledExecutionTime}
                 onOpenScheduleDialog={handleOpenScheduleDialog}
                 onCancelSchedule={props.onCancelSchedule}
+                stopOnFailure={props.stopOnFailure}
+                onStopOnFailureChange={props.onStopOnFailureChange}
             />
 
             {/* Split Layout Container */}

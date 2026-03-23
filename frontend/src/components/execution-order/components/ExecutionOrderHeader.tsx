@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Typography, Button, Tooltip, Chip } from '@mui/material';
+import { Box, Typography, Button, Tooltip, Chip, Checkbox, FormControlLabel } from '@mui/material';
 import SyncIcon from '@mui/icons-material/Sync';
 import StopIcon from '@mui/icons-material/Stop';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -22,6 +22,8 @@ interface ExecutionOrderHeaderProps {
     scheduledExecutionTime: Date | null;
     onOpenScheduleDialog: (event: React.MouseEvent) => void;
     onCancelSchedule: () => void;
+    stopOnFailure: boolean;
+    onStopOnFailureChange: (checked: boolean) => void;
 }
 
 const ExecutionOrderHeader: React.FC<ExecutionOrderHeaderProps> = ({
@@ -37,6 +39,8 @@ const ExecutionOrderHeader: React.FC<ExecutionOrderHeaderProps> = ({
     scheduledExecutionTime,
     onOpenScheduleDialog,
     onCancelSchedule,
+    stopOnFailure,
+    onStopOnFailureChange,
 }) => {
     const { t } = useTranslation();
     const navigate = useNavigate();
@@ -54,6 +58,18 @@ const ExecutionOrderHeader: React.FC<ExecutionOrderHeaderProps> = ({
                     <SyncIcon />
                 </Button>
             </Tooltip>
+            <FormControlLabel
+                control={
+                    <Checkbox
+                        checked={stopOnFailure}
+                        onChange={(e) => onStopOnFailureChange(e.target.checked)}
+                        size="small"
+                        disabled={isExecuting}
+                    />
+                }
+                label={t('orchestrator.stop_on_failure', 'Detener al fallar')}
+                sx={{ mr: 1 }}
+            />
             <Tooltip title={hasWarnings ? warningMessage : (isExecuting ? t('orchestrator.stop_tests') : t('orchestrator.run_tests'))}>
                 <span>
                     <Button

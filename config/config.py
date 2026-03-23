@@ -22,3 +22,8 @@ IMAGE_CONFIDENCE_THRESHOLD = 70
 # Value 0–100, used directly to filter low-confidence words.
 OCR_CONFIDENCE_THRESHOLD = 40
 
+# --- Behave Execution Configuration ---
+# If True, stop execution on the first failing scenario.
+# If False, continue executing all scenarios even if some fail.
+STOP_ON_FAILURE = False
+

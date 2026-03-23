@@ -89,6 +89,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
   const [validationTexts, setValidationTexts] = useState<string[]>([]);
   const lastOpenedFileRef = useRef<string | null>(null);
   const [isSidebarResizing, setIsSidebarResizing] = useState(false);
+  const [stopOnFailure, setStopOnFailure] = useState(false);
 
   const {
     activeView: activePerspective, setActiveView, isConsoleOpen, toggleConsole,
@@ -379,7 +380,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({
     setScenarioGifs({});
     setRunningFeatureId(null);
     try {
-      const response = await fetch('/api/run-tests', { method: 'POST' });
+      const response = await fetch('/api/run-tests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stop_on_failure: stopOnFailure })
+      });
       if (!response.ok) throw new Error('Failed to start execution');
       connectToLogStream();
     } catch (error) {
@@ -524,8 +529,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                 onStopTests={handleStopTests}
                 onScheduleTests={handleScheduleTests}
                 scheduledExecutionTime={scheduledExecutionTime}
-                onCancelSchedule={handleCancelSchedule}
-                validationTexts={validationTexts}
+                onCancelSchedule={handleCancelSchedule}                stopOnFailure={stopOnFailure}
+                onStopOnFailureChange={setStopOnFailure}                validationTexts={validationTexts}
               />
             )}
           </Box>

@@ -2190,7 +2190,7 @@ def stop_tests():
 from datetime import datetime
 import time
 
-def _start_test_process():
+def _start_test_process(stop_on_failure: bool = False):
     """
     Función interna para iniciar el proceso de pruebas.
     Retorna el proceso o lanza una excepción.
@@ -2219,6 +2219,7 @@ def _start_test_process():
     # Forzar la codificación UTF-8 para el subproceso.
     env = os.environ.copy()
     env['PYTHONIOENCODING'] = 'utf-8'
+    env['BEHAVE_STOP_ON_FAILURE'] = str(stop_on_failure)
 
     process = subprocess.Popen(
         [sys.executable, script_path],
@@ -2254,9 +2255,12 @@ def _start_test_process():
 def run_tests():
     """
     Endpoint para iniciar la ejecución de las pruebas inmediatamente.
+    Accepts optional JSON body with 'stop_on_failure' boolean.
     """
     try:
-        _start_test_process()
+        data = request.get_json(silent=True) or {}
+        stop_on_failure = data.get('stop_on_failure', False)
+        _start_test_process(stop_on_failure=stop_on_failure)
         return jsonify({"message": "La ejecución de pruebas ha comenzado."}), 202
     except FileNotFoundError as e:
         return jsonify({"error": str(e)}), 404
@@ -2308,7 +2312,7 @@ def schedule_tests():
             try:
                 # Ponemos un mensaje en el log para que el frontend sepa que arrancó
                 log_queue.put(f"--- INICIO DE EJECUCIÓN PROGRAMADA ({target_time}) ---")
-                _start_test_process()
+                _start_test_process(stop_on_failure=False)  # Default for scheduled, could be configurable later
             except Exception as e:
                 print(f"Error en ejecución programada: {e}")
                 log_queue.put(f"Error al iniciar ejecución programada: {e}")
