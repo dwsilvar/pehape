@@ -4,12 +4,15 @@ import { Box } from '@mui/material';
 import { DndContext, DragEndEvent, DragStartEvent, DragOverEvent, useSensor, useSensors, PointerSensor, TouchSensor } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
 import Sidebar from './components/Sidebar';
+import AppNavbar from './components/AppNavbar';
 import HomePage from './pages/HomePage';
 import MaintenancePage from './pages/MaintenancePage';
 import TasksPage from './pages/TasksPage';
 import OCRResourcesPage from './pages/OCRResourcesPage';
 import RunningAppsPage from './pages/RunningAppsPage';
 import ReportsPage from './pages/ReportsPage';
+import FeatureEditorPage from './pages/FeatureEditorPage';
+import TestPlanPage from './pages/TestPlanPage';
 import { useExecutionOrder } from './hooks/useExecutionOrder';
 
 import { LayoutProvider, useLayout } from './context/LayoutContext';
@@ -185,8 +188,10 @@ const AppLayout: React.FC = () => {
       <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
         <Sidebar />
         <Box sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <AppNavbar />
           <Routes>
-            <Route path="/" element={
+            <Route path="/" element={<TestPlanPage />} />
+            <Route path="/editor" element={
               <HomePage
                 selectedFile={selectedFile}
                 draggedItemPath={draggedItemPath}
@@ -201,6 +206,7 @@ const AppLayout: React.FC = () => {
             <Route path="/ocr-resources" element={<OCRResourcesPage />} />
             <Route path="/running-apps" element={<RunningAppsPage />} />
             <Route path="/reports" element={<ReportsPage />} />
+            <Route path="/feature-editor" element={<FeatureEditorPage />} />
           </Routes>
         </Box>
       </Box>

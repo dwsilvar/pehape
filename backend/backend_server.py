@@ -616,6 +616,106 @@ scheduled_test_state = {
 }
 # -------------------------------------------------
 
+
+# ── Test Plan Designer Endpoints ──────────────────────────────────────────────
+
+TEST_PLANS_FILE = os.path.join(FEATURES_DIR, 'test_plans.json')
+
+@app.route('/api/test-plans', methods=['GET'])
+def get_test_plans():
+    """
+    Returns all saved test plans from features/test_plans.json.
+    Returns an empty list if the file does not exist yet.
+    """
+    try:
+        if not os.path.exists(TEST_PLANS_FILE):
+            return jsonify([])
+        with open(TEST_PLANS_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        return jsonify(data if isinstance(data, list) else [])
+    except Exception as e:
+        logger.error(f"Error reading test plans: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/test-plans', methods=['PUT'])
+def save_test_plans():
+    """
+    Persists the full test plans array to features/test_plans.json.
+    Body: JSON array of TestPlan objects.
+    """
+    try:
+        data = request.get_json()
+        if not isinstance(data, list):
+            return jsonify({"error": "Expected a JSON array of test plans"}), 400
+        with open(TEST_PLANS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        return jsonify({"message": "Test plans saved successfully"})
+    except Exception as e:
+        logger.error(f"Error saving test plans: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/features-with-scenarios', methods=['GET'])
+def list_features_with_scenarios():
+    """
+    Returns a flat list of .feature files with their parsed scenario names, tags and steps.
+    Used to populate the Asset Library in the Test Plan Designer.
+    """
+    results = []
+
+    try:
+        for root, dirs, files in os.walk(FEATURES_DIR):
+            # Skip the steps directory
+            dirs[:] = [d for d in dirs if d != 'steps']
+            for filename in sorted(files):
+                if not filename.endswith('.feature'):
+                    continue
+                full_path = os.path.join(root, filename)
+                rel_path = os.path.relpath(full_path, FEATURES_DIR).replace('\\', '/')
+
+                feature_title = filename.replace('.feature', '')
+                scenarios = []
+
+                try:
+                    parser = Parser()
+                    with open(full_path, 'r', encoding='utf-8') as fh:
+                        content = fh.read()
+
+                    feature = parser.parse(content)
+                    if feature:
+                        feature_title = feature.name or feature_title
+                        for scenario in feature.scenarios:
+                            steps = [
+                                f"{step.keyword} {step.name}"
+                                for step in (scenario.steps or [])
+                            ]
+                            tags = list(scenario.tags or [])
+                            scenarios.append({
+                                "name": scenario.name,
+                                "tags": tags,
+                                "steps": steps,
+                            })
+                except Exception as parse_err:
+                    logger.warning(f"Could not parse {rel_path}: {parse_err}")
+                    # Still include the file, just with empty scenarios
+                    scenarios = []
+
+                results.append({
+                    "name": filename,
+                    "path": rel_path,
+                    "featureTitle": feature_title,
+                    "scenarios": scenarios,
+                })
+
+        return jsonify(results)
+    except Exception as e:
+        logger.error(f"Error listing features with scenarios: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# ──────────────────────────────────────────────────────────────────────────────
+
+
 @app.route('/api/features', methods=['GET'])
 def list_features():
     """
@@ -659,6 +759,7 @@ def list_features():
         return jsonify(root_node)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 @app.route('/api/features/<path:filepath>', methods=['GET'])
 def get_feature_content(filepath):
@@ -1980,6 +2081,48 @@ def serve_allure_report(path=None):
         
     return response
 
+def find_gif_execution_id(scenario_name: str, start_time_ms: int) -> str:
+    """
+    Intenta encontrar un directorio en reports/temp_gif que coincida
+    con el nombre del escenario y el timestamp de inicio.
+    """
+    try:
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        temp_gif_dir = os.path.join(project_root, 'reports', 'temp_gif')
+        
+        if not os.path.exists(temp_gif_dir):
+            return None
+            
+        timestamp_sec = int(start_time_ms / 1000)
+        sanitized_name = "".join([c if c.isalnum() else "_" for c in scenario_name])
+        
+        # El formato esperado es {timestamp}_{sanitized_name}
+        # pero debido a pequeñas diferencias de tiempo, buscamos concordancia
+        # con el nombre sanitizado y un timestamp cercano (+/- 2 segundos)
+        
+        # Listar directorios en temp_gif
+        dirs = os.listdir(temp_gif_dir)
+        
+        # Candidatos exactos primero
+        expected_prefix = f"{timestamp_sec}_{sanitized_name}"
+        if expected_prefix in dirs:
+            return expected_prefix
+            
+        # Búsqueda por tolerancia de tiempo si no hay match exacto
+        for d in dirs:
+            if d.endswith(f"_{sanitized_name}"):
+                try:
+                    dir_ts = int(d.split('_')[0])
+                    if abs(dir_ts - timestamp_sec) <= 5: # Tolerancia de 5 segundos
+                        return d
+                except (ValueError, IndexError):
+                    continue
+                    
+        return None
+    except Exception as e:
+        logger.error(f"Error finding gif execution id: {e}")
+        return None
+
 @app.route('/api/reports/gherkin-results', methods=['GET'])
 def get_gherkin_results():
     """
@@ -2039,22 +2182,36 @@ def get_gherkin_results():
                             keyword = kw.strip()
                             step_name = step_name[len(kw):]
                             break
+                            
+                    attachments = []
+                    for att in step.get("attachments", []):
+                        attachments.append({
+                            "name": att.get("name"),
+                            "source": att.get("source"),
+                            "type": att.get("type")
+                        })
+                        
                     steps_data.append({
                         "name": step_name,
                         "keyword": keyword,
-                        "status": step_status
+                        "status": step_status,
+                        "attachments": attachments
                     })
 
                 # Agrupar por feature
                 if feature_name not in features_map:
                     features_map[feature_name] = []
 
+                # Buscar evidencia visual (GIF/Video)
+                gif_id = find_gif_execution_id(scenario_name, result_data.get("start", 0))
+
                 features_map[feature_name].append({
                     "name": scenario_name,
                     "status": status,
                     "duration_ms": duration_ms,
                     "tags": tags,
-                    "steps": steps_data
+                    "steps": steps_data,
+                    "gifExecutionId": gif_id
                 })
 
                 # Summary
@@ -2082,6 +2239,28 @@ def get_gherkin_results():
 
     except Exception as e:
         logger.error(f"Error in get_gherkin_results: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/reports/attachment/<path:filename>', methods=['GET'])
+def get_report_attachment(filename):
+    """
+    Sirve los archivos adjuntos (imágenes, json, etc) generados por Allure.
+    """
+    try:
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        allure_results_dir = os.path.join(project_root, 'reports', 'allure_results')
+        
+        # Prevenir path traversal asegurando que el archivo resuelto esté dentro de allure_results_dir
+        requested_path = os.path.abspath(os.path.join(allure_results_dir, filename))
+        if not requested_path.startswith(os.path.abspath(allure_results_dir)):
+            return jsonify({"error": "Acceso denegado"}), 403
+            
+        if not os.path.exists(requested_path):
+            return jsonify({"error": "Archivo no encontrado"}), 404
+            
+        return send_from_directory(allure_results_dir, filename)
+    except Exception as e:
+        logger.error(f"Error serving attachment {filename}: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/reports/usage', methods=['GET'])

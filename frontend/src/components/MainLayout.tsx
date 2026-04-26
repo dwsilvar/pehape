@@ -9,7 +9,6 @@ import CheckIcon from '@mui/icons-material/Check';
 import AppToolbar from './AppToolbar';
 import FileExplorer from './FileExplorer';
 import { FeatureEditor } from './FeatureEditor';
-import ExecutionOrder from './execution-order/ExecutionOrder';
 import StatusBar from './StatusBar';
 import ModulesComponent from './Modules';
 import ConsoleView from './ConsoleView';
@@ -472,86 +471,47 @@ const MainLayout: React.FC<MainLayoutProps> = ({
         )}
 
         <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
-          <Box sx={{ flex: 1, overflow: activePerspective === 'editor' ? 'auto' : 'hidden', display: 'flex', flexDirection: 'column' }}>
-            {activePerspective === 'editor' ? (
-              <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                <Tabs value={tabValue} onChange={handleTabChange}>
-                  <Tab label={selectedFile?.name || t('common.editor')} />
-                  <Tab label={t('common.modules')} />
-                </Tabs>
-                <TabPanel value={tabValue} index={0}>
-                  <FeatureEditor
-                    selectedFile={selectedFile}
-                    editorContent={editorContent}
-                    onEditorChange={handleEditorChange}
-                    onSave={handleSaveFile}
-                    isDirty={isDirty}
-                    theme={theme.palette.mode === 'dark' ? 'vs-dark' : 'light'}
-                    isResizing={isSidebarResizing}
-                    validationTexts={validationTexts}
-                    onValidationTextsChange={setValidationTexts}
-                  />
-                </TabPanel>
-                <TabPanel value={tabValue} index={1}>
-                  <ModulesComponent
-                    modules={modules}
-                    setModules={setModules}
-                    fontSize={fontSize}
-                    onFeatureSelect={handleFileSelect}
-                    onRunTests={handleRunTests}
-                    onSaveModules={handleSave}
-                    scenarioStatuses={scenarioStatuses}
-                    setScenarioStatuses={setScenarioStatuses}
-                    isExecuting={isExecuting}
-                    runningFeatureId={runningFeatureId}
-                    collapsedSections={modulesViewCollapsed}
-                    onToggleSectionCollapse={handleToggleModulesViewCollapse}
-                    navigateToModule={navigateToModule}
-                    onStopTests={handleStopTests}
-                    focusedModule={focusedModule}
-                    onFocusConsumed={clearFocusedModule}
-                  />
-                </TabPanel>
-              </Box>
-            ) : (
-              <ExecutionOrder
-                fontSize={fontSize}
-                modules={modules}
-                setModules={setModules}
-                onFeatureSelect={handleFileSelect}
-                isExecuting={isExecuting}
-                runningFeatureId={runningFeatureId}
-                onRunTests={handleRunTests}
-                onSaveModules={handleSave}
-                collapsedSections={executionOrderCollapsed}
-                onToggleSectionCollapse={handleToggleExecutionOrderCollapse}
-                navigateToModule={navigateToModule}
-                onStopTests={handleStopTests}
-                onScheduleTests={handleScheduleTests}
-                scheduledExecutionTime={scheduledExecutionTime}
-                onCancelSchedule={handleCancelSchedule}                stopOnFailure={stopOnFailure}
-                onStopOnFailureChange={setStopOnFailure}                validationTexts={validationTexts}
-              />
-            )}
-          </Box>
-
-          {isConsoleOpen && activePerspective !== 'editor' && (
-            <Paper elevation={8} sx={{ height: '250px', borderTop: 1, borderColor: 'divider', display: 'flex', flexDirection: 'column' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', p: 1, bgcolor: 'action.hover' }}>
-                <Typography variant="overline" sx={{ flexGrow: 1 }}>Console</Typography>
-                <IconButton size="small" onClick={toggleConsole}><CloseIcon fontSize="small" /></IconButton>
-              </Box>
-              <Box sx={{ flex: 1, overflow: 'auto' }}><ConsoleView logs={logs} /></Box>
-            </Paper>
-          )}
-
-          {activePerspective === 'orchestrator' && (
-            <Box sx={{ height: '24px', borderTop: 1, borderColor: 'divider', px: 1, display: 'flex', alignItems: 'center' }}>
-              <Button size="small" onClick={toggleConsole} startIcon={<TerminalIcon sx={{ fontSize: 14 }} />}>
-                {t('common.console')}
-              </Button>
+          <Box sx={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+              <Tabs value={tabValue} onChange={handleTabChange}>
+                <Tab label={selectedFile?.name || t('common.editor')} />
+                <Tab label={t('common.modules')} />
+              </Tabs>
+              <TabPanel value={tabValue} index={0}>
+                <FeatureEditor
+                  selectedFile={selectedFile}
+                  editorContent={editorContent}
+                  onEditorChange={handleEditorChange}
+                  onSave={handleSaveFile}
+                  isDirty={isDirty}
+                  theme={theme.palette.mode === 'dark' ? 'vs-dark' : 'light'}
+                  isResizing={isSidebarResizing}
+                  validationTexts={validationTexts}
+                  onValidationTextsChange={setValidationTexts}
+                />
+              </TabPanel>
+              <TabPanel value={tabValue} index={1}>
+                <ModulesComponent
+                  modules={modules}
+                  setModules={setModules}
+                  fontSize={fontSize}
+                  onFeatureSelect={handleFileSelect}
+                  onRunTests={handleRunTests}
+                  onSaveModules={handleSave}
+                  scenarioStatuses={scenarioStatuses}
+                  setScenarioStatuses={setScenarioStatuses}
+                  isExecuting={isExecuting}
+                  runningFeatureId={runningFeatureId}
+                  collapsedSections={modulesViewCollapsed}
+                  onToggleSectionCollapse={handleToggleModulesViewCollapse}
+                  navigateToModule={navigateToModule}
+                  onStopTests={handleStopTests}
+                  focusedModule={focusedModule}
+                  onFocusConsumed={clearFocusedModule}
+                />
+              </TabPanel>
             </Box>
-          )}
+          </Box>
         </Box>
       </Box>
 

@@ -64,6 +64,7 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
   const [showCatalog, setShowCatalog] = useState(false);
   const [compactCatalog, setCompactCatalog] = useState(true);
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
+  const [validatedWithUnsaved, setValidatedWithUnsaved] = useState(false);
   const completionProviderRef = useRef<any>(null);
   const hoverProviderRef = useRef<any>(null);
   const menuActionsRef = useRef<any[]>([]);
@@ -158,6 +159,11 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
           'Given': 'given', 'When': 'when', 'Then': 'then', 'And': 'and', 'But': 'but',
           'Dado': 'given', 'Cuando': 'when', 'Entonces': 'then', 'Y': 'and', 'Pero': 'but'
         };
+        // Parent keywords that define the step type context
+        const parentKeywordsMap: Record<string, string> = {
+          'Given': 'given', 'When': 'when', 'Then': 'then',
+          'Dado': 'given', 'Cuando': 'when', 'Entonces': 'then'
+        };
         const keywords = Object.keys(keywordsMap);
         const trimmedPrefix = textUntilPosition.trimStart();
         const keywordMatch = keywords.find(k => trimmedPrefix.startsWith(k));
@@ -170,10 +176,29 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
         const keywordEndColumn = lineContent.indexOf(keywordMatch) + keywordMatch.length + 1;
         const currentColumn = position.column;
 
-        // Filter catalog based on type
+        // Resolve effective step type:
+        // For 'And'/'But', scan upward to find the nearest parent keyword (Given/When/Then)
+        let effectiveType = currentType;
+        if (currentType === 'and' || currentType === 'but') {
+          const parentKeywords = Object.keys(parentKeywordsMap);
+          for (let lineNum = position.lineNumber - 1; lineNum >= 1; lineNum--) {
+            const prevLine = model.getLineContent(lineNum).trimStart();
+            const parentMatch = parentKeywords.find(pk => prevLine.startsWith(pk));
+            if (parentMatch) {
+              effectiveType = parentKeywordsMap[parentMatch];
+              break;
+            }
+          }
+          // If no parent found (e.g. at top of file), fall through with all steps
+          if (effectiveType === 'and' || effectiveType === 'but') {
+            effectiveType = ''; // Show all when context is truly unknown
+          }
+        }
+
+        // Filter catalog based on resolved effective type
         const filteredSteps = stepCatalog.filter(step => {
-          if (currentType === 'and' || currentType === 'but') return true;
-          return step.type.toLowerCase() === currentType;
+          if (!effectiveType) return true; // Unknown context: show all
+          return step.type.toLowerCase() === effectiveType;
         });
 
         const suggestions = filteredSteps.map((step, idx) => {
@@ -697,6 +722,7 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
 
     setIsValidating(true);
     setValidationResult(null);
+    setValidatedWithUnsaved(isDirty);
 
     // Clear existing markers
     monacoInstance.editor.setModelMarkers(editorInstance.getModel(), 'gherkin-validator', []);
@@ -761,9 +787,44 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
         />
       )}
       {selectedFile && (
-        <Box sx={{ p: 1, display: 'flex', alignItems: 'center', borderBottom: 1, borderColor: 'divider' }}>
-          <Typography variant="subtitle2" sx={{ flexGrow: 1 }}>
+        <Box sx={{ p: 1, display: 'flex', alignItems: 'center', borderBottom: 1, borderColor: 'divider', gap: 1 }}>
+          <Typography
+            variant="subtitle2"
+            sx={{
+              flexGrow: 1,
+              fontStyle: isDirty ? 'italic' : 'normal',
+              color: isDirty ? 'warning.main' : 'text.secondary',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.5,
+              transition: 'color 0.2s ease',
+            }}
+          >
+            {isDirty && (
+              <Box
+                component="span"
+                sx={{
+                  display: 'inline-block',
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  bgcolor: 'warning.main',
+                  flexShrink: 0,
+                  boxShadow: '0 0 4px',
+                  color: 'warning.main',
+                }}
+              />
+            )}
             {selectedFile.path}
+            {isDirty && (
+              <Chip
+                label={t('editor.unsaved')}
+                size="small"
+                color="warning"
+                variant="outlined"
+                sx={{ ml: 0.5, height: 18, fontSize: '0.65rem', fontStyle: 'normal' }}
+              />
+            )}
           </Typography>
           <Button
             variant="outlined"
@@ -874,6 +935,34 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
               <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
                 {t('editor.validation_texts_hint')}
               </Typography>
+            </Paper>
+          )}
+
+          {/* Unsaved warning banner shown whenever validation ran on a dirty file */}
+          {validationResult && validatedWithUnsaved && (
+            <Paper
+              elevation={2}
+              sx={{
+                p: 1.5,
+                borderTop: 2,
+                borderColor: 'warning.main',
+                bgcolor: 'warning.dark',
+                color: 'warning.contrastText',
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <ErrorOutlineIcon fontSize="small" />
+                <Typography variant="body2" sx={{ fontWeight: 'medium', flexGrow: 1 }}>
+                  {t('editor.validate_unsaved_warning')}
+                </Typography>
+                <IconButton
+                  size="small"
+                  color="inherit"
+                  onClick={() => setValidatedWithUnsaved(false)}
+                >
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              </Box>
             </Paper>
           )}
 

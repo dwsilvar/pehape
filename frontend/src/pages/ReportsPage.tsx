@@ -17,7 +17,10 @@ import {
     Science as ScienceIcon,
     UnfoldMore as UnfoldMoreIcon,
     UnfoldLess as UnfoldLessIcon,
-    AccessTime as AccessTimeIcon
+    AccessTime as AccessTimeIcon,
+    Gif as GifIcon,
+    Movie as MovieIcon,
+    DashboardRounded as DashboardRoundedIcon
 } from '@mui/icons-material';
 import AppToolbar from '../components/AppToolbar';
 import { useTranslation } from 'react-i18next';
@@ -35,6 +38,7 @@ interface ScenarioResult {
     duration_ms: number;
     tags: string[];
     steps: StepResult[];
+    gifExecutionId?: string;
 }
 
 interface FeatureResult {
@@ -86,11 +90,11 @@ const SummaryCards: React.FC<{ summary: GherkinReport['summary']; t: any }> = ({
     const theme = useTheme();
     const cards = [
         { label: t('pages.reports.total'), value: summary.total, color: theme.palette.primary.main },
-        { label: t('pages.reports.passed'), value: summary.passed, color: theme.palette.success.main },
-        { label: t('pages.reports.failed'), value: summary.failed, color: theme.palette.error.main },
-        { label: t('pages.reports.broken'), value: summary.broken, color: theme.palette.warning.main },
-        { label: t('pages.reports.skipped'), value: summary.skipped, color: theme.palette.grey[500] },
-        { label: t('pages.reports.totalTime'), value: formatDuration(summary.total_duration_ms || 0), color: theme.palette.info.main },
+        { label: t('pages.reports.passed'), value: summary.passed, color: theme.palette.success?.main || '#4caf50' },
+        { label: t('pages.reports.failed'), value: summary.failed, color: theme.palette.error?.main || '#f44336' },
+        { label: t('pages.reports.broken'), value: summary.broken, color: theme.palette.warning?.main || '#ff9800' },
+        { label: t('pages.reports.skipped'), value: summary.skipped, color: theme.palette.grey?.[500] || '#9e9e9e' },
+        { label: t('pages.reports.totalTime'), value: formatDuration(summary.total_duration_ms || 0), color: theme.palette.primary.main },
     ];
 
     return (
@@ -194,9 +198,15 @@ const GherkinTabContent: React.FC<{ t: any }> = ({ t }) => {
         try {
             const response = await fetch('/api/reports/gherkin-results');
             const data = await response.json();
-            setReport(data);
-            // Auto-expand all features by default
-            setExpandedFeatures(new Set(data.features.map((f: FeatureResult) => f.name)));
+            
+            if (data && data.features) {
+                setReport(data);
+                // Auto-expand all features by default
+                setExpandedFeatures(new Set(data.features.map((f: FeatureResult) => f.name)));
+            } else {
+                console.error('Invalid report data:', data);
+                setReport(null);
+            }
         } catch (error) {
             console.error('Error fetching gherkin results:', error);
             setReport(null);
@@ -210,11 +220,12 @@ const GherkinTabContent: React.FC<{ t: any }> = ({ t }) => {
     }, [fetchResults]);
 
     const toggleAllFeatures = () => {
-        if (expandedFeatures.size === (report?.features.length ?? 0)) {
+        const totalFeatures = report?.features?.length ?? 0;
+        if (expandedFeatures.size === totalFeatures && totalFeatures > 0) {
             setExpandedFeatures(new Set());
             setExpandedScenarios(new Set());
         } else {
-            setExpandedFeatures(new Set(report?.features.map(f => f.name) ?? []));
+            setExpandedFeatures(new Set(report?.features?.map(f => f.name) ?? []));
         }
     };
 
@@ -243,18 +254,21 @@ const GherkinTabContent: React.FC<{ t: any }> = ({ t }) => {
         );
     }
 
-    if (!report || report.features.length === 0) {
+    if (!report || !report.features || report.features.length === 0) {
         return (
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 8, textAlign: 'center' }}>
                 <ScienceIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
                 <Typography variant="h6" color="text.secondary" gutterBottom>
                     {t('pages.reports.noResults')}
                 </Typography>
+                <Button variant="outlined" startIcon={<RefreshIcon />} onClick={fetchResults} sx={{ mt: 2 }}>
+                    {t('pages.reports.refresh')}
+                </Button>
             </Box>
         );
     }
-
-    const allExpanded = expandedFeatures.size === report.features.length;
+    
+    const allExpanded = report.features.length > 0 && expandedFeatures.size === report.features.length;
 
     return (
         <Box>
@@ -278,13 +292,15 @@ const GherkinTabContent: React.FC<{ t: any }> = ({ t }) => {
                 </Box>
             </Box>
 
-            <SummaryCards summary={report.summary} t={t} />
+            {report.summary && <SummaryCards summary={report.summary} t={t} />}
 
             {/* Features List */}
             {report.features.map((feature) => {
+                if (!feature || !feature.scenarios) return null;
+                
                 // Compute feature-level summary
-                const featurePassed = feature.scenarios.filter(s => s.status === 'passed').length;
-                const featureFailed = feature.scenarios.filter(s => s.status === 'failed' || s.status === 'broken').length;
+                const featurePassed = feature.scenarios.filter(s => s && s.status === 'passed').length;
+                const featureFailed = feature.scenarios.filter(s => s && (s.status === 'failed' || s.status === 'broken')).length;
 
                 return (
                     <Accordion
@@ -400,7 +416,38 @@ const GherkinTabContent: React.FC<{ t: any }> = ({ t }) => {
                                             </Box>
                                         </AccordionSummary>
                                         <AccordionDetails sx={{ pl: 4, pr: 2, pb: 2, pt: 0 }}>
-                                            {scenario.steps.length > 0 ? (
+                                            {scenario.gifExecutionId && (
+                                                <Box sx={{ mb: 2, display: 'flex', gap: 1, alignItems: 'center', backgroundColor: alpha(theme.palette.primary.main, 0.05), p: 1.5, borderRadius: 1, border: '1px solid', borderColor: alpha(theme.palette.primary.main, 0.1) }}>
+                                                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mr: 1, color: theme.palette.primary.main, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                                        <ScienceIcon fontSize="small" /> {t('pages.reports.evidence')}:
+                                                    </Typography>
+                                                    <Button
+                                                        size="small"
+                                                        variant="contained"
+                                                        startIcon={<GifIcon />}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            window.open(`/api/execution/${scenario.gifExecutionId}/gif`, '_blank');
+                                                        }}
+                                                        sx={{ textTransform: 'none', fontWeight: 600, backgroundColor: theme.palette.primary.main, color: theme.palette.primary.contrastText }}
+                                                    >
+                                                        {t('pages.reports.downloadGif')}
+                                                    </Button>
+                                                    <Button
+                                                        size="small"
+                                                        variant="contained"
+                                                        startIcon={<MovieIcon />}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            window.open(`/api/execution/${scenario.gifExecutionId}/video`, '_blank');
+                                                        }}
+                                                        sx={{ textTransform: 'none', fontWeight: 600, backgroundColor: theme.palette.primary.main, color: theme.palette.primary.contrastText }}
+                                                    >
+                                                        {t('pages.reports.downloadVideo')}
+                                                    </Button>
+                                                </Box>
+                                            )}
+                                            {scenario.steps && scenario.steps.length > 0 ? (
                                                 <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
                                                     <StepsTable steps={scenario.steps} />
                                                 </Paper>
@@ -484,6 +531,8 @@ const AllureTabContent: React.FC<{ t: any }> = ({ t }) => {
 };
 
 // --- Main Page ---
+import ReportMainShell from '../components/reports/ReportMainShell';
+
 const ReportsPage: React.FC = () => {
     const { t } = useTranslation();
     const [activeTab, setActiveTab] = useState(0);
@@ -504,8 +553,8 @@ const ReportsPage: React.FC = () => {
                 >
                     <Tab
                         id="tab-gherkin"
-                        label={t('pages.reports.tabGherkin')}
-                        icon={<ScienceIcon sx={{ fontSize: 20 }} />}
+                        label="Dashboard / Resumen Jerárquico"
+                        icon={<DashboardRoundedIcon sx={{ fontSize: 20 }} />}
                         iconPosition="start"
                     />
                     <Tab
@@ -516,8 +565,8 @@ const ReportsPage: React.FC = () => {
                     />
                 </Tabs>
             </Box>
-            <Box sx={{ p: 2, flex: 1, display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
-                {activeTab === 0 && <GherkinTabContent t={t} />}
+            <Box sx={{ p: 2, flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                {activeTab === 0 && <ReportMainShell />}
                 {activeTab === 1 && <AllureTabContent t={t} />}
             </Box>
         </Box>

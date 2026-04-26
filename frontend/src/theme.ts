@@ -1,17 +1,68 @@
 import { createTheme, Theme } from '@mui/material/styles';
 
+declare module '@mui/material/styles' {
+  interface Palette {
+    custom: {
+      bgMain: string;
+      bgSidebar: string;
+      bgCanvas: string;
+      cardBg: string;
+      textMuted: string;
+      border: string;
+    };
+  }
+  interface PaletteOptions {
+    custom?: {
+      bgMain?: string;
+      bgSidebar?: string;
+      bgCanvas?: string;
+      cardBg?: string;
+      textMuted?: string;
+      border?: string;
+    };
+  }
+}
+
 const darkTheme = createTheme({
   palette: {
     mode: 'dark',
     primary: {
-      main: '#90caf9',
+      main: '#38BDF8',
     },
     secondary: {
-      main: '#f48fb1',
+      main: '#94A3B8',
+    },
+    success: {
+      main: '#22C55E',
+    },
+    error: {
+      main: '#EF4444',
+    },
+    warning: {
+      main: '#F59E0B',
     },
     background: {
-      default: '#121212',
-      paper: '#1e1e1e',
+      default: '#0F172A',
+      paper: '#1E293B',
+    },
+    text: {
+      primary: '#F8FAFC',
+      secondary: '#94A3B8',
+    },
+    divider: 'rgba(255, 255, 255, 0.1)',
+    custom: {
+      bgMain: '#0F172A',
+      bgSidebar: '#1E293B',
+      bgCanvas: '#0B1120',
+      cardBg: 'rgba(30, 41, 59, 0.7)',
+      textMuted: '#94A3B8',
+      border: 'rgba(255, 255, 255, 0.1)',
+    },
+  },
+  typography: {
+    fontFamily: 'Inter, system-ui, sans-serif',
+    button: {
+      textTransform: 'none',
     },
   },
 });
@@ -20,14 +71,42 @@ const lightTheme = createTheme({
   palette: {
     mode: 'light',
     primary: {
-      main: '#1976d2',
+      main: '#38BDF8',
     },
     secondary: {
-      main: '#dc004e',
+      main: '#64748B',
+    },
+    success: {
+      main: '#22C55E',
+    },
+    error: {
+      main: '#EF4444',
+    },
+    warning: {
+      main: '#F59E0B',
     },
     background: {
-      default: '#f4f6f8',
-      paper: '#ffffff',
+      default: '#F8FAFC',
+      paper: '#FFFFFF',
+    },
+    text: {
+      primary: '#1E293B',
+      secondary: '#64748B',
+    },
+    divider: '#E2E8F0',
+    custom: {
+      bgMain: '#F8FAFC',
+      bgSidebar: '#FFFFFF',
+      bgCanvas: '#F1F5F9',
+      cardBg: '#FFFFFF',
+      textMuted: '#64748B',
+      border: '#E2E8F0',
+    },
+  },
+  typography: {
+    fontFamily: 'Inter, system-ui, sans-serif',
+    button: {
+      textTransform: 'none',
     },
   },
 });

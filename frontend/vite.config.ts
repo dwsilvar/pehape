@@ -28,11 +28,20 @@ export default defineConfig({
   server: {
     port: config.port,
     proxy: {
+      '^/api/(execute-plan|execution-status|executions|reports/orchestrator-summary)': {
+        target: 'http://localhost:5001',
+        changeOrigin: true,
+      },
+      '/allure-report': {
+        target: 'http://localhost:5001',
+        changeOrigin: true,
+      },
       '/api': {
         target: config.api_url,
         changeOrigin: true,
       },
     },
+
   },
   build: {
     outDir: 'dist',
