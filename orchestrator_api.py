@@ -51,7 +51,7 @@ try:
 except ImportError:
     ExecutionPlanManager = None
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -1129,13 +1129,102 @@ def get_resource_image(filepath: str):
 
 
 @app.post("/api/images/upload", tags=["OCR"])
-async def upload_image(request: Request):
+async def upload_image(
+    file: UploadFile = File(...),
+    text: str = Form(...),
+    step_text: Optional[str] = Form(None),
+    is_generic: bool = Form(False),
+    feature_path: Optional[str] = Form(None),
+    tag: Optional[str] = Form(None)
+):
     """
     Endpoint para subir una imagen OCR.
+    Mantiene un mapeo en ocr_mapping.json para permitir múltiples textos por imagen
+    y manejar caracteres especiales.
     """
-    # En FastAPI se usa UploadFile, pero para mantener compatibilidad con FormData de Flask:
-    # Lo implementaremos si es estrictamente necesario, o usaremos la lógica básica.
-    return {"message": "Endpoint migrado pero requiere adaptación de UploadFile"}
+    try:
+        import hashlib
+        import time
+        
+        mapping_path = IMAGES_DIR / "ocr_mapping.json"
+        
+        # Cargar mapeo existente
+        mapping = {}
+        if mapping_path.exists():
+            with open(mapping_path, 'r', encoding='utf-8') as f:
+                mapping = json.load(f)
+
+        # Generar un ID único para la imagen
+        timestamp = int(time.time())
+        text_hash = hashlib.md5(text.encode()).hexdigest()[:8]
+        unique_id = f"img_{timestamp}_{text_hash}.png"
+
+        if is_generic:
+            # Lógica genérica
+            generic_dir = IMAGES_DIR / "features" / "generic"
+            generic_dir.mkdir(parents=True, exist_ok=True)
+            target_path = generic_dir / unique_id
+            
+            # Guardar archivo
+            with open(target_path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+            
+            # Actualizar mapeo genérico
+            if 'generic' not in mapping:
+                mapping['generic'] = []
+            
+            mapping['generic'].append({
+                "id": unique_id,
+                "texts": [step_text] if step_text else [text],
+                "original_text": text
+            })
+            
+            with open(mapping_path, 'w', encoding='utf-8') as f:
+                json.dump(mapping, f, indent=4, ensure_ascii=False)
+                
+            return {"message": "Generic image saved", "id": unique_id, "is_generic": True}
+        else:
+            if not feature_path or not tag:
+                raise HTTPException(status_code=400, detail="Missing feature_path or tag")
+
+            if not tag.startswith('@'):
+                tag = f"@{tag}"
+                
+            # Limpiar feature_path (quitar extensión si viene con ella)
+            clean_feat_path = feature_path.replace('.feature', '')
+            
+            # Obtener el path de destino (físico)
+            # Replicamos la lógica de util.system_utils.get_image_path_from_feature_and_tag
+            target_dir = IMAGES_DIR / clean_feat_path / tag.lstrip('@')
+            target_dir.mkdir(parents=True, exist_ok=True)
+            target_path = target_dir / unique_id
+            
+            # Guardar archivo
+            with open(target_path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+            
+            # Actualizar mapeo específico (normalizado a forward slashes)
+            feat_key = feature_path.replace('\\', '/')
+            if feat_key not in mapping:
+                mapping[feat_key] = {}
+            
+            if tag not in mapping[feat_key]:
+                mapping[feat_key][tag] = {"steps": []}
+            
+            mapping[feat_key][tag]["steps"].append({
+                "id": unique_id,
+                "texts": [step_text] if step_text else [text],
+                "original_text": text
+            })
+            
+            with open(mapping_path, 'w', encoding='utf-8') as f:
+                json.dump(mapping, f, indent=4, ensure_ascii=False)
+                
+            return {"message": "Image saved and mapped", "id": unique_id, "path": str(target_path)}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 
 @app.post("/api/images/link", tags=["OCR"])
