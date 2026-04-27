@@ -226,12 +226,10 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
     };
 
     const disGherkin = monacoInstance.languages.registerCompletionItemProvider('gherkin', provider);
-    const disFeature = monacoInstance.languages.registerCompletionItemProvider('feature', provider);
 
     completionProviderRef.current = {
       dispose: () => {
         disGherkin.dispose();
-        disFeature.dispose();
       }
     };
 

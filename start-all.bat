@@ -11,8 +11,8 @@ echo.
 REM Definir rutas
 set "PROJECT_ROOT=%~dp0"
 
-echo Iniciando servidor de backend en una nueva ventana...
-start "Backend Server - Pehape" cmd /k "%PROJECT_ROOT%start-backend.bat"
+REM echo Iniciando servidor de backend en una nueva ventana...
+REM start "Backend Server - Pehape" cmd /k "%PROJECT_ROOT%start-backend.bat"
 
 echo Iniciando servidor de frontend en una nueva ventana...
 start "Frontend Server - Pehape" cmd /k "%PROJECT_ROOT%start-frontend.bat"
@@ -24,7 +24,6 @@ echo.
 echo ========================================
 echo Todos los servidores se estan iniciando en ventanas separadas.
 echo.
-echo Backend: http://localhost:5000
 echo Frontend: http://localhost:3000
 echo Orchestrator: http://localhost:5001
 echo.
