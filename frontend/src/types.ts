@@ -53,6 +53,72 @@ export interface Module {
   is_hook?: boolean;
 }
 
+// ── Test Plan Designer Types ──────────────────────────────────────────────────
+
+/**
+ * A single Gherkin scenario referenced inside a TestCycle.
+ */
+export interface ScenarioRef {
+  id: string;           // unique instance id (cloned per-drop)
+  featurePath: string;  // e.g. "retiro/retiro.feature"
+  featureName: string;  // Feature title from the .feature file
+  scenarioName: string;
+  tags: string[];
+  steps: string[];      // First N step lines for preview
+}
+
+/**
+ * A sequence of scenarios grouped together in a TestCycle.
+ */
+export interface TestFlow {
+  id: string;
+  name: string;
+  scenarios: ScenarioRef[];
+}
+
+/**
+ * An ordered list of test flows that make up a test run slice.
+ */
+export interface TestCycle {
+  id: string;
+  name: string;
+  flows: TestFlow[];
+  // Backward compatibility: Some old cycles might have these properties
+  flowName?: string;
+  scenarios?: ScenarioRef[];
+}
+
+/**
+ * Top-level container grouping one or more TestCycles.
+ */
+export interface TestPlan {
+  id: string;
+  name: string;
+  status: 'draft' | 'running' | 'completed';
+  cycles: TestCycle[];
+}
+
+/**
+ * Scenario metadata returned by /api/features-with-scenarios.
+ */
+export interface ScenarioMeta {
+  name: string;
+  tags: string[];
+  steps: string[];
+}
+
+/**
+ * Feature file with parsed scenario metadata.
+ */
+export interface FeatureWithScenarios {
+  name: string;         // filename e.g. "retiro.feature"
+  path: string;         // relative path e.g. "retiro/retiro.feature"
+  featureTitle: string; // Feature: ... title
+  scenarios: ScenarioMeta[];
+}
+
+// ── Execution Status Types ─────────────────────────────────────────────────────
+
 /**
  * Define los posibles estados de un escenario durante la ejecución.
  */

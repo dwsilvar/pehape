@@ -155,7 +155,7 @@ class PyTesseractWorker:
             except Exception:
                 conf = -1
             word = data['text'][i].strip()
-            if conf > configurator.CONFIDENCE_THRESHOLD and word != '':
+            if conf > configurator.OCR_CONFIDENCE_THRESHOLD and word != '':
                 words_data.append({
                     'text': word,
                     'left': data['left'][i],
@@ -229,7 +229,7 @@ class PyTesseractWorker:
             except Exception:
                 conf = -1
 
-            if conf > configurator.CONFIDENCE_THRESHOLD:
+            if conf > configurator.OCR_CONFIDENCE_THRESHOLD:
                 word_text = data['text'][i].strip()
                 word_normalized = self._normalize_text(word_text)
                 

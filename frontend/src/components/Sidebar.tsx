@@ -13,7 +13,9 @@ import {
     Window as WindowIcon,
     BarChart as BarChartIcon,
     Person as PersonIcon,
-    BugReport as BugReportIcon
+    BugReport as BugReportIcon,
+    Article as ArticleIcon,
+    EventNote as EventNoteIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useLayout } from '../context/LayoutContext';
@@ -27,11 +29,8 @@ const Sidebar: React.FC = () => {
 
     const FEEDBACK_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSd9cr759DSc-2lhb51K_xtfJYfeb3-7erusvcTSJDZRjHAuGg/viewform?usp=publish-editor";
 
-    const handleNavigation = (path: string, view?: 'editor' | 'orchestrator') => {
+    const handleNavigation = (path: string) => {
         navigate(path);
-        if (view) {
-            setActiveView(view);
-        }
     };
 
     const isActive = (path: string) => location.pathname === path;
@@ -56,23 +55,16 @@ const Sidebar: React.FC = () => {
                     <ChevronRightIcon />
                 </IconButton>
 
-                <Tooltip title={t('common.sidebar.editor')} placement="right">
+                <Tooltip title={t('common.sidebar.test_plan')} placement="right">
                     <IconButton
-                        color={isHome && activeView === 'editor' ? 'primary' : 'default'}
-                        onClick={() => handleNavigation('/', 'editor')}
+                        color={isHome ? 'primary' : 'default'}
+                        onClick={() => handleNavigation('/')}
                     >
                         <HomeIcon />
                     </IconButton>
                 </Tooltip>
 
-                <Tooltip title={t('common.sidebar.execution')} placement="right">
-                    <IconButton
-                        color={isHome && activeView === 'orchestrator' ? 'primary' : 'default'}
-                        onClick={() => handleNavigation('/', 'orchestrator')}
-                    >
-                        <AccountTreeIcon />
-                    </IconButton>
-                </Tooltip>
+
 
                 <Divider sx={{ width: '80%', my: 1 }} />
 
@@ -93,6 +85,17 @@ const Sidebar: React.FC = () => {
                         <AssignmentIcon />
                     </IconButton>
                 </Tooltip>
+
+                <Tooltip title={t('common.sidebar.feature_editor')} placement="right">
+                    <IconButton
+                        color={isActive('/feature-editor') ? 'primary' : 'default'}
+                        onClick={() => handleNavigation('/feature-editor')}
+                    >
+                        <ArticleIcon />
+                    </IconButton>
+                </Tooltip>
+
+
 
                 <Tooltip title={t('common.sidebar.ocr')} placement="right">
                     <IconButton
@@ -184,27 +187,17 @@ const Sidebar: React.FC = () => {
             <List component="nav">
                 <ListItem disablePadding>
                     <ListItemButton
-                        selected={isHome && activeView === 'editor'}
-                        onClick={() => handleNavigation('/', 'editor')}
+                        selected={isHome}
+                        onClick={() => handleNavigation('/')}
                     >
                         <ListItemIcon>
                             <HomeIcon />
                         </ListItemIcon>
-                        <ListItemText primary={t('common.sidebar.editor')} />
+                        <ListItemText primary={t('common.sidebar.test_plan')} />
                     </ListItemButton>
                 </ListItem>
 
-                <ListItem disablePadding>
-                    <ListItemButton
-                        selected={isHome && activeView === 'orchestrator'}
-                        onClick={() => handleNavigation('/', 'orchestrator')}
-                    >
-                        <ListItemIcon>
-                            <AccountTreeIcon />
-                        </ListItemIcon>
-                        <ListItemText primary={t('common.sidebar.execution')} />
-                    </ListItemButton>
-                </ListItem>
+
 
                 <Divider sx={{ my: 1 }} />
 
@@ -233,6 +226,24 @@ const Sidebar: React.FC = () => {
                         <ListItemText primary={t('common.sidebar.tasks')} />
                     </ListItemButton>
                 </ListItem>
+
+                <Divider sx={{ my: 1 }} />
+
+                <ListItem disablePadding>
+                    <ListItemButton
+                        selected={isActive('/feature-editor')}
+                        onClick={() => handleNavigation('/feature-editor')}
+                    >
+                        <ListItemIcon>
+                            <ArticleIcon />
+                        </ListItemIcon>
+                        <ListItemText primary={t('common.sidebar.feature_editor')} />
+                    </ListItemButton>
+                </ListItem>
+
+                <Divider sx={{ my: 1 }} />
+
+
 
                 <Divider sx={{ my: 1 }} />
 

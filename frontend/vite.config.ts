@@ -29,10 +29,15 @@ export default defineConfig({
     port: config.port,
     proxy: {
       '/api': {
-        target: config.api_url,
+        target: 'http://localhost:5001',
+        changeOrigin: true,
+      },
+      '/allure-report': {
+        target: 'http://localhost:5001',
         changeOrigin: true,
       },
     },
+
   },
   build: {
     outDir: 'dist',

@@ -6,6 +6,7 @@ from behave_runner.behave_run_json import BehaveRunJson
 from behave_runner.execution_plan_loader import ExecutionPlanLoader
 from behave_runner.report_allure import ReportAllure
 import config.logging_config as logging_config
+import config.config as config
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,9 @@ class BehaveMaster:
             # 2. Instantiate and run the sequence using the BehaveRunner class
             # Se añaden argumentos para asegurar el streaming en tiempo real.
             behave_args = "--no-capture"
-            runner = BehaveRunJson(plan, behave_args)
+            # Allow overriding via environment variable
+            stop_on_failure = os.getenv('BEHAVE_STOP_ON_FAILURE', str(config.STOP_ON_FAILURE)).lower() in ('true', '1', 'yes')
+            runner = BehaveRunJson(plan, behave_args, stop_on_failure=stop_on_failure)
 
             runner.run_sequence()
             logger.info("Test execution completed.")

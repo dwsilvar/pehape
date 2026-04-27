@@ -121,7 +121,7 @@ class PyAutoGUIWorker(WorkerInterface):
         """
         try:
             logger.info(f"Searching for image '{image_path}'..." + (f" in region {region}" if region else ""))
-            location = pyautogui.locateCenterOnScreen(image_path, confidence=(configurator.CONFIDENCE_THRESHOLD/100), region=region)
+            location = pyautogui.locateCenterOnScreen(image_path, confidence=(configurator.IMAGE_CONFIDENCE_THRESHOLD/100), region=region)
             if location is not None:
                 return self.click_at(location)
             else:
@@ -233,7 +233,7 @@ class PyAutoGUIWorker(WorkerInterface):
         try:
             logger.info(f"PyAutoGUI: Searching for image '{image_path}'..." + (f" in region {region}" if region else ""))
 
-            location = pyautogui.locateCenterOnScreen(image_path, confidence=(configurator.CONFIDENCE_THRESHOLD/100), region=region)
+            location = pyautogui.locateCenterOnScreen(image_path, confidence=(configurator.IMAGE_CONFIDENCE_THRESHOLD/100), region=region)
             if location:
                 logger.info(f"✓ PyAutoGUI: Image '{os.path.basename(image_path)}' found at {location}.")
                 return location

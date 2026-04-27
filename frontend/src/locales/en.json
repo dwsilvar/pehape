@@ -39,12 +39,12 @@
         "move_error_invalid": "You cannot move a folder inside itself or its children",
         "sidebar": {
             "editor": "Editor",
-            "execution": "Execution Order",
             "maintenance": "Maintenance",
             "tasks": "Tasks",
             "ocr": "OCR Images",
             "apps": "Running Apps",
             "reports": "Reports",
+            "test_plan": "Test Plan Designer",
             "feedback": "Report Bug / Improvement"
         }
     },
@@ -55,10 +55,12 @@
         },
         "feature_editor": "Feature Editor",
         "dirty_marker": "* (Unsaved)",
+        "unsaved": "Unsaved",
         "loading_file": "Loading {{path}}...",
         "error_loading": "Error loading {{path}}.",
         "placeholder": "Select a file from the explorer to edit",
         "validate": "Validate",
+        "validate_unsaved_warning": "⚠ You are validating an unsaved version of this file. The results may not reflect the latest saved state.",
         "upload_ocr_image": "Upload OCR Image",
         "add_to_validation": "Add to Validation Texts",
         "step_catalog": "Step Catalog",
@@ -183,7 +185,27 @@
             "refresh": "Refresh",
             "openNewTab": "Open in New Tab",
             "loading": "Checking report status...",
-            "noReport": "No report available yet. Run tests to generate a report."
+            "noReport": "No report available yet. Run tests to generate a report.",
+            "tabGherkin": "Gherkin Tests",
+            "tabAllure": "Allure Report",
+            "summary": "Execution Summary",
+            "total": "Total",
+            "passed": "Passed",
+            "failed": "Failed",
+            "skipped": "Skipped",
+            "broken": "Broken",
+            "noResults": "No test results available. Execute tests to see results here.",
+            "steps": "Steps",
+            "duration": "Duration",
+            "tags": "Tags",
+            "status": "Status",
+            "scenarios": "Scenarios",
+            "expandAll": "Expand All",
+            "collapseAll": "Collapse All",
+            "totalTime": "Total Time",
+            "downloadGif": "Download GIF",
+            "downloadVideo": "Download Video",
+            "evidence": "Visual Evidence"
         },
         "maintenance": {
             "title": "System Maintenance",
@@ -221,6 +243,58 @@
             "editFeature": "Edit Feature",
             "loading": "Loading OCR images...",
             "noImages": "No OCR images found."
+        },
+        "testPlan": {
+            "title": "Test Plan Designer",
+            "subtitle": "Compose test flows by dragging scenarios from the library.",
+            "newPlan": "New Plan",
+            "newCycle": "New Cycle",
+            "newFlow": "New Flow",
+            "planName": "Plan Name",
+            "cycleName": "Cycle Name",
+            "executePlan": "Execute Full Plan",
+            "executing": "Executing...",
+            "executePlanTooltip": "Click to launch the orchestrator execution",
+            "status": {
+                "draft": "Draft",
+                "running": "Running",
+                "completed": "Completed"
+            },
+            "hierarchy": "Plan Hierarchy",
+            "noPlans": "No plans created yet. Create your first test plan.",
+            "noCycles": "This plan has no cycles. Add one with the + button.",
+            "canvas": {
+                "title": "Flow Designer",
+                "placeholder": "Drag scenarios here to build a test flow",
+                "placeholderSub": "Scenarios will execute top-to-bottom",
+                "scenariosCount": "{{count}} scenario(s)",
+                "remove": "Remove from flow",
+                "moveUp": "Move up",
+                "moveDown": "Move down",
+                "selectCycle": "Select a cycle from the left panel to view its flow"
+            },
+            "library": {
+                "title": "Asset Library",
+                "search": "Search features or tags...",
+                "filterVersion": "Filter by tag",
+                "allVersions": "All tags",
+                "noScenarios": "No scenarios found.",
+                "loading": "Loading features...",
+                "dragHint": "Drag to canvas",
+                "steps": "Steps:",
+                "noFeatures": "No feature files found."
+            },
+            "drawer": {
+                "title": "Execution Logs",
+                "subtitle": "Real-time output from the test runner"
+            },
+            "save": "Save Plan",
+            "saved": "✓ Plan saved",
+            "deletePlan": "Delete Plan",
+            "deleteCycle": "Delete Cycle",
+            "deleteFlow": "Delete Flow",
+            "confirmDelete": "Delete \"{{name}}\"? This action cannot be undone.",
+            "enterName": "Enter a name..."
         }
     }
 }

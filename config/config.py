@@ -14,5 +14,16 @@ IMAGES_REPORT_PATH = "reports/screenshots"
 TESSERACT_CMD_PATH = r"C:\src\tesseract-ocr\tesseract.exe"
 TESSERACT_LANGUAGE = "spa"
 
-CONFIDENCE_THRESHOLD = 40
+# Threshold for image-based search (PyAutoGUI locateOnScreen).
+# Value 0–100, will be divided by 100 when passed to PyAutoGUI.
+IMAGE_CONFIDENCE_THRESHOLD = 70
+
+# Threshold for OCR text detection (PyTesseract).
+# Value 0–100, used directly to filter low-confidence words.
+OCR_CONFIDENCE_THRESHOLD = 40
+
+# --- Behave Execution Configuration ---
+# If True, stop execution on the first failing scenario.
+# If False, continue executing all scenarios even if some fail.
+STOP_ON_FAILURE = False
 

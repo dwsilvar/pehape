@@ -11,9 +11,10 @@ class BehaveRunJson:
     Class responsible for taking the execution plan and executing the commands
     'behave' in the specified order and with the specified filters.
     """
-    def __init__(self, execution_plan: List[Dict[str, Any]], extra_args: str = ""):
+    def __init__(self, execution_plan: List[Dict[str, Any]], extra_args: str = "", stop_on_failure: bool = False):
         self.execution_plan = execution_plan
         self.extra_args = extra_args.split()
+        self.stop_on_failure = stop_on_failure
         self.modules_by_name = {
             module.get("module_name"): module for module in execution_plan
         }
@@ -47,6 +48,9 @@ class BehaveRunJson:
 
         behave_args = list(self.extra_args)
         behave_args.extend(["-f", "plain", "-o", "-"])
+        
+        if self.stop_on_failure:
+            behave_args.append("--stop")
         
         # Intentar usar Allure solo si la librería está disponible
         try:

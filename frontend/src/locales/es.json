@@ -40,12 +40,13 @@
         "move_error_invalid": "No se puede mover una carpeta dentro de sí misma o sus hijos",
         "sidebar": {
             "editor": "Editor",
-            "execution": "Orden de Ejecución",
             "maintenance": "Mantenimiento",
             "tasks": "Tareas",
+            "feature_editor": "Editor de Features",
             "ocr": "Imágenes OCR",
             "apps": "Apps en Ejecución",
             "reports": "Reportes",
+            "test_plan": "Diseñador de Planes",
             "feedback": "Reportar Error / Mejora"
         }
     },
@@ -56,10 +57,12 @@
         },
         "feature_editor": "Editor de Feature",
         "dirty_marker": "* (Sin guardar)",
+        "unsaved": "Sin guardar",
         "loading_file": "Cargando {{path}}...",
         "error_loading": "Error al cargar {{path}}.",
         "placeholder": "Seleccione un archivo del explorador para editar",
         "validate": "Validar",
+        "validate_unsaved_warning": "⚠ Estás validando una versión sin guardar de este archivo. Los resultados pueden no reflejar el último estado guardado.",
         "upload_ocr_image": "Subir Imagen OCR",
         "link_ocr_image": "Vincular Imagen OCR Existente",
         "add_to_validation": "Añadir a lista de validación",
@@ -188,7 +191,27 @@
             "refresh": "Actualizar",
             "openNewTab": "Abrir en Nueva Pestaña",
             "loading": "Verificando estado del reporte...",
-            "noReport": "No hay reporte disponible aún. Ejecute pruebas para generar un reporte."
+            "noReport": "No hay reporte disponible aún. Ejecute pruebas para generar un reporte.",
+            "tabGherkin": "Pruebas Gherkin",
+            "tabAllure": "Reporte Allure",
+            "summary": "Resumen de Ejecución",
+            "total": "Total",
+            "passed": "Exitosos",
+            "failed": "Fallidos",
+            "skipped": "Omitidos",
+            "broken": "Rotos",
+            "noResults": "No hay resultados de pruebas disponibles. Ejecute pruebas para ver los resultados aquí.",
+            "steps": "Pasos",
+            "duration": "Duración",
+            "tags": "Tags",
+            "status": "Estado",
+            "scenarios": "Escenarios",
+            "expandAll": "Expandir Todo",
+            "collapseAll": "Colapsar Todo",
+            "totalTime": "Tiempo Total",
+            "downloadGif": "Descargar GIF",
+            "downloadVideo": "Descargar Video",
+            "evidence": "Evidencia Visual"
         },
         "maintenance": {
             "title": "Mantenimiento del Sistema",
@@ -226,6 +249,58 @@
             "editFeature": "Editar Feature",
             "loading": "Cargando imágenes OCR...",
             "noImages": "No se encontraron imágenes OCR."
+        },
+        "testPlan": {
+            "title": "Diseñador de Planes de Prueba",
+            "subtitle": "Compone flujos de prueba arrastrando escenarios desde la biblioteca.",
+            "newPlan": "Nuevo Plan",
+            "newCycle": "Nuevo Ciclo",
+            "newFlow": "Nuevo Flujo",
+            "planName": "Nombre del Plan",
+            "cycleName": "Nombre del Ciclo",
+            "executePlan": "Ejecutar Plan Completo",
+            "executing": "Ejecutando...",
+            "executePlanTooltip": "Haz clic para lanzar la ejecución del orquestador",
+            "status": {
+                "draft": "Borrador",
+                "running": "Ejecutando",
+                "completed": "Completado"
+            },
+            "hierarchy": "Jerarquía del Plan",
+            "noPlans": "No hay planes creados aún. Crea tu primer plan de prueba.",
+            "noCycles": "Este plan no tiene ciclos. Agrega uno con el botón +.",
+            "canvas": {
+                "title": "Diseñador de Flujo",
+                "placeholder": "Arrastra escenarios aquí para construir un flujo de prueba",
+                "placeholderSub": "Los escenarios se ejecutarán de arriba a abajo",
+                "scenariosCount": "{{count}} escenario(s)",
+                "remove": "Quitar del flujo",
+                "moveUp": "Mover arriba",
+                "moveDown": "Mover abajo",
+                "selectCycle": "Selecciona un ciclo del panel izquierdo para ver su flujo"
+            },
+            "library": {
+                "title": "Biblioteca de Assets",
+                "search": "Buscar features o tags...",
+                "filterVersion": "Filtrar por tag",
+                "allVersions": "Todos los tags",
+                "noScenarios": "No se encontraron escenarios.",
+                "loading": "Cargando features...",
+                "dragHint": "Arrastra al canvas",
+                "steps": "Pasos:",
+                "noFeatures": "No se encontraron features."
+            },
+            "drawer": {
+                "title": "Logs de Ejecución",
+                "subtitle": "Salida en tiempo real del runner de pruebas"
+            },
+            "save": "Guardar Plan",
+            "saved": "✓ Plan guardado",
+            "deletePlan": "Eliminar Plan",
+            "deleteCycle": "Eliminar Ciclo",
+            "deleteFlow": "Eliminar Flujo",
+            "confirmDelete": "¿Eliminar \"{{name}}\"? Esta acción no se puede deshacer.",
+            "enterName": "Ingresa un nombre..."
         }
     }
 }
