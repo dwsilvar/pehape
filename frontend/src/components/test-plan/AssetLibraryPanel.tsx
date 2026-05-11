@@ -6,11 +6,11 @@ import {
 } from '@mui/material';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
-import InsertDriveFileRoundedIcon from '@mui/icons-material/InsertDriveFileRounded';
 import LibraryBooksRoundedIcon from '@mui/icons-material/LibraryBooksRounded';
 import { useTranslation } from 'react-i18next';
 import { FeatureWithScenarios } from '../../types';
 import ScenarioLibraryCard from './ScenarioLibraryCard';
+import { FeatureIcon } from '../PehapeIcons';
 
 interface AssetLibraryPanelProps {
   features: FeatureWithScenarios[];
@@ -186,7 +186,7 @@ const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({ features, isLoadi
                   '&:hover': { bgcolor: alpha(theme.palette.action.hover, 0.8) },
                 }}
               >
-                <InsertDriveFileRoundedIcon sx={{ fontSize: 14, color: 'primary.main', flexShrink: 0 }} />
+                <FeatureIcon size={15} color={theme.palette.primary.main} sx={{ flexShrink: 0 }} />
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography
                     variant="body2"

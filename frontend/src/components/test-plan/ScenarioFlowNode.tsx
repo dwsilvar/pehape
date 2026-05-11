@@ -49,6 +49,7 @@ import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { ScenarioRef } from '../../types';
+import { FeatureIndexIcon, ScenarioIcon } from '../PehapeIcons';
 import ScenarioDetailPanel from './ScenarioDetailPanel';
 
 // ── Schema v1.3 token constants ───────────────────────────────────────────────
@@ -204,16 +205,12 @@ const ScenarioFlowNode: React.FC<ScenarioFlowNodeProps> = ({
           ─────────────────────────────────────────────────────────────────── */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.5 }}>
 
-            {/* Sequence index badge */}
-            <Box sx={{
-              width: 20, height: 20, borderRadius: '50%',
-              bgcolor: isVersionConflict ? theme.palette.error.main : theme.palette.primary.main,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-            }}>
-              <Typography sx={{ fontSize: '0.6rem', fontWeight: 700, color: '#fff' }}>
-                {index + 1}
-              </Typography>
-            </Box>
+            {/* L4 FeatureIndexIcon — file_text_code with sequence number inside (brand-identity-v1) */}
+            <FeatureIndexIcon
+              size={28}
+              color={isVersionConflict ? theme.palette.error.main : theme.palette.primary.main}
+              label={index + 1}
+            />
 
             <Typography
               component="span"
@@ -245,25 +242,31 @@ const ScenarioFlowNode: React.FC<ScenarioFlowNodeProps> = ({
 
           <Divider sx={{ my: 1, borderColor: isDark ? '#1e293b' : '#f1f5f9' }} />
 
-          {/* ── BODY SECTION ─────────────────────────────────────────────────
+          {/* ── BODY SECTION ──────────────────────────────────────────────────
               Scenario: "{scenario_name}"
               color:#1E293B | font_weight:700 | font_size:14px | margin_top:4px
           ─────────────────────────────────────────────────────────────────── */}
-          <Typography
-            component="div"
-            sx={{
-              color: scenColor,
-              fontWeight: S.SCEN_WEIGHT,
-              fontSize: S.SCEN_SIZE,
-              fontFamily: S.FONT_FAMILY,
-              lineHeight: S.LINE_HEIGHT,
-              wordBreak: 'break-word',
-              mt: '4px',              // margin_top: 4px
-              mb: 1,
-            }}
-          >
-            Scenario: &ldquo;{scenario.scenarioName}&rdquo;
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.75, mt: '4px', mb: 1 }}>
+            {/* L5 Scenario icon — play_square, brand-identity-v1 */}
+            <ScenarioIcon
+              size={15}
+              color={scenColor}
+              sx={{ flexShrink: 0, mt: '1px', opacity: 0.8 }}
+            />
+            <Typography
+              component="div"
+              sx={{
+                color: scenColor,
+                fontWeight: S.SCEN_WEIGHT,
+                fontSize: S.SCEN_SIZE,
+                fontFamily: S.FONT_FAMILY,
+                lineHeight: S.LINE_HEIGHT,
+                wordBreak: 'break-word',
+              }}
+            >
+              Scenario: &ldquo;{scenario.scenarioName}&rdquo;
+            </Typography>
+          </Box>
 
           {/* ── FOOTER SECTION ───────────────────────────────────────────────
               tag_chips_container
