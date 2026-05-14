@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { Box, useTheme } from '@mui/material';
+import { Box, useTheme, Tabs, Tab } from '@mui/material';
 import {
   DndContext,
   DragEndEvent,
@@ -16,6 +16,7 @@ import { TestPlan, TestCycle, TestFlow, ScenarioRef, FeatureWithScenarios } from
 import PlanHeader from '../components/test-plan/PlanHeader';
 import PlanHierarchyPanel from '../components/test-plan/PlanHierarchyPanel';
 import FlowCanvas from '../components/test-plan/FlowCanvas';
+import ExecutionMonitor from '../components/test-plan/ExecutionMonitor';
 import AssetLibraryPanel from '../components/test-plan/AssetLibraryPanel';
 import ExecutionDrawer from '../components/test-plan/ExecutionDrawer';
 
@@ -45,6 +46,15 @@ const TestPlanPage: React.FC = () => {
   const [rightWidth, setRightWidth] = useState(RIGHT_WIDTH_DEFAULT);
   const theme = useTheme();
   const layoutRef = useRef<HTMLDivElement>(null);
+
+  // ── Center tab state ────────────────────────────────────────────────────────
+  const [centerTab, setCenterTab] = useState<'canvas' | 'monitor'>('canvas');
+
+  useEffect(() => {
+    if (isExecuting) {
+      setCenterTab('monitor');
+    }
+  }, [isExecuting]);
 
   // ── Derived ──────────────────────────────────────────────────────────────────
   const selectedPlan = plans.find(p => p.id === selectedPlanId) ?? null;
@@ -396,16 +406,50 @@ const TestPlanPage: React.FC = () => {
             }}
           />
 
-          {/* Center: Flow Canvas */}
+          {/* Center: Flow Canvas / Execution Monitor */}
           <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
-            <FlowCanvas
-              flow={selectedFlow}
-              noFlowSelected={!selectedFlowId}
-              onRemoveScenario={handleRemoveScenario}
-              onMoveUp={handleMoveUp}
-              onMoveDown={handleMoveDown}
-              onFlowNameChange={handleFlowNameChange}
-            />
+            {/* Center Header Tabs */}
+            <Box sx={{ borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper', px: 2 }}>
+              <Tabs
+                value={centerTab}
+                onChange={(e, v) => setCenterTab(v)}
+                sx={{ minHeight: 40 }}
+                TabIndicatorProps={{ sx: { height: 3, borderTopLeftRadius: 3, borderTopRightRadius: 3 } }}
+              >
+                <Tab
+                  label="Diseñador de Flujo"
+                  value="canvas"
+                  sx={{ minHeight: 40, py: 0, fontSize: '0.75rem', fontWeight: 600, textTransform: 'none' }}
+                />
+                <Tab
+                  label="Monitor de Ejecución"
+                  value="monitor"
+                  sx={{ minHeight: 40, py: 0, fontSize: '0.75rem', fontWeight: 600, textTransform: 'none' }}
+                />
+              </Tabs>
+            </Box>
+
+            {/* Center Content */}
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              {centerTab === 'canvas' && (
+                <FlowCanvas
+                  flow={selectedFlow}
+                  noFlowSelected={!selectedFlowId}
+                  onRemoveScenario={handleRemoveScenario}
+                  onMoveUp={handleMoveUp}
+                  onMoveDown={handleMoveDown}
+                  onFlowNameChange={handleFlowNameChange}
+                />
+              )}
+              {centerTab === 'monitor' && (
+                <ExecutionMonitor
+                  plans={plans}
+                  selectedPlanId={selectedPlanId}
+                  taskId={currentTaskId}
+                  isExecuting={isExecuting}
+                />
+              )}
+            </Box>
           </Box>
 
           {/* Right resize handle */}
