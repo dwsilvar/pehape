@@ -1,17 +1,13 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { Box, Paper, Tabs, Tab, MenuItem, Menu, IconButton, Typography, CircularProgress, useTheme, Badge, Button, alpha } from '@mui/material';
+import { Box, Paper, Tabs, Tab, IconButton, Typography, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import CodeIcon from '@mui/icons-material/Code';
-import TerminalIcon from '@mui/icons-material/Terminal';
-import CloseIcon from '@mui/icons-material/Close';
-import CheckIcon from '@mui/icons-material/Check';
 import AppToolbar from './AppToolbar';
 import FileExplorer from './FileExplorer';
 import { FeatureEditor } from './FeatureEditor';
 import StatusBar from './StatusBar';
 import ModulesComponent from './Modules';
-import ConsoleView from './ConsoleView';
 import { FileData, Module } from '../types';
 import { useExecutionOrder as useGlobalExecutionOrder } from '../hooks/useExecutionOrder';
 import { useLayout } from '../context/LayoutContext';
@@ -69,7 +65,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({
 
   const [editorContent, setEditorContent] = useState<string>('');
   const [isDirty, setIsDirty] = useState(false);
-  const [isModifiedByDrag, setIsModifiedByDrag] = useState(false);
   const [fontSize] = useState(14);
 
   // Global state from hook if not provided via props
@@ -216,23 +211,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({
     }
   }, [setModules, propsOnSaveModules]);
 
-  const [viewMenuAnchorEl, setViewMenuAnchorEl] = useState<null | HTMLElement>(null);
-  const [languageMenuAnchorEl, setLanguageMenuAnchorEl] = useState<null | HTMLElement>(null);
-
-  const [isReady, setIsReady] = useState(false);
-  useEffect(() => {
-    const timer = setTimeout(() => setIsReady(true), 100);
-    return () => clearTimeout(timer);
-  }, []);
-
-  const handleViewMenuClick = (event: React.MouseEvent<HTMLElement>) => {
-    setViewMenuAnchorEl(event.currentTarget);
-  };
-
-  const handleViewMenuClose = () => {
-    setViewMenuAnchorEl(null);
-  };
-
   const handleFileSelect = useCallback(async (path: string) => {
     const name = path.split('/').pop() || path;
     setInternalSelectedFile({ name, path, type: 'file' });
@@ -251,15 +229,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({
       setIsDirty(false);
     }
   }, [t]);
-
-  const handleLanguageMenuClose = () => {
-    setLanguageMenuAnchorEl(null);
-  };
-
-  const handleLanguageChange = (lng: string) => {
-    i18n.changeLanguage(lng);
-    handleLanguageMenuClose();
-  };
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);

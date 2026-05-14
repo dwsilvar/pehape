@@ -174,7 +174,7 @@ const HierarchyDiagram: React.FC = () => {
 
 interface ConceptCardProps {
   concept: (typeof CONCEPTS)[number];
-  conceptRef: React.RefObject<HTMLDivElement>;
+  conceptRef: React.RefObject<HTMLDivElement | null>;
 }
 
 const ConceptCard: React.FC<ConceptCardProps> = ({ concept, conceptRef }) => {

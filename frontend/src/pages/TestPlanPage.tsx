@@ -3,8 +3,6 @@ import { Box, useTheme } from '@mui/material';
 import {
   DndContext,
   DragEndEvent,
-  DragStartEvent,
-  DragOverlay,
   closestCorners,
   useSensor,
   useSensors,
