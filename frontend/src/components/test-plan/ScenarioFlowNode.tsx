@@ -1,41 +1,20 @@
 /**
- * ScenarioFlowNode — conforms to test-scenario-node-schema-v1 v1.3
+ * ScenarioFlowNode — v2.0
  *
- * visual_constraints:
- *   width: 450px (fixed), max-width: 600px, centered in sequence, padding: 16px
- *   border: 1px solid #E2E8F0, background: #FFFFFF, border-radius: 8px
- *   box-shadow: 0 1px 3px 0 rgba(0,0,0,0.1)
- *   NOTE: dashed hover removed — border_style is now "solid"
- *
- * typography:
- *   font_family: Inter, sans-serif
- *   text_wrapping: word-wrap, overflow: break-word, line_height: 1.5
- *
- * content_structure (ui_mapping):
- *   header_section → Feature: "{feature_name}"
- *     color:#64748B, font_weight:600, font_size:12px
- *   body_section   → Scenario: "{scenario_name}"
- *     color:#1E293B, font_weight:700, font_size:14px, margin_top:4px
- *   footer_section → tag_chips_container (max 5)
- *     chip: bg #F1F5F9, text #475569, border 1px solid #CBD5E1
- *
- * interactions:
- *   context_menu:
- *     trigger: right_click
- *     style: bg #FFFFFF, text #334155, shadow lg
- *     edit_scenario → disabled_with_tooltip (icon: edit_off, not_implemented)
- *     view_detail   → open_side_panel      (icon: visibility, active)
- *   detail_view_panel: right_overlay, width 500px, bg #F8FAFC
- *
- * interaction_feedback:
- *   - drag handle + sequence index on canvas presence
- *   - red outline if @v1 and @v2 mixed
+ * Layout: horizontal flex
+ *   LEFT sidebar (36px): drag | moveUp | moveDown | delete (con confirmación)
+ *   RIGHT content:
+ *     1. Scenario: icono + label "Scenario" + nombre (prominente)
+ *     2. Tags: chips de colores
+ *     3. Divider
+ *     4. Feature: icono + label "Feature" + nombre recortado (path completo en tooltip)
  */
 import React, { useState, useCallback } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
   Box, Typography, Chip, IconButton, Tooltip, Paper, alpha, useTheme, Divider,
+  Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Button,
   Menu, MenuItem, ListItemIcon, ListItemText,
 } from '@mui/material';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
@@ -48,41 +27,15 @@ import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { ScenarioRef } from '../../types';
-import { FeatureIndexIcon, ScenarioIcon } from '../PehapeIcons';
+import { FeatureIcon, ScenarioIcon } from '../PehapeIcons';
 import ScenarioDetailPanel from './ScenarioDetailPanel';
 
-// ── Schema v1.3 token constants ───────────────────────────────────────────────
-const S = {
-  // visual_constraints
-  WIDTH:          '450px',
-  MAX_WIDTH:      '600px',
-  PADDING:        '16px',
-  BORDER_COLOR:   '#E2E8F0',
-  BG:             '#FFFFFF',
-  BORDER_RADIUS:  '8px',
-  BOX_SHADOW:     '0 1px 3px 0 rgba(0,0,0,0.1)',
+// ── Constants ─────────────────────────────────────────────────────────────────
+const FONT_FAMILY = '"Inter", "Roboto", sans-serif';
+const WIDTH       = '450px';
+const MAX_WIDTH   = '600px';
 
-  // content: Feature label
-  FEAT_COLOR:     '#64748B',
-  FEAT_WEIGHT:    600,
-  FEAT_SIZE:      '12px',
-
-  // content: Scenario label
-  SCEN_COLOR:     '#1E293B',
-  SCEN_WEIGHT:    700,
-  SCEN_SIZE:      '14px',
-  SCEN_MT:        '4px',
-
-  // context_menu
-  MENU_BG:        '#FFFFFF',
-  MENU_TEXT:      '#334155',
-
-  // typography
-  FONT_FAMILY:    '"Inter", "Roboto", sans-serif',
-  LINE_HEIGHT:    1.5,
-} as const;
-
-// ── Tag color system (mismo que ScenarioLibraryCard) ─────────────────────────
+// ── Tag color system ──────────────────────────────────────────────────────────
 const TAG_COLORS = [
   '#6366f1', '#8b5cf6', '#ec4899', '#f43f5e',
   '#f97316', '#eab308', '#22c55e', '#14b8a6',
@@ -94,11 +47,13 @@ function tagColor(tag: string): string {
   return TAG_COLORS[Math.abs(hash) % TAG_COLORS.length];
 }
 
+// ── Types ─────────────────────────────────────────────────────────────────────
 interface ScenarioFlowNodeProps {
   scenario: ScenarioRef;
   index: number;
   total: number;
   hasMixedVersionTags?: boolean;
+  compact?: boolean;
   onRemove: (id: string) => void;
   onMoveUp: (id: string) => void;
   onMoveDown: (id: string) => void;
@@ -109,29 +64,35 @@ function detectMixedVersions(tags: string[]): boolean {
   return lower.includes('@v1') && lower.includes('@v2');
 }
 
+// ── Component ─────────────────────────────────────────────────────────────────
 const ScenarioFlowNode: React.FC<ScenarioFlowNodeProps> = ({
-  scenario, index, total, hasMixedVersionTags = false,
+  scenario, index, total, hasMixedVersionTags = false, compact = false,
   onRemove, onMoveUp, onMoveDown,
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
-
-  const [contextMenu, setContextMenu] = useState<{ mouseX: number; mouseY: number } | null>(null);
-  const [detailOpen, setDetailOpen] = useState(false);
   const navigate = useNavigate();
 
-  const handleContextMenu = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const [contextMenu, setContextMenu] = useState<{ mouseX: number; mouseY: number } | null>(null);
+  const [detailOpen, setDetailOpen]   = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [hovered, setHovered]         = useState(false);
+
+  const handleContextMenu  = useCallback((e: React.MouseEvent) => {
+    e.preventDefault(); e.stopPropagation();
     setContextMenu({ mouseX: e.clientX, mouseY: e.clientY });
   }, []);
-  const handleCloseMenu  = useCallback(() => setContextMenu(null), []);
-  const handleViewDetail = useCallback(() => { handleCloseMenu(); setDetailOpen(true); }, [handleCloseMenu]);
+  const handleCloseMenu    = useCallback(() => setContextMenu(null), []);
+  const handleViewDetail   = useCallback(() => { handleCloseMenu(); setDetailOpen(true); }, [handleCloseMenu]);
   const handleEditScenario = useCallback(() => {
     handleCloseMenu();
     navigate(`/feature-editor?file=${encodeURIComponent(scenario.featurePath)}`);
   }, [handleCloseMenu, navigate, scenario.featurePath]);
+
+  const handleDeleteClick   = () => setConfirmOpen(true);
+  const handleDeleteCancel  = () => setConfirmOpen(false);
+  const handleDeleteConfirm = () => { setConfirmOpen(false); onRemove(scenario.id); };
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: scenario.id,
@@ -146,139 +107,392 @@ const ScenarioFlowNode: React.FC<ScenarioFlowNodeProps> = ({
   };
 
   const isVersionConflict = hasMixedVersionTags || detectMixedVersions(scenario.tags);
-  const visibleTags   = scenario.tags.slice(0, 5);   // max_display: 5
+  const visibleTags   = scenario.tags.slice(0, 5);
   const extraTagCount = Math.max(0, scenario.tags.length - 5);
 
-  // Adaptive colors: use theme custom tokens
+  // ── Computed colors ──────────────────────────────────────────────────────────
   const cardBg      = theme.palette.custom.cardBg;
   const borderColor = isVersionConflict
     ? theme.palette.error.main
     : isDragging
       ? theme.palette.primary.main
       : theme.palette.custom.border;
-  const featColor   = theme.palette.text.secondary;
-  const scenColor   = theme.palette.text.primary;
-  // chipBg/chipText/chipBorder ahora son dinámicos por tag (ver tagColor())
+  const cardShadow  = isDark ? '0 4px 6px -1px rgba(0,0,0,0.5)' : '0 1px 3px 0 rgba(0,0,0,0.1)';
+  const sidebarBg   = isDark
+    ? alpha(theme.palette.common.white, 0.03)
+    : alpha(theme.palette.common.black, 0.025);
+  const sidebarBorder = isDark ? alpha(theme.palette.common.white, 0.07) : alpha(theme.palette.common.black, 0.06);
   const menuBg      = theme.palette.custom.bgSidebar;
   const menuText    = theme.palette.text.primary;
-  const cardShadow  = isDark ? '0 4px 6px -1px rgba(0, 0, 0, 0.5)' : S.BOX_SHADOW;
+
+  // Feature display name: filename only, full path in tooltip
+  const featureDisplayName = scenario.featureName || scenario.featurePath.split('/').pop() || scenario.featurePath;
+
+  // ── COMPACT ROW ─────────────────────────────────────────────────────────────
+  if (compact) {
+    return (
+      <>
+        <Box
+          ref={setNodeRef}
+          style={style}
+          onContextMenu={handleContextMenu}
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
+          sx={{ display: 'flex', justifyContent: 'center', mb: 0.5 }}
+        >
+          <Box
+            sx={{
+              width: WIDTH,
+              maxWidth: MAX_WIDTH,
+              borderRadius: '6px',
+              border: `1px solid ${isVersionConflict ? theme.palette.error.main : hovered ? theme.palette.primary.main : theme.palette.custom.border}`,
+              borderLeft: `3px solid ${isVersionConflict ? theme.palette.error.main : theme.palette.primary.main}`,
+              backgroundColor: hovered
+                ? (isDark ? alpha(theme.palette.primary.main, 0.08) : alpha(theme.palette.primary.main, 0.04))
+                : cardBg,
+              fontFamily: FONT_FAMILY,
+              overflow: 'hidden',
+              transition: 'all 0.18s ease',
+              boxShadow: isDragging ? '0 8px 24px rgba(0,0,0,0.18)' : 'none',
+              opacity: isDragging ? 0.4 : 1,
+            }}
+          >
+            {/* Main row */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, px: 1, py: 0.6, minHeight: 38 }}>
+              {/* Index badge */}
+              <Box
+                sx={{
+                  width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+                  bgcolor: alpha(theme.palette.primary.main, 0.15),
+                  border: `1px solid ${alpha(theme.palette.primary.main, 0.35)}`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <Typography sx={{ fontSize: '0.6rem', fontWeight: 800, color: 'primary.main', lineHeight: 1 }}>
+                  {index + 1}
+                </Typography>
+              </Box>
+
+              {/* Drag handle */}
+              <Box
+                {...listeners} {...attributes}
+                sx={{
+                  cursor: isDragging ? 'grabbing' : 'grab',
+                  color: isDark ? '#475569' : '#94a3b8',
+                  display: 'flex', alignItems: 'center', flexShrink: 0,
+                  '&:hover': { color: 'primary.main' },
+                }}
+              >
+                <DragIndicatorRoundedIcon sx={{ fontSize: 14 }} />
+              </Box>
+
+              {/* Scenario name */}
+              <Typography
+                sx={{
+                  flex: 1, minWidth: 0,
+                  fontSize: '0.82rem', fontWeight: 600,
+                  color: 'text.primary', fontFamily: FONT_FAMILY,
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}
+              >
+                {scenario.scenarioName}
+              </Typography>
+
+              {/* Tags (max 2 in compact) */}
+              <Box sx={{ display: 'flex', gap: 0.4, flexShrink: 0, alignItems: 'center' }}>
+                {scenario.tags.slice(0, 2).map(tag => {
+                  const tc = tagColor(tag);
+                  return (
+                    <Chip key={tag} label={tag} size="small"
+                      sx={{
+                        height: 16, fontSize: '0.58rem', fontWeight: 700,
+                        bgcolor: alpha(tc, 0.15), color: tc,
+                        border: `1px solid ${alpha(tc, 0.35)}`,
+                        borderRadius: '3px', '& .MuiChip-label': { px: 0.5 },
+                      }}
+                    />
+                  );
+                })}
+                {scenario.tags.length > 2 && (
+                  <Typography sx={{ fontSize: '0.58rem', color: 'text.disabled', fontWeight: 600 }}>
+                    +{scenario.tags.length - 2}
+                  </Typography>
+                )}
+              </Box>
+
+              {/* Version conflict */}
+              {isVersionConflict && (
+                <Tooltip title="Conflicto de versión" arrow>
+                  <WarningAmberRoundedIcon sx={{ fontSize: 13, color: 'error.main', flexShrink: 0 }} />
+                </Tooltip>
+              )}
+
+              {/* Controls */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0, flexShrink: 0, ml: 0.5 }}>
+                <Tooltip title={t('pages.testPlan.canvas.moveUp')} placement="top">
+                  <span>
+                    <IconButton size="small" disabled={index === 0} onClick={() => onMoveUp(scenario.id)} sx={{ p: 0.2 }}>
+                      <KeyboardArrowUpRoundedIcon sx={{ fontSize: 13 }} />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+                <Tooltip title={t('pages.testPlan.canvas.moveDown')} placement="top">
+                  <span>
+                    <IconButton size="small" disabled={index === total - 1} onClick={() => onMoveDown(scenario.id)} sx={{ p: 0.2 }}>
+                      <KeyboardArrowDownRoundedIcon sx={{ fontSize: 13 }} />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+                <Tooltip title={t('pages.testPlan.canvas.remove')} placement="top">
+                  <IconButton
+                    size="small"
+                    onClick={handleDeleteClick}
+                    sx={{ p: 0.2, color: 'text.disabled', '&:hover': { color: 'error.main' } }}
+                  >
+                    <DeleteOutlineRoundedIcon sx={{ fontSize: 13 }} />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+            </Box>
+
+            {/* Hover-revealed Feature row */}
+            <Box
+              sx={{
+                maxHeight: hovered ? '40px' : '0px',
+                overflow: 'hidden',
+                transition: 'max-height 0.2s ease',
+                borderTop: hovered ? `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}` : 'none',
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.75, px: 1.5, py: 0.5 }}>
+                <FeatureIcon size={11} color={theme.palette.text.disabled} sx={{ flexShrink: 0, mt: '1px' }} />
+                <Typography
+                  component="span"
+                  sx={{ fontSize: '0.68rem', fontWeight: 700, color: 'text.secondary', fontFamily: FONT_FAMILY, flexShrink: 0 }}
+                >
+                  {featureDisplayName}
+                </Typography>
+                <Typography
+                  component="span"
+                  sx={{ fontSize: '0.65rem', fontStyle: 'italic', color: 'text.disabled', fontFamily: FONT_FAMILY, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                >
+                  {scenario.featurePath}
+                </Typography>
+              </Box>
+            </Box>
+          </Box>
+        </Box>
+
+        {/* Context menu & dialogs shared with expanded mode */}
+        <Menu
+          open={contextMenu !== null}
+          onClose={handleCloseMenu}
+          anchorReference="anchorPosition"
+          anchorPosition={contextMenu !== null ? { top: contextMenu.mouseY, left: contextMenu.mouseX } : undefined}
+          slotProps={{ paper: { elevation: 8, sx: { minWidth: 210, borderRadius: '8px', border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, bgcolor: menuBg } } }}
+        >
+          <MenuItem onClick={handleEditScenario}>
+            <ListItemIcon><EditRoundedIcon sx={{ fontSize: 16, color: 'primary.main' }} /></ListItemIcon>
+            <ListItemText primary="Editar Scenario" primaryTypographyProps={{ fontSize: '0.82rem', fontWeight: 600, fontFamily: FONT_FAMILY }} />
+          </MenuItem>
+          <Divider sx={{ my: 0.25 }} />
+          <MenuItem onClick={handleViewDetail}>
+            <ListItemIcon><VisibilityRoundedIcon sx={{ fontSize: 16, color: 'primary.main' }} /></ListItemIcon>
+            <ListItemText primary="Ver Detalle" primaryTypographyProps={{ fontSize: '0.82rem', fontWeight: 600, fontFamily: FONT_FAMILY }} />
+          </MenuItem>
+        </Menu>
+
+        <Dialog open={confirmOpen} onClose={handleDeleteCancel} maxWidth="xs" fullWidth
+          slotProps={{ paper: { sx: { borderRadius: '12px', border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, bgcolor: menuBg } } }}
+        >
+          <DialogTitle sx={{ fontSize: '0.95rem', fontWeight: 700, fontFamily: FONT_FAMILY, pb: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <DeleteOutlineRoundedIcon sx={{ fontSize: 18, color: 'error.main' }} />
+              Quitar del flujo
+            </Box>
+          </DialogTitle>
+          <DialogContent sx={{ pb: 1.5 }}>
+            <DialogContentText sx={{ fontSize: '0.85rem', fontFamily: FONT_FAMILY, color: 'text.secondary' }}>
+              ¿Quitar <strong style={{ color: theme.palette.text.primary }}>{scenario.scenarioName}</strong> del flujo?
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions sx={{ px: 2.5, pb: 2, gap: 1 }}>
+            <Button onClick={handleDeleteCancel} size="small" variant="outlined" sx={{ borderRadius: '6px', fontFamily: FONT_FAMILY, fontSize: '0.8rem', textTransform: 'none' }}>Cancelar</Button>
+            <Button onClick={handleDeleteConfirm} size="small" variant="contained" color="error" sx={{ borderRadius: '6px', fontFamily: FONT_FAMILY, fontSize: '0.8rem', textTransform: 'none' }}>Quitar</Button>
+          </DialogActions>
+        </Dialog>
+
+        <ScenarioDetailPanel scenario={scenario} open={detailOpen} onClose={() => setDetailOpen(false)} />
+      </>
+    );
+  }
 
   return (
     <>
+      {/* ── CARD ────────────────────────────────────────────────────────────── */}
       <Box
         ref={setNodeRef}
         style={style}
         onContextMenu={handleContextMenu}
-        sx={{
-          display: 'flex',
-          justifyContent: 'center',   // alignment: centered_in_sequence
-          mb: 0,                       // spacing owned by FlowConnector
-        }}
+        sx={{ display: 'flex', justifyContent: 'center', mb: 0 }}
       >
         <Paper
           elevation={0}
           sx={{
-            // ── visual_constraints ──────────────────────────────────────────
-            width: S.WIDTH,
-            maxWidth: S.MAX_WIDTH,
-            padding: S.PADDING,
-            borderRadius: S.BORDER_RADIUS,
-            border: `1px solid ${borderColor}`,  // border_style: solid, border_width: 1px
+            width: WIDTH,
+            maxWidth: MAX_WIDTH,
+            borderRadius: '8px',
+            border: `1px solid ${borderColor}`,
             backgroundColor: cardBg,
             boxShadow: isDragging
-              ? `0 8px 24px rgba(0,0,0,0.18)`
+              ? '0 8px 24px rgba(0,0,0,0.18)'
               : isVersionConflict
                 ? `0 0 0 2px ${alpha(theme.palette.error.main, 0.25)}, ${cardShadow}`
                 : cardShadow,
-            // ── typography ──────────────────────────────────────────────────
-            fontFamily: S.FONT_FAMILY,
-            lineHeight: S.LINE_HEIGHT,
-            wordBreak: 'break-word',    // overflow_behavior: break-word
-            overflowWrap: 'word-wrap',  // text_wrapping
+            fontFamily: FONT_FAMILY,
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'row',
             transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
-            cursor: 'context-menu',
             '&:hover': {
               boxShadow: isDragging ? undefined : `0 4px 12px rgba(0,0,0,0.12), ${cardShadow}`,
               borderColor: isVersionConflict ? theme.palette.error.main : theme.palette.primary.main,
             },
           }}
         >
-          {/* ── HEADER SECTION ───────────────────────────────────────────────
-              Feature: "{feature_name}"
-              color:#64748B | font_weight:600 | font_size:12px
-          ─────────────────────────────────────────────────────────────────── */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.5 }}>
-
-            {/* L4 FeatureIndexIcon — file_text_code with sequence number inside (brand-identity-v1) */}
-            <FeatureIndexIcon
-              size={28}
-              color={isVersionConflict ? theme.palette.error.main : theme.palette.primary.main}
-              label={index + 1}
-            />
-
-            <Typography
-              component="span"
-              sx={{
-                flex: 1,
-                color: featColor,
-                fontWeight: S.FEAT_WEIGHT,
-                fontSize: S.FEAT_SIZE,
-                fontFamily: S.FONT_FAMILY,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              Feature: &ldquo;{scenario.featureName || scenario.featurePath.split('/').pop()}&rdquo;
-            </Typography>
-
-            {isVersionConflict && (
-              <Tooltip title="Conflicto de versión: @v1 y @v2 mezclados en el mismo flujo" arrow>
-                <WarningAmberRoundedIcon sx={{ fontSize: 15, color: theme.palette.error.main, flexShrink: 0 }} />
+          {/* ── LEFT SIDEBAR: controls ───────────────────────────────────────── */}
+          <Box
+            sx={{
+              width: 34,
+              flexShrink: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              py: 1,
+              bgcolor: sidebarBg,
+              borderRight: `1px solid ${sidebarBorder}`,
+            }}
+          >
+            {/* Top group: drag + move up + move down */}
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.25 }}>
+              {/* 1. Drag handle */}
+              <Tooltip title="Arrastrar" placement="left">
+                <Box
+                  {...listeners}
+                  {...attributes}
+                  sx={{
+                    cursor: isDragging ? 'grabbing' : 'grab',
+                    color: isDark ? '#475569' : '#94a3b8',
+                    display: 'flex',
+                    alignItems: 'center',
+                    borderRadius: '4px',
+                    p: 0.25,
+                    '&:hover': { color: theme.palette.primary.main, bgcolor: alpha(theme.palette.primary.main, 0.08) },
+                  }}
+                >
+                  <DragIndicatorRoundedIcon sx={{ fontSize: 16 }} />
+                </Box>
               </Tooltip>
-            )}
 
-            {/* Drag handle */}
-            <Box {...listeners} {...attributes} sx={{ cursor: isDragging ? 'grabbing' : 'grab', color: isDark ? '#475569' : '#cbd5e1', display: 'flex', alignItems: 'center', flexShrink: 0, '&:hover': { color: isDark ? '#94a3b8' : '#94a3b8' } }}>
-              <DragIndicatorRoundedIcon sx={{ fontSize: 16 }} />
+              {/* 2. Move up */}
+              <Tooltip title={t('pages.testPlan.canvas.moveUp')} placement="left">
+                <span>
+                  <IconButton
+                    size="small"
+                    disabled={index === 0}
+                    onClick={() => onMoveUp(scenario.id)}
+                    sx={{ p: 0.25, borderRadius: '4px' }}
+                  >
+                    <KeyboardArrowUpRoundedIcon sx={{ fontSize: 15 }} />
+                  </IconButton>
+                </span>
+              </Tooltip>
+
+              {/* 3. Move down */}
+              <Tooltip title={t('pages.testPlan.canvas.moveDown')} placement="left">
+                <span>
+                  <IconButton
+                    size="small"
+                    disabled={index === total - 1}
+                    onClick={() => onMoveDown(scenario.id)}
+                    sx={{ p: 0.25, borderRadius: '4px' }}
+                  >
+                    <KeyboardArrowDownRoundedIcon sx={{ fontSize: 15 }} />
+                  </IconButton>
+                </span>
+              </Tooltip>
             </Box>
+
+            {/* Bottom: delete */}
+            <Tooltip title={t('pages.testPlan.canvas.remove')} placement="left">
+              <IconButton
+                size="small"
+                onClick={handleDeleteClick}
+                sx={{
+                  p: 0.25,
+                  borderRadius: '4px',
+                  color: 'text.disabled',
+                  '&:hover': { color: 'error.main', bgcolor: alpha(theme.palette.error.main, 0.08) },
+                }}
+              >
+                <DeleteOutlineRoundedIcon sx={{ fontSize: 15 }} />
+              </IconButton>
+            </Tooltip>
           </Box>
 
-          <Divider sx={{ my: 1, borderColor: isDark ? '#1e293b' : '#f1f5f9' }} />
+          {/* ── RIGHT CONTENT AREA ───────────────────────────────────────────── */}
+          <Box sx={{ flex: 1, minWidth: 0, p: '12px 14px', display: 'flex', flexDirection: 'column', gap: 0.75 }}>
 
-          {/* ── BODY SECTION ──────────────────────────────────────────────────
-              Scenario: "{scenario_name}"
-              color:#1E293B | font_weight:700 | font_size:14px | margin_top:4px
-          ─────────────────────────────────────────────────────────────────── */}
-          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.75, mt: '4px', mb: 1 }}>
-            {/* L5 Scenario icon — play_square, brand-identity-v1 */}
-            <ScenarioIcon
-              size={15}
-              color={scenColor}
-              sx={{ flexShrink: 0, mt: '1px', opacity: 0.8 }}
-            />
-            <Typography
-              component="div"
-              sx={{
-                color: scenColor,
-                fontWeight: S.SCEN_WEIGHT,
-                fontSize: S.SCEN_SIZE,
-                fontFamily: S.FONT_FAMILY,
-                lineHeight: S.LINE_HEIGHT,
-                wordBreak: 'break-word',
-              }}
-            >
-              Scenario: &ldquo;{scenario.scenarioName}&rdquo;
-            </Typography>
-          </Box>
+            {/* 1. SCENARIO — prominente ───────────────────────────────────── */}
+            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.75 }}>
+              <ScenarioIcon
+                size={15}
+                color={theme.palette.primary.main}
+                sx={{ flexShrink: 0, mt: '2px' }}
+              />
+              <Box sx={{ minWidth: 0, flex: 1 }}>
+                <Typography
+                  component="span"
+                  sx={{
+                    fontSize: '0.68rem',
+                    fontWeight: 600,
+                    color: theme.palette.primary.main,
+                    fontFamily: FONT_FAMILY,
+                    letterSpacing: 0.4,
+                    textTransform: 'uppercase',
+                    display: 'block',
+                    lineHeight: 1.2,
+                    mb: 0.25,
+                  }}
+                >
+                  Scenario
+                </Typography>
+                <Typography
+                  component="div"
+                  sx={{
+                    fontSize: '0.93rem',
+                    fontWeight: 700,
+                    color: 'text.primary',
+                    fontFamily: FONT_FAMILY,
+                    lineHeight: 1.45,
+                    wordBreak: 'break-word',
+                  }}
+                >
+                  {scenario.scenarioName}
+                </Typography>
+              </Box>
 
-          {/* ── FOOTER SECTION ───────────────────────────────────────────────
-              tag_chips_container
-              chip: bg #F1F5F9, text #475569, border 1px solid #CBD5E1, max_display:5
-          ─────────────────────────────────────────────────────────────────── */}
-          {scenario.tags.length > 0 && (
-            <>
-              <Divider sx={{ mb: 0.75, borderColor: isDark ? '#1e293b' : '#f1f5f9' }} />
+              {/* Version conflict warning */}
+              {isVersionConflict && (
+                <Tooltip title="Conflicto de versión: @v1 y @v2 mezclados en el mismo flujo" arrow>
+                  <WarningAmberRoundedIcon sx={{ fontSize: 15, color: theme.palette.error.main, flexShrink: 0, mt: '2px' }} />
+                </Tooltip>
+              )}
+            </Box>
+
+            {/* 2. TAGS ───────────────────────────────────────────────────── */}
+            {scenario.tags.length > 0 && (
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, alignItems: 'center' }}>
                 {visibleTags.map(tag => {
                   const tc = tagColor(tag);
@@ -289,12 +503,12 @@ const ScenarioFlowNode: React.FC<ScenarioFlowNodeProps> = ({
                       size="small"
                       sx={{
                         height: 20,
-                        fontSize: '0.65rem',
+                        fontSize: '0.63rem',
                         fontWeight: 700,
                         bgcolor: alpha(tc, 0.15),
                         color: tc,
                         border: `1px solid ${alpha(tc, 0.35)}`,
-                        fontFamily: S.FONT_FAMILY,
+                        fontFamily: FONT_FAMILY,
                         borderRadius: '4px',
                         '& .MuiChip-label': { px: 0.75 },
                       }}
@@ -309,11 +523,11 @@ const ScenarioFlowNode: React.FC<ScenarioFlowNodeProps> = ({
                       variant="outlined"
                       sx={{
                         height: 20,
-                        fontSize: '0.62rem',
+                        fontSize: '0.6rem',
                         fontWeight: 600,
                         color: 'text.secondary',
                         borderColor: 'divider',
-                        fontFamily: S.FONT_FAMILY,
+                        fontFamily: FONT_FAMILY,
                         borderRadius: '4px',
                         '& .MuiChip-label': { px: 0.75 },
                       }}
@@ -321,39 +535,60 @@ const ScenarioFlowNode: React.FC<ScenarioFlowNodeProps> = ({
                   </Tooltip>
                 )}
               </Box>
-            </>
-          )}
+            )}
 
-          {/* ── Actions row ────────────────────────────────────────────────── */}
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.25, mt: 1, pt: 0.5, borderTop: `1px solid ${isDark ? '#1e293b' : '#f1f5f9'}` }}>
-            <Tooltip title={t('pages.testPlan.canvas.moveUp')}>
-              <span>
-                <IconButton size="small" disabled={index === 0} onClick={() => onMoveUp(scenario.id)} sx={{ p: 0.3 }}>
-                  <KeyboardArrowUpRoundedIcon sx={{ fontSize: 15 }} />
-                </IconButton>
-              </span>
-            </Tooltip>
-            <Tooltip title={t('pages.testPlan.canvas.moveDown')}>
-              <span>
-                <IconButton size="small" disabled={index === total - 1} onClick={() => onMoveDown(scenario.id)} sx={{ p: 0.3 }}>
-                  <KeyboardArrowDownRoundedIcon sx={{ fontSize: 15 }} />
-                </IconButton>
-              </span>
-            </Tooltip>
-            <Tooltip title={t('pages.testPlan.canvas.remove')}>
-              <IconButton size="small" onClick={() => onRemove(scenario.id)} sx={{ p: 0.3, color: 'error.main' }}>
-                <DeleteOutlineRoundedIcon sx={{ fontSize: 15 }} />
-              </IconButton>
+            {/* 3. FEATURE — secundario ────────────────────────────────────── */}
+            <Divider sx={{ borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }} />
+
+            <Tooltip
+              title={scenario.featurePath}
+              placement="bottom-start"
+              enterDelay={500}
+              arrow
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, cursor: 'default' }}>
+                <FeatureIcon
+                  size={13}
+                  color={theme.palette.text.disabled}
+                  sx={{ flexShrink: 0 }}
+                />
+                <Typography
+                  component="span"
+                  sx={{
+                    fontSize: '0.63rem',
+                    fontWeight: 600,
+                    color: 'text.disabled',
+                    fontFamily: FONT_FAMILY,
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.4,
+                    flexShrink: 0,
+                  }}
+                >
+                  Feature
+                </Typography>
+                <Typography
+                  component="span"
+                  sx={{
+                    fontSize: '0.75rem',
+                    fontWeight: 500,
+                    color: 'text.secondary',
+                    fontFamily: FONT_FAMILY,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    flex: 1,
+                    minWidth: 0,
+                  }}
+                >
+                  {featureDisplayName}
+                </Typography>
+              </Box>
             </Tooltip>
           </Box>
         </Paper>
       </Box>
 
-      {/* ── CONTEXT MENU — trigger: right_click ──────────────────────────────
-          style: bg #FFFFFF, text_color #334155, shadow lg
-          edit_scenario  → disabled_with_tooltip (icon: edit_off, not_implemented)
-          view_detail    → open_side_panel        (icon: visibility,  active)
-      ─────────────────────────────────────────────────────────────────────── */}
+      {/* ── CONTEXT MENU ────────────────────────────────────────────────────── */}
       <Menu
         open={contextMenu !== null}
         onClose={handleCloseMenu}
@@ -361,7 +596,7 @@ const ScenarioFlowNode: React.FC<ScenarioFlowNodeProps> = ({
         anchorPosition={contextMenu !== null ? { top: contextMenu.mouseY, left: contextMenu.mouseX } : undefined}
         slotProps={{
           paper: {
-            elevation: 8,   // shadow: lg
+            elevation: 8,
             sx: {
               minWidth: 210,
               borderRadius: '8px',
@@ -369,36 +604,88 @@ const ScenarioFlowNode: React.FC<ScenarioFlowNodeProps> = ({
               bgcolor: menuBg,
               color: menuText,
               '& .MuiMenuItem-root': {
-                py: 0.85,
-                px: 1.5,
+                py: 0.85, px: 1.5,
                 fontSize: '0.82rem',
                 color: menuText,
-                fontFamily: S.FONT_FAMILY,
+                fontFamily: FONT_FAMILY,
               },
             },
           },
         }}
       >
-        {/* edit_scenario — active, icon: edit */}
         <MenuItem id="ctx-edit-scenario" onClick={handleEditScenario}>
           <ListItemIcon>
             <EditRoundedIcon sx={{ fontSize: 16, color: theme.palette.primary.main }} />
           </ListItemIcon>
-          <ListItemText primary="Editar Scenario" primaryTypographyProps={{ fontSize: '0.82rem', fontWeight: 600, fontFamily: S.FONT_FAMILY, color: menuText }} />
+          <ListItemText
+            primary="Editar Scenario"
+            primaryTypographyProps={{ fontSize: '0.82rem', fontWeight: 600, fontFamily: FONT_FAMILY, color: menuText }}
+          />
         </MenuItem>
 
         <Divider sx={{ my: 0.25, borderColor: isDark ? '#1e293b' : '#f1f5f9' }} />
 
-        {/* view_detail — active, icon: visibility */}
         <MenuItem id="ctx-view-detail" onClick={handleViewDetail}>
           <ListItemIcon>
             <VisibilityRoundedIcon sx={{ fontSize: 16, color: theme.palette.primary.main }} />
           </ListItemIcon>
-          <ListItemText primary="Ver Detalle" primaryTypographyProps={{ fontSize: '0.82rem', fontWeight: 600, fontFamily: S.FONT_FAMILY, color: menuText }} />
+          <ListItemText
+            primary="Ver Detalle"
+            primaryTypographyProps={{ fontSize: '0.82rem', fontWeight: 600, fontFamily: FONT_FAMILY, color: menuText }}
+          />
         </MenuItem>
       </Menu>
 
-      {/* ── DETAIL VIEW PANEL — right_overlay, 500px, bg #F8FAFC ──────────── */}
+      {/* ── DELETE CONFIRMATION DIALOG ───────────────────────────────────────── */}
+      <Dialog
+        open={confirmOpen}
+        onClose={handleDeleteCancel}
+        maxWidth="xs"
+        fullWidth
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: '12px',
+              border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`,
+              bgcolor: menuBg,
+            },
+          },
+        }}
+      >
+        <DialogTitle sx={{ fontSize: '0.95rem', fontWeight: 700, fontFamily: FONT_FAMILY, pb: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <DeleteOutlineRoundedIcon sx={{ fontSize: 18, color: 'error.main' }} />
+            Quitar del flujo
+          </Box>
+        </DialogTitle>
+        <DialogContent sx={{ pb: 1.5 }}>
+          <DialogContentText sx={{ fontSize: '0.85rem', fontFamily: FONT_FAMILY, color: 'text.secondary' }}>
+            ¿Quitar <strong style={{ color: theme.palette.text.primary }}>{scenario.scenarioName}</strong> del flujo?
+            Esta acción no elimina el scenario del archivo feature.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ px: 2.5, pb: 2, gap: 1 }}>
+          <Button
+            onClick={handleDeleteCancel}
+            size="small"
+            variant="outlined"
+            sx={{ borderRadius: '6px', fontFamily: FONT_FAMILY, fontSize: '0.8rem', textTransform: 'none' }}
+          >
+            Cancelar
+          </Button>
+          <Button
+            onClick={handleDeleteConfirm}
+            size="small"
+            variant="contained"
+            color="error"
+            sx={{ borderRadius: '6px', fontFamily: FONT_FAMILY, fontSize: '0.8rem', textTransform: 'none' }}
+          >
+            Quitar
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ── DETAIL VIEW PANEL ───────────────────────────────────────────────── */}
       <ScenarioDetailPanel
         scenario={scenario}
         open={detailOpen}
