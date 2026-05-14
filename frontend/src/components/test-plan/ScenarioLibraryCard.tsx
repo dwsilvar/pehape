@@ -77,7 +77,32 @@ const ScenarioLibraryCard: React.FC<ScenarioLibraryCardProps> = ({
   );
 
   return (
-    <Tooltip title={tooltipContent} placement="left" arrow enterDelay={400}>
+    <Tooltip
+      title={tooltipContent}
+      placement="left"
+      arrow
+      enterDelay={400}
+      slotProps={{
+        tooltip: {
+          sx: {
+            bgcolor: 'background.paper',
+            color: 'text.primary',
+            border: '1px solid',
+            borderColor: 'divider',
+            boxShadow: theme.shadows[4],
+            borderRadius: '8px',
+            p: 1.25,
+            '& .MuiTooltip-arrow': {
+              color: 'background.paper',
+              '&::before': {
+                border: '1px solid',
+                borderColor: 'divider',
+              },
+            },
+          },
+        },
+      }}
+    >
       <Paper
         ref={setNodeRef}
         style={style}

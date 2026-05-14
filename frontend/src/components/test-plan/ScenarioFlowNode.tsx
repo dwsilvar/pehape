@@ -74,11 +74,6 @@ const S = {
   SCEN_SIZE:      '14px',
   SCEN_MT:        '4px',
 
-  // content: chip_group
-  CHIP_BG:        '#F1F5F9',
-  CHIP_TEXT:      '#475569',
-  CHIP_BORDER:    '#CBD5E1',
-
   // context_menu
   MENU_BG:        '#FFFFFF',
   MENU_TEXT:      '#334155',
@@ -87,6 +82,18 @@ const S = {
   FONT_FAMILY:    '"Inter", "Roboto", sans-serif',
   LINE_HEIGHT:    1.5,
 } as const;
+
+// ── Tag color system (mismo que ScenarioLibraryCard) ─────────────────────────
+const TAG_COLORS = [
+  '#6366f1', '#8b5cf6', '#ec4899', '#f43f5e',
+  '#f97316', '#eab308', '#22c55e', '#14b8a6',
+  '#06b6d4', '#3b82f6',
+];
+function tagColor(tag: string): string {
+  let hash = 0;
+  for (let i = 0; i < tag.length; i++) hash = tag.charCodeAt(i) + ((hash << 5) - hash);
+  return TAG_COLORS[Math.abs(hash) % TAG_COLORS.length];
+}
 
 interface ScenarioFlowNodeProps {
   scenario: ScenarioRef;
@@ -152,9 +159,7 @@ const ScenarioFlowNode: React.FC<ScenarioFlowNodeProps> = ({
       : theme.palette.custom.border;
   const featColor   = theme.palette.text.secondary;
   const scenColor   = theme.palette.text.primary;
-  const chipBg      = isDark ? alpha(theme.palette.custom.border, 0.5) : S.CHIP_BG;
-  const chipText    = theme.palette.text.secondary;
-  const chipBorder  = theme.palette.custom.border;
+  // chipBg/chipText/chipBorder ahora son dinámicos por tag (ver tagColor())
   const menuBg      = theme.palette.custom.bgSidebar;
   const menuText    = theme.palette.text.primary;
   const cardShadow  = isDark ? '0 4px 6px -1px rgba(0, 0, 0, 0.5)' : S.BOX_SHADOW;
@@ -276,24 +281,27 @@ const ScenarioFlowNode: React.FC<ScenarioFlowNodeProps> = ({
             <>
               <Divider sx={{ mb: 0.75, borderColor: isDark ? '#1e293b' : '#f1f5f9' }} />
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, alignItems: 'center' }}>
-                {visibleTags.map(tag => (
-                  <Chip
-                    key={tag}
-                    label={tag}
-                    size="small"
-                    sx={{
-                      height: 20,
-                      fontSize: '0.65rem',
-                      fontWeight: 500,
-                      bgcolor: chipBg,
-                      color: chipText,
-                      border: `1px solid ${chipBorder}`,
-                      fontFamily: S.FONT_FAMILY,
-                      borderRadius: '4px',
-                      '& .MuiChip-label': { px: 0.75 },
-                    }}
-                  />
-                ))}
+                {visibleTags.map(tag => {
+                  const tc = tagColor(tag);
+                  return (
+                    <Chip
+                      key={tag}
+                      label={tag}
+                      size="small"
+                      sx={{
+                        height: 20,
+                        fontSize: '0.65rem',
+                        fontWeight: 700,
+                        bgcolor: alpha(tc, 0.15),
+                        color: tc,
+                        border: `1px solid ${alpha(tc, 0.35)}`,
+                        fontFamily: S.FONT_FAMILY,
+                        borderRadius: '4px',
+                        '& .MuiChip-label': { px: 0.75 },
+                      }}
+                    />
+                  );
+                })}
                 {extraTagCount > 0 && (
                   <Tooltip title={scenario.tags.slice(5).join(' · ')} arrow placement="top">
                     <Chip
@@ -304,8 +312,8 @@ const ScenarioFlowNode: React.FC<ScenarioFlowNodeProps> = ({
                         height: 20,
                         fontSize: '0.62rem',
                         fontWeight: 600,
-                        color: chipText,
-                        borderColor: chipBorder,
+                        color: 'text.secondary',
+                        borderColor: 'divider',
                         fontFamily: S.FONT_FAMILY,
                         borderRadius: '4px',
                         '& .MuiChip-label': { px: 0.75 },

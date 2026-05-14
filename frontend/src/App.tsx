@@ -13,6 +13,7 @@ import RunningAppsPage from './pages/RunningAppsPage';
 import ReportsPage from './pages/ReportsPage';
 import FeatureEditorPage from './pages/FeatureEditorPage';
 import TestPlanPage from './pages/TestPlanPage';
+import ConceptsGuidePage from './pages/ConceptsGuidePage';
 import { useExecutionOrder } from './hooks/useExecutionOrder';
 
 import { LayoutProvider, useLayout } from './context/LayoutContext';
@@ -207,6 +208,7 @@ const AppLayout: React.FC = () => {
             <Route path="/running-apps" element={<RunningAppsPage />} />
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/feature-editor" element={<FeatureEditorPage />} />
+            <Route path="/guide" element={<ConceptsGuidePage />} />
           </Routes>
         </Box>
       </Box>

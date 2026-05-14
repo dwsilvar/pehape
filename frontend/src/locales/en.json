@@ -45,6 +45,7 @@
             "apps": "Running Apps",
             "reports": "Reports",
             "test_plan": "Test Plan Designer",
+            "guide": "Concepts Guide",
             "feedback": "Report Bug / Improvement"
         }
     },
