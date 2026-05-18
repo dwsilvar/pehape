@@ -1,5 +1,8 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { Box, useTheme, Tabs, Tab } from '@mui/material';
+import { Box, useTheme, Tabs, Tab, Tooltip, IconButton } from '@mui/material';
+import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded';
+import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
+import LibraryBooksRoundedIcon from '@mui/icons-material/LibraryBooksRounded';
 import {
   DndContext,
   DragEndEvent,
@@ -36,6 +39,7 @@ const TestPlanPage: React.FC = () => {
   const [isExecuting, setIsExecuting] = useState(false);
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
   const [executionStatus, setExecutionStatus] = useState<string>('idle');
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
   // ── Library state ───────────────────────────────────────────────────────────
   const [features, setFeatures] = useState<FeatureWithScenarios[]>([]);
@@ -44,6 +48,7 @@ const TestPlanPage: React.FC = () => {
   // ── Resize state ────────────────────────────────────────────────────────────
   const [leftWidth, setLeftWidth] = useState(LEFT_WIDTH_DEFAULT);
   const [rightWidth, setRightWidth] = useState(RIGHT_WIDTH_DEFAULT);
+  const [libraryVisible, setLibraryVisible] = useState(true);
   const theme = useTheme();
   const layoutRef = useRef<HTMLDivElement>(null);
 
@@ -295,6 +300,10 @@ const TestPlanPage: React.FC = () => {
     }
   }, [selectedPlanId, selectedCycleId, selectedFlowId, updateFlowScenarios]);
 
+  // ── Drawer callbacks (stable refs to avoid re-triggering the SSE useEffect) ─
+  const handleToggleDrawer        = useCallback(() => setIsDrawerOpen(v => !v), []);
+  const handleExecutionFinished   = useCallback(() => setIsExecuting(false), []);
+
   // ── Execution ───────────────────────────────────────────────────────────────
   const handleExecute = useCallback(async (scheduledAt?: string) => {
     if (!selectedPlanId) return;
@@ -306,6 +315,7 @@ const TestPlanPage: React.FC = () => {
       const url = scheduledAt
         ? `/api/execute-plan/${selectedPlanId}?scheduled_at=${encodeURIComponent(scheduledAt)}`
         : `/api/execute-plan/${selectedPlanId}`;
+
       const res = await fetch(url, {
         method: 'POST',
       });
@@ -447,26 +457,83 @@ const TestPlanPage: React.FC = () => {
                   selectedPlanId={selectedPlanId}
                   taskId={currentTaskId}
                   isExecuting={isExecuting}
+                  isGeneratingReport={isGeneratingReport}
                 />
               )}
             </Box>
           </Box>
 
-          {/* Right resize handle */}
+          {/* Right resize handle + library toggle */}
           <Box
-            onMouseDown={makeResizeHandler('right')}
             sx={{
-              width: 4,
-              cursor: 'col-resize',
-              bgcolor: theme.palette.custom.border,
+              width: libraryVisible ? 4 : 28,
               flexShrink: 0,
-              '&:hover': { bgcolor: 'primary.main' },
-              transition: 'background-color 0.15s ease',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              position: 'relative',
+              bgcolor: theme.palette.custom.border,
+              transition: 'width 0.2s ease, background-color 0.15s ease',
+              cursor: libraryVisible ? 'col-resize' : 'default',
+              '&:hover': { bgcolor: libraryVisible ? 'primary.main' : theme.palette.custom.border },
             }}
-          />
+            onMouseDown={libraryVisible ? makeResizeHandler('right') : undefined}
+          >
+            <Tooltip
+              title={libraryVisible ? 'Ocultar biblioteca' : 'Mostrar biblioteca'}
+              placement="left"
+            >
+              <IconButton
+                size="small"
+                onClick={() => setLibraryVisible(v => !v)}
+                onMouseDown={e => e.stopPropagation()}
+                sx={{
+                  position: libraryVisible ? 'absolute' : 'static',
+                  right: libraryVisible ? -12 : 'auto',
+                  width: 24,
+                  height: 24,
+                  bgcolor: theme.palette.background.paper,
+                  border: `1px solid ${theme.palette.custom.border}`,
+                  borderRadius: '50%',
+                  color: 'text.secondary',
+                  opacity: libraryVisible ? 0 : 1,
+                  transition: 'opacity 0.15s ease',
+                  zIndex: 10,
+                  '&:hover': {
+                    bgcolor: theme.palette.primary.main,
+                    color: 'white',
+                    borderColor: theme.palette.primary.main,
+                    opacity: 1,
+                  },
+                  '.MuiBox-root:hover &': { opacity: 1 },
+                  p: 0.25,
+                }}
+              >
+                {libraryVisible
+                  ? <ChevronRightRoundedIcon sx={{ fontSize: 14 }} />
+                  : <ChevronLeftRoundedIcon sx={{ fontSize: 14 }} />
+                }
+              </IconButton>
+            </Tooltip>
+            {!libraryVisible && (
+              <Tooltip title="Biblioteca de Assets" placement="left">
+                <LibraryBooksRoundedIcon sx={{ fontSize: 13, color: 'text.disabled', mt: 1 }} />
+              </Tooltip>
+            )}
+          </Box>
 
           {/* Right: Asset Library */}
-          <Box sx={{ width: rightWidth, flexShrink: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <Box
+            sx={{
+              width: libraryVisible ? rightWidth : 0,
+              flexShrink: 0,
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              transition: 'width 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+            }}
+          >
             <AssetLibraryPanel
               features={features}
               isLoading={isLibraryLoading}
@@ -475,12 +542,13 @@ const TestPlanPage: React.FC = () => {
         </Box>
 
         {/* ── Execution Drawer (bottom) ── */}
-        <ExecutionDrawer 
-          isOpen={isDrawerOpen} 
-          onToggle={() => setIsDrawerOpen(v => !v)}
+        <ExecutionDrawer
+          isOpen={isDrawerOpen}
+          onToggle={handleToggleDrawer}
           taskId={currentTaskId}
-          onExecutionFinished={() => setIsExecuting(false)}
+          onExecutionFinished={handleExecutionFinished}
           onStatusChange={setExecutionStatus}
+          onReportGenerating={setIsGeneratingReport}
         />
       </Box>
     </DndContext>

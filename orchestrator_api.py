@@ -317,6 +317,7 @@ def _run_orchestrator(task_id: str, plan_id: str, plan_json: str) -> None:
     try:
         env = os.environ.copy()
         env["PYTHONIOENCODING"] = "utf-8"
+        env["PYTHONUNBUFFERED"] = "1"  # Force immediate flush of print() output
 
         proc = subprocess.Popen(
             cmd,
@@ -495,13 +496,29 @@ def get_gherkin_results():
                 if feature_name not in features_map:
                     features_map[feature_name] = []
 
-                # Buscar evidencia visual (GIF/Video)
-                gif_id = find_gif_execution_id(scenario_name, result_data.get("start", 0))
+                # start_ms: timestamp de inicio del test en Allure (ms desde epoch).
+                # Es único por ejecución incluso cuando el escenario tiene nombre duplicado,
+                # porque cada behave subprocess arranca en un momento distinto.
+                start_ms = result_data.get("start", 0)
+
+                # pehape_original_name: set by _patch_duplicate_allure_results() to
+                # preserve the original scenario name even after Allure-display renaming
+                # (e.g. "Login (Instancia #2)" → original: "Login").
+                # The frontend pool uses this key for matching, so all duplicate
+                # instances resolve to the same name bucket and are disambiguated
+                # by timestamp. The display_name is what we show in the UI.
+                original_name = result_data.get("pehape_original_name") or scenario_name
+                display_name  = scenario_name  # may include "(Instancia #N)"
+
+                # Buscar evidencia visual (GIF/Video) using the original name
+                gif_id = find_gif_execution_id(original_name, start_ms)
 
                 features_map[feature_name].append({
-                    "name": scenario_name,
+                    "name": original_name,      # ← matching key for the matrix pool
+                    "display_name": display_name,  # ← what the UI shows
                     "status": status,
                     "duration_ms": duration_ms,
+                    "start_ms": start_ms,       # ← timestamp for closest-match
                     "tags": tags,
                     "steps": steps_data,
                     "gifExecutionId": gif_id
@@ -516,12 +533,15 @@ def get_gherkin_results():
             except Exception:
                 continue
 
-        # Convertir a lista ordenada
+        # Convertir a lista ordenada por feature, y dentro de cada feature
+        # ordenar los escenarios por start_ms para que el orden refleje la
+        # secuencia real de ejecución (importante cuando hay duplicados).
         features_list = []
         for feature_name, scenarios in sorted(features_map.items()):
+            scenarios_sorted = sorted(scenarios, key=lambda s: s.get("start_ms", 0))
             features_list.append({
                 "name": feature_name,
-                "scenarios": scenarios
+                "scenarios": scenarios_sorted
             })
 
         return {
@@ -1766,6 +1786,7 @@ def _convert_plan_to_orchestrator_format(plan: dict) -> dict:
                 "enabled":   cycle.get("enabled", True),
                 "scenarios": [
                     {
+                        "id":             s.get("id", ""),
                         "feature_path":   s.get("featurePath", ""),
                         "scenario_name":  s.get("scenarioName", ""),
                         "tags":           s.get("tags", []),
@@ -1785,6 +1806,7 @@ def _convert_plan_to_orchestrator_format(plan: dict) -> dict:
                     "enabled":   True,
                     "scenarios": [
                         {
+                            "id":             s.get("id", ""),
                             "feature_path":   s.get("featurePath", ""),
                             "scenario_name":  s.get("scenarioName", ""),
                             "tags":           s.get("tags", []),

@@ -31,6 +31,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+# Force unbuffered stdout so events appear immediately in the SSE stream
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(line_buffering=True)
+
 # ── Logging setup ──────────────────────────────────────────────────────────────
 
 LOG_FORMAT = "%(asctime)s  %(levelname)-7s  %(message)s"
@@ -126,6 +130,100 @@ def _clean_results_dir(results_dir: Path) -> None:
         shutil.rmtree(results_dir)
     results_dir.mkdir(parents=True, exist_ok=True)
     logger.info(f"Allure results directory reset: {results_dir}")
+
+
+def _patch_duplicate_allure_results(results_dir: Path) -> None:
+    """
+    Post-process Allure result JSON files to disambiguate scenarios that share
+    the same name (duplicate instances in a Test Flow).
+
+    Allure groups tests with the same historyId as "retries". By assigning a
+    unique historyId (and renaming the title for instances > 1) we ensure each
+    execution instance appears as an independent test in the Allure report,
+    regardless of allure-python-commons version.
+
+    Strategy
+    --------
+    1. Load all *-result.json files and sort them by start time (ascending).
+    2. Count how many files share the same scenario name.
+    3. For names that appear more than once, iterate in start-time order and:
+       - Assign instance index (1, 2, 3, …)
+       - Patch ``name`` for instances > 1  → "Name (Instancia #N)"
+       - Patch ``historyId``               → MD5("Name::instancia:N")
+       - Patch ``testCaseId``              → MD5("Name::testcase:N")
+    4. Re-write only modified files.
+    """
+    import glob
+    import hashlib
+
+    result_files = glob.glob(str(results_dir / "*-result.json"))
+    if not result_files:
+        return
+
+    # ── Load all result files ─────────────────────────────────────────────────
+    loaded: list[tuple[str, dict]] = []
+    for rf in result_files:
+        try:
+            with open(rf, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            loaded.append((rf, data))
+        except Exception:
+            continue
+
+    # Sort by start timestamp so instance numbering follows execution order
+    loaded.sort(key=lambda x: x[1].get("start", 0))
+
+    # ── Count occurrences per name ────────────────────────────────────────────
+    from collections import Counter
+    name_counts: Counter = Counter(entry[1].get("name", "") for entry in loaded)
+
+    # ── Patch duplicates ──────────────────────────────────────────────────────
+    name_instance: dict[str, int] = {}
+
+    for rf, data in loaded:
+        orig_name: str = data.get("name", "")
+        if name_counts[orig_name] <= 1:
+            continue  # Unique scenario — no patch needed
+
+        name_instance[orig_name] = name_instance.get(orig_name, 0) + 1
+        idx = name_instance[orig_name]
+
+        modified = False
+
+        # Preserve the original name so the matrix-report API can still
+        # match all instances under the same key, regardless of renaming.
+        if data.get("pehape_original_name") != orig_name:
+            data["pehape_original_name"] = orig_name
+            modified = True
+
+        # Rename instances > 1 so Allure shows them under different titles
+        if idx > 1:
+            data["name"] = f"{orig_name} (Instancia #{idx})"
+            modified = True
+
+        # Always assign unique historyId and testCaseId based on orig name + instance
+        unique_key = f"{orig_name}::instancia:{idx}"
+        new_history_id = hashlib.md5(unique_key.encode("utf-8")).hexdigest()
+        new_test_case_id = hashlib.md5(f"{orig_name}::testcase:{idx}".encode("utf-8")).hexdigest()
+
+        if data.get("historyId") != new_history_id:
+            data["historyId"] = new_history_id
+            modified = True
+        if data.get("testCaseId") != new_test_case_id:
+            data["testCaseId"] = new_test_case_id
+            modified = True
+
+        if modified:
+            try:
+                with open(rf, "w", encoding="utf-8") as f:
+                    json.dump(data, f, ensure_ascii=False, indent=2)
+            except Exception as e:
+                logger.warning(f"Could not patch allure result {rf}: {e}")
+
+    logger.info(
+        f"Allure results patched: {sum(name_counts[n] for n in name_counts if name_counts[n] > 1)} "
+        f"duplicate-scenario files updated."
+    )
 
 
 def _generate_allure_report(results_dir: Path, report_dir: Path) -> None:
@@ -306,9 +404,15 @@ class Orchestrator:
 
         # ── Generate final Allure report ─────────────────────────────────────
         if any(r.status in ("pass", "fail") for r in self.summary.results):
+            print(json.dumps({"type": "allure_report", "status": "generating"}), flush=True)
+            # Patch result files BEFORE generating the report so duplicate scenarios
+            # appear as independent tests (not retries) in the Allure HTML output.
+            _patch_duplicate_allure_results(self.results_dir)
             _generate_allure_report(self.results_dir, self.report_dir)
+            print(json.dumps({"type": "allure_report", "status": "ready", "url": "/allure-report/index.html"}), flush=True)
         else:
             logger.warning("No scenarios were executed — skipping Allure report generation.")
+
 
         # Record end time
         self.plan["execution_end_time"] = datetime.now(timezone.utc).isoformat()
@@ -340,12 +444,12 @@ class Orchestrator:
 
         flows = cycle.get("test_flows", [])
         for flow in flows:
-            self._run_flow(flow, plan_id, cycle_id, global_config)
+            self._run_flow(flow, plan_id, cycle_id, cycle_name, global_config)
 
     # ── Flow ──────────────────────────────────────────────────────────────────
 
     def _run_flow(
-        self, flow: dict, plan_id: str, cycle_id: str, global_config: dict
+        self, flow: dict, plan_id: str, cycle_id: str, cycle_name: str, global_config: dict
     ) -> None:
         flow_id = flow.get("flow_id", "UNKNOWN_FLOW")
         flow_name = flow.get("flow_name", flow_id)
@@ -360,14 +464,26 @@ class Orchestrator:
         scenarios = flow.get("scenarios", [])
         flow_failed = False    # Fail-Fast flag
 
+        # ── Instance counter: tracks how many times each scenario_name has
+        #    appeared so far within this flow. Enables disambiguation of
+        #    duplicate scenario rows in Allure labels and the frontend monitor.
+        instance_counter: dict[str, int] = {}
+
         for idx, scenario in enumerate(scenarios):
+            sname = scenario.get("scenario_name", "")
+            instance_counter[sname] = instance_counter.get(sname, 0) + 1
+            instance_index = instance_counter[sname]   # 1-based
+
             result = self._run_scenario_node(
                 scenario=scenario,
                 plan_id=plan_id,
                 cycle_id=cycle_id,
+                cycle_name=cycle_name,
                 flow_id=flow_id,
+                flow_name=flow_name,
                 global_config=global_config,
                 flow_failed=flow_failed,
+                instance_index=instance_index,
             )
             self.summary.results.append(result)
 
@@ -384,17 +500,35 @@ class Orchestrator:
         scenario: dict,
         plan_id: str,
         cycle_id: str,
+        cycle_name: str,
         flow_id: str,
+        flow_name: str,
         global_config: dict,
         flow_failed: bool,
+        instance_index: int = 1,   # 1-based ordinal for this scenario name within the flow
     ) -> ScenarioResult:
         scenario_name = scenario.get("scenario_name", "UNKNOWN_SCENARIO")
+        scenario_id   = scenario.get("id", "")   # unique UUID per instance row in the plan
         feature_path = scenario.get("feature_path", "")
         tags = scenario.get("tags", [])
         scenario_enabled = scenario.get("enabled", True)
 
-        # Merge userdata: global_config → scenario.userdata (scenario overrides)
-        userdata: dict = {**global_config, **scenario.get("userdata", {})}
+        # Merge userdata: global_config → scenario.userdata → orchestrator context
+        userdata: dict = {
+            **global_config,
+            **scenario.get("userdata", {}),
+            # Inject cycle/flow identifiers so environment.py can add Allure labels
+            "orch_cycle_id":       cycle_id,
+            "orch_cycle_name":     cycle_name,
+            "orch_flow_id":        flow_id,
+            "orch_flow_name":      flow_name,
+            "orch_plan_id":        plan_id,
+            # ── Instance tracking (enables duplicate-scenario disambiguation) ──
+            # orch_scenario_id   : UUID unique to this slot in the plan (not the name)
+            # orch_instance_index: 1-based counter; >1 means a repeated scenario
+            "orch_scenario_id":    scenario_id,
+            "orch_instance_index": str(instance_index),
+        }
 
         base_result = ScenarioResult(
             plan_id=plan_id,
@@ -409,6 +543,7 @@ class Orchestrator:
         # Disabled node
         if not scenario_enabled:
             logger.warning(f"      [SKIP] Scenario '{scenario_name}' is disabled.")
+            print(json.dumps({"type": "scenario_status", "status": "skipped", "scenario_id": scenario_id, "scenario_name": scenario_name}), flush=True)
             scenario["result_status"] = "skip"
             scenario["duration_ms"] = 0
             return base_result
@@ -418,6 +553,7 @@ class Orchestrator:
             logger.warning(
                 f"      [SKIP] Scenario '{scenario_name}' — skipped due to Flow fail-fast."
             )
+            print(json.dumps({"type": "scenario_status", "status": "skipped", "scenario_id": scenario_id, "scenario_name": scenario_name}), flush=True)
             scenario["result_status"] = "skip"
             scenario["duration_ms"] = 0
             return base_result
@@ -437,6 +573,8 @@ class Orchestrator:
             f"        Feature:  {feature_path}\n"
             f"        Tags:     {', '.join(tags) or '(none)'}"
         )
+        # Emit structured JSON event — includes scenario_id for precise frontend matching
+        print(json.dumps({"type": "scenario_status", "status": "running", "scenario_id": scenario_id, "scenario_name": scenario_name}), flush=True)
 
         import time
         start_time = time.time()
@@ -447,6 +585,9 @@ class Orchestrator:
         symbol = PASS_SYM if exit_code == 0 else FAIL_SYM
 
         print(f"        Result:   {symbol}  (exit code: {exit_code}, {duration_ms}ms)")
+        # Emit structured JSON event — includes scenario_id for precise frontend matching
+        result_status = "passed" if exit_code == 0 else "failed"
+        print(json.dumps({"type": "scenario_status", "status": result_status, "scenario_id": scenario_id, "scenario_name": scenario_name}), flush=True)
 
         # Mutate the original plan JSON in memory so we can export it later
         scenario["result_status"] = status

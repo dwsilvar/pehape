@@ -79,15 +79,6 @@ const Sidebar: React.FC = () => {
                         </IconButton>
                     </Tooltip>
 
-                    <Tooltip title={t('common.sidebar.guide')} placement="right">
-                        <IconButton
-                            color={isActive('/guide') ? 'primary' : 'default'}
-                            onClick={() => handleNavigation('/guide')}
-                        >
-                            <MenuBookIcon />
-                        </IconButton>
-                    </Tooltip>
-
                     <Tooltip title={t('common.sidebar.reports')} placement="right">
                         <IconButton
                             color={isActive('/reports') ? 'primary' : 'default'}
@@ -135,6 +126,15 @@ const Sidebar: React.FC = () => {
                             onClick={() => handleNavigation('/running-apps')}
                         >
                             <WindowIcon />
+                        </IconButton>
+                    </Tooltip>
+
+                    <Tooltip title={t('common.sidebar.guide')} placement="right">
+                        <IconButton
+                            color={isActive('/guide') ? 'primary' : 'default'}
+                            onClick={() => handleNavigation('/guide')}
+                        >
+                            <MenuBookIcon />
                         </IconButton>
                     </Tooltip>
 
@@ -254,18 +254,6 @@ const Sidebar: React.FC = () => {
 
                     <ListItem disablePadding>
                         <ListItemButton
-                            selected={isActive('/guide')}
-                            onClick={() => handleNavigation('/guide')}
-                        >
-                            <ListItemIcon>
-                                <MenuBookIcon color={isActive('/guide') ? 'primary' : 'inherit'} />
-                            </ListItemIcon>
-                            <ListItemText primary={t('common.sidebar.guide')} />
-                        </ListItemButton>
-                    </ListItem>
-
-                    <ListItem disablePadding>
-                        <ListItemButton
                             selected={isActive('/reports')}
                             onClick={() => handleNavigation('/reports')}
                         >
@@ -333,6 +321,18 @@ const Sidebar: React.FC = () => {
                                 <WindowIcon />
                             </ListItemIcon>
                             <ListItemText primary={t('common.sidebar.apps')} />
+                        </ListItemButton>
+                    </ListItem>
+
+                    <ListItem disablePadding>
+                        <ListItemButton
+                            selected={isActive('/guide')}
+                            onClick={() => handleNavigation('/guide')}
+                        >
+                            <ListItemIcon>
+                                <MenuBookIcon color={isActive('/guide') ? 'primary' : 'inherit'} />
+                            </ListItemIcon>
+                            <ListItemText primary={t('common.sidebar.guide')} />
                         </ListItemButton>
                     </ListItem>
 

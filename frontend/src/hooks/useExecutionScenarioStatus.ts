@@ -3,61 +3,140 @@ import { useEffect, useRef, useState } from 'react';
 export type ScenarioExecStatus = 'pending' | 'running' | 'passed' | 'failed' | 'skipped';
 
 /**
- * Hook que suscribe al SSE de ejecución y parsea la salida estándar de Behave
- * para actualizar el estado de cada scenario en tiempo real.
+ * Tracks real-time execution status per scenario row.
  *
- * Parsing strategy (standard Behave output):
- *   "  Scenario: <name>"              → mark as 'running'
- *   "  Scenario Outline: <name>"      → mark as 'running'
- *   AssertionError / Error: / FAILED  → current running → will be 'failed'
- *   Next Scenario / done              → finalize current
+ * Key design decisions:
+ *  - Map key is the SCENARIO ID (not name) → avoids collisions when the same
+ *    scenario name appears in multiple flows/cycles.
+ *  - Status is PRESERVED after execution finishes (taskId becomes null).
+ *    Only a NEW non-null taskId resets everything to 'pending'.
+ *  - The orchestrator emits JSON events with scenario_id so we can match exactly.
+ *    Falls back to name-matching for text-only formatters.
  */
 export function useExecutionScenarioStatus(
   taskId: string | null,
-  scenarioNames: string[],
+  scenarioIds: string[],           // unique IDs matching FlatScenario.id
+  scenarioNames: string[],         // parallel array for text-based name matching
 ): Map<string, ScenarioExecStatus> {
+
   const [statusMap, setStatusMap] = useState<Map<string, ScenarioExecStatus>>(new Map());
-  const currentRunning = useRef<string | null>(null);
-  const hasError      = useRef(false);
-  const esRef         = useRef<EventSource | null>(null);
+  const statusMapRef      = useRef<Map<string, ScenarioExecStatus>>(statusMap); // sync ref for resolveId
+  const currentRunningId  = useRef<string | null>(null);  // ID of the running scenario
+  const currentRunningName = useRef<string | null>(null); // name, for text-based matching
+  const esRef             = useRef<EventSource | null>(null);
+  const lastTaskId        = useRef<string | null>(null);
 
+  // Keep statusMapRef in sync so resolveId can read the latest state
+  // without depending on statusMap in the SSE useEffect closure.
+  statusMapRef.current = statusMap;
+
+  // ── Reset map only when a NEW task starts ──────────────────────────────────
   useEffect(() => {
-    // Reset map whenever taskId or scenarios change
-    const initial = new Map<string, ScenarioExecStatus>();
-    scenarioNames.forEach(n => initial.set(n, 'pending'));
-    setStatusMap(initial);
-    currentRunning.current = null;
-    hasError.current = false;
+    if (!taskId) return; // taskId → null after execution: keep existing states
+    if (taskId === lastTaskId.current) return; // same task, no reset
 
+    lastTaskId.current = taskId;
+
+    // Reset all to pending for the new run
+    const initial = new Map<string, ScenarioExecStatus>();
+    scenarioIds.forEach(id => initial.set(id, 'pending'));
+    setStatusMap(initial);
+    currentRunningId.current  = null;
+    currentRunningName.current = null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskId]);
+
+  // ── SSE subscription ────────────────────────────────────────────────────────
+  useEffect(() => {
     if (!taskId) return;
 
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /** Resolve scenario ID from an emitted scenario_id or by name fallback.
+     *
+     * When scenario_id is provided it matches exactly (O(1)).
+     * When only the name is available we do a sequential scan, but we skip IDs
+     * that have already been assigned a terminal status (passed/failed/skipped)
+     * so duplicate scenario names advance to the next unresolved slot rather
+     * than always colliding on the first one.
+     */
+    const resolveId = (scenarioId?: string, name?: string): string | undefined => {
+      // 1. Exact ID match — always preferred
+      if (scenarioId && scenarioIds.includes(scenarioId)) return scenarioId;
+
+      // 2. Name-based fallback — find the first slot with this name that is
+      //    still pending or running (i.e. not yet terminated).
+      if (name) {
+        // Collect all indices that match the name
+        const matchingIndices: number[] = [];
+        for (let i = 0; i < scenarioNames.length; i++) {
+          const n = scenarioNames[i];
+          if (n === name || name.includes(n) || n.includes(name)) {
+            matchingIndices.push(i);
+          }
+        }
+        if (matchingIndices.length === 0) return undefined;
+        if (matchingIndices.length === 1) return scenarioIds[matchingIndices[0]];
+
+        // Multiple slots share this name — prefer the first one that is not
+        // yet in a terminal state so we don't clobber an already-resolved slot.
+        // We read the current statusMap via a ref to avoid capturing stale closure.
+        // (statusMap ref is kept up-to-date via the setter pattern below.)
+        for (const idx of matchingIndices) {
+          const id = scenarioIds[idx];
+          const currentStatus = statusMapRef.current.get(id);
+          if (!currentStatus || currentStatus === 'pending' || currentStatus === 'running') {
+            return id;
+          }
+        }
+        // All slots are in terminal state → fall back to the last one
+        return scenarioIds[matchingIndices[matchingIndices.length - 1]];
+      }
+      return undefined;
+    };
+
     const finalizeRunning = (overrideStatus?: ScenarioExecStatus) => {
-      const name = currentRunning.current;
-      if (!name) return;
-      const status = overrideStatus ?? (hasError.current ? 'failed' : 'passed');
+      const id = currentRunningId.current;
+      if (!id) return;
       setStatusMap(prev => {
         const next = new Map(prev);
-        if (next.get(name) === 'running') next.set(name, status);
+        if (next.get(id) === 'running') {
+          next.set(id, overrideStatus ?? 'passed');
+        }
         return next;
       });
-      currentRunning.current = null;
-      hasError.current = false;
+      currentRunningId.current   = null;
+      currentRunningName.current = null;
     };
 
-    const markRunning = (name: string) => {
-      // Finalize previous
-      finalizeRunning();
-      currentRunning.current = name;
-      hasError.current = false;
+    const markRunning = (scenarioId?: string, name?: string) => {
+      finalizeRunning(); // close previous
+      const id = resolveId(scenarioId, name);
+      if (!id) return;
+      currentRunningId.current   = id;
+      currentRunningName.current = name ?? null;
       setStatusMap(prev => {
         const next = new Map(prev);
-        // Match by exact name or contained name (handles long/trimmed names)
-        const key = [...next.keys()].find(k => k === name || name.includes(k) || k.includes(name));
-        if (key) next.set(key, 'running');
+        next.set(id, 'running');
         return next;
       });
     };
 
+    const markStatus = (status: ScenarioExecStatus, scenarioId?: string, name?: string) => {
+      const id = resolveId(scenarioId, name);
+      if (!id) return;
+      setStatusMap(prev => {
+        const next = new Map(prev);
+        next.set(id, status);
+        return next;
+      });
+      if (currentRunningId.current === id) {
+        currentRunningId.current   = null;
+        currentRunningName.current = null;
+      }
+    };
+
+    // ── Connect EventSource ───────────────────────────────────────────────────
     const es = new EventSource(`/api/execution-status/${taskId}/stream`);
     esRef.current = es;
 
@@ -67,68 +146,49 @@ export function useExecutionScenarioStatus(
 
         if (data.line) {
           const line: string = data.line;
+          console.debug('[ExecutionMonitor SSE]', line);
 
-          // ── Scenario start detection (JSON Logger) ─────────────────────────
+          // ── 1. JSON event from orchestrator.py ────────────────────────────
           try {
-            const parsedLine = JSON.parse(line);
-            if (parsedLine.type === 'scenario_status') {
-              if (parsedLine.status === 'running') {
-                markRunning(parsedLine.scenario_name);
+            const ev = JSON.parse(line);
+            if (ev.type === 'scenario_status') {
+              const sid  = ev.scenario_id;
+              const name = ev.scenario_name;
+              if (ev.status === 'running') {
+                markRunning(sid, name);
+              } else if (['passed', 'failed', 'skipped'].includes(ev.status)) {
+                markStatus(ev.status as ScenarioExecStatus, sid, name);
               }
               return;
             }
           } catch {
-            // Not a JSON line, proceed with text parsing
+            // not JSON
           }
 
-          // ── Scenario start detection (Text Formatter) ─────────────────────────
-          const scenMatch = line.match(/^\s*Scenario(?:\s+Outline)?:\s+(.+?)(?:\s+#.*)?$/);
-          if (scenMatch) {
-            markRunning(scenMatch[1].trim());
+          // ── 2. [SKIP] from orchestrator logger ────────────────────────────
+          // "  WARNING   [SKIP] Scenario 'name' — skipped due to..."
+          const skipMatch = line.match(/\[SKIP\]\s+Scenario\s+'([^']+)'/);
+          if (skipMatch) {
+            markStatus('skipped', undefined, skipMatch[1].trim());
             return;
           }
 
-          // ── Failure indicators ─────────────────────────────────────────────
-          // En behave formatter "plain", un step fallido dice "... FAILED" o "... failed"
-          if (
-            line.includes('AssertionError') ||
-            line.includes('Error:') ||
-            line.includes('FAILED') ||
-            line.includes('failed') ||
-            /^\s*Failing\s+scenarios/i.test(line)
-          ) {
-            hasError.current = true;
+          // ── 3. Behave plain-text fallback: "  Scenario: name" ────────────
+          const scenMatch = line.match(/^\s+Scenario(?:\s+Outline)?:\s+(.+?)(?:\s+#.*)?$/);
+          if (scenMatch) {
+            markRunning(undefined, scenMatch[1].trim());
+            return;
           }
 
-          // ── Explicit scenario result line (some formatters) ─────────────────
-          const resultMatch = line.match(/^\s*Scenario.*?:\s+(.+?)\s+\.\.\.\s+(passed|failed|skipped)/i);
+          // Behave result: "  Scenario: name ... passed"
+          const resultMatch = line.match(/Scenario.*?:\s+(.+?)\s+\.\.\.\s+(passed|failed|skipped)/i);
           if (resultMatch) {
-            const name   = resultMatch[1].trim();
-            const status = resultMatch[2].toLowerCase() as ScenarioExecStatus;
-            setStatusMap(prev => {
-              const next = new Map(prev);
-              const key = [...next.keys()].find(k => k === name || name.includes(k) || k.includes(name));
-              if (key) next.set(key, status);
-              return next;
-            });
-            if (currentRunning.current && (
-              currentRunning.current === name ||
-              name.includes(currentRunning.current) ||
-              currentRunning.current.includes(name)
-            )) {
-              currentRunning.current = null;
-              hasError.current = false;
-            }
-          }
-
-          // ── Summary line ──────────────────────────────────────────────────
-          const summaryMatch = line.match(/(\d+)\s+scenario.*?passed.*?(\d+)\s+failed.*?(\d+)\s+skipped/i);
-          if (summaryMatch) {
-            finalizeRunning();
+            markStatus(resultMatch[2].toLowerCase() as ScenarioExecStatus, undefined, resultMatch[1].trim());
           }
         }
 
-        if (data.done) {
+        // Execution finished signal
+        if (data.done || data.status === 'finished' || data.status === 'failed') {
           finalizeRunning();
           es.close();
         }
@@ -138,6 +198,7 @@ export function useExecutionScenarioStatus(
     };
 
     es.onerror = () => {
+      // Connection dropped — finalize any still-running scenario
       finalizeRunning();
       es.close();
     };

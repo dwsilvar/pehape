@@ -16,6 +16,27 @@ const getStatusColor = (status: string, theme: any) => {
     }
 };
 
+/**
+ * Convierte milisegundos a una string legible adaptada a la magnitud:
+ *   < 1 000 ms   → "850 ms"
+ *   < 60 000 ms  → "12.3 s"
+ *   < 3 600 000  → "2m 34s"
+ *   ≥ 3 600 000  → "1h 05m 12s"
+ */
+const formatDuration = (ms: number): string => {
+    if (!ms || ms <= 0) return '—';
+    if (ms < 1_000) return `${ms} ms`;
+    if (ms < 60_000) return `${(ms / 1_000).toFixed(1)} s`;
+    const totalSec = Math.floor(ms / 1_000);
+    const h = Math.floor(totalSec / 3_600);
+    const m = Math.floor((totalSec % 3_600) / 60);
+    const s = totalSec % 60;
+    if (h > 0) {
+        return `${h}h ${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`;
+    }
+    return `${m}m ${String(s).padStart(2, '0')}s`;
+};
+
 const ReportMatrixView: React.FC<ReportMatrixViewProps> = ({ data }) => {
     const theme = useTheme();
     const [gherkinData, setGherkinData] = useState<any[]>([]);
@@ -39,27 +60,109 @@ const ReportMatrixView: React.FC<ReportMatrixViewProps> = ({ data }) => {
         const result: any[] = [];
         if (!data || !data.test_cycles) return result;
 
+        // ── Build candidate pool ──────────────────────────────────────────────
+        // Group gherkin results by scenario name. The API returns them sorted
+        // by start_ms (ascending), so the pool order matches execution order.
+        // Each entry gets a mutable `_consumed` flag so we can mark it as "used"
+        // and prevent the same Allure result from being assigned to two plan rows.
+        //
+        // We intentionally do a fuzzy name key (normalised lowercase) so that
+        // minor differences in whitespace/punctuation don't prevent matching.
+        const pool = new Map<string, Array<any & { _consumed: boolean }>>();
+        for (const g of gherkinData) {
+            const key = (g.name ?? '').toLowerCase().trim();
+            if (!pool.has(key)) pool.set(key, []);
+            pool.get(key)!.push({ ...g, _consumed: false });
+        }
+
+        // Helper: find the best (closest in time) non-consumed candidate for a
+        // given scenario name and optional gif-timestamp.
+        const findBestMatch = (scenarioName: string, gifStartSec: number | null): any | null => {
+            const nameKey = scenarioName.toLowerCase().trim();
+
+            // Try exact name match first, then partial-match fallback.
+            let candidates = pool.get(nameKey) ?? null;
+            if (!candidates) {
+                // Partial match: find any pool key that contains / is contained by scenarioName
+                for (const [k, v] of pool) {
+                    if (k.includes(nameKey) || nameKey.includes(k)) {
+                        candidates = v;
+                        break;
+                    }
+                }
+            }
+            if (!candidates || candidates.length === 0) return null;
+
+            const available = candidates.filter(c => !c._consumed);
+            if (available.length === 0) return null;
+
+            if (gifStartSec === null) {
+                // No timestamp info → take the first available in order
+                available[0]._consumed = true;
+                return available[0];
+            }
+
+            // Find the CLOSEST match by timestamp distance (no fixed window).
+            // This correctly disambiguates when runs are only a few seconds apart.
+            const gifStartMs = gifStartSec * 1000;
+            let best = available[0];
+            let bestDist = Math.abs((available[0].start_ms ?? 0) - gifStartMs);
+
+            for (let i = 1; i < available.length; i++) {
+                const dist = Math.abs((available[i].start_ms ?? 0) - gifStartMs);
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    best = available[i];
+                }
+            }
+
+            best._consumed = true;
+            return best;
+        };
+
+        // ── Build rows ────────────────────────────────────────────────────────
         data.test_cycles.forEach((cycle: any) => {
             cycle.test_flows?.forEach((flow: any) => {
                 flow.scenarios?.forEach((sc: any) => {
-                    // Try to merge with gherkin data
-                    const gherkinMatch = gherkinData.find(g => g.name === sc.scenario_name);
-                    
+                    // Extract gifExecutionId and its seconds-timestamp from logs
+                    let gifExecutionId: string | null = null;
+                    let gifStartSec: number | null = null;
+
+                    if (sc.logs) {
+                        for (const line of sc.logs.split('\n')) {
+                            try {
+                                const ev = JSON.parse(line);
+                                if (ev.type === 'scenario_status' && ev.gifExecutionId) {
+                                    gifExecutionId = ev.gifExecutionId;
+                                    const tsSec = parseInt(gifExecutionId.split('_')[0], 10);
+                                    if (!isNaN(tsSec)) gifStartSec = tsSec;
+                                    break;
+                                }
+                            } catch { /* not JSON */ }
+                        }
+                    }
+
+                    const gherkinMatch = findBestMatch(sc.scenario_name, gifStartSec);
+
                     result.push({
+                        id: sc.id,
                         cycleName: cycle.cycle_name || cycle.cycle_id,
-                        flowName: flow.flow_name ? flow.flow_name.replace(' — Default', '').replace(' - Default', '') : 'Sin Grupo',
+                        flowName: flow.flow_name
+                            ? flow.flow_name.replace(' — Default', '').replace(' - Default', '')
+                            : 'Sin Grupo',
                         scenarioName: sc.scenario_name,
                         tags: sc.tags || [],
                         duration: sc.duration_ms || 0,
                         status: sc.result_status || 'skip',
                         steps: gherkinMatch?.steps || [],
-                        gifExecutionId: gherkinMatch?.gifExecutionId || null
+                        gifExecutionId,   // from logs — always instance-specific
                     });
                 });
             });
         });
 
         return result;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [data, gherkinData]);
 
     const handleEvidenceChange = (event: any, executionId: string) => {
@@ -79,7 +182,7 @@ const ReportMatrixView: React.FC<ReportMatrixViewProps> = ({ data }) => {
                             <TableCell sx={{ fontWeight: 600 }}>Flujo</TableCell>
                             <TableCell sx={{ fontWeight: 600 }}>Escenario</TableCell>
                             <TableCell sx={{ fontWeight: 600 }}>Tags</TableCell>
-                            <TableCell sx={{ fontWeight: 600 }}>Duración (ms)</TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>Duración</TableCell>
                             <TableCell sx={{ fontWeight: 600 }}>Resultado</TableCell>
                             <TableCell sx={{ fontWeight: 600 }}>Evidencias</TableCell>
                             <TableCell sx={{ fontWeight: 600 }}>Acciones</TableCell>
@@ -107,7 +210,15 @@ const ReportMatrixView: React.FC<ReportMatrixViewProps> = ({ data }) => {
                                             ))}
                                         </Box>
                                     </TableCell>
-                                    <TableCell sx={{ fontSize: '0.8rem' }}>{row.duration}</TableCell>
+                                    <TableCell sx={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
+                                        <Box
+                                            title={row.duration > 0 ? `${row.duration.toLocaleString()} ms` : ''}
+                                            component="span"
+                                            sx={{ cursor: row.duration > 0 ? 'help' : 'default' }}
+                                        >
+                                            {formatDuration(row.duration)}
+                                        </Box>
+                                    </TableCell>
                                     <TableCell>
                                         <Chip 
                                             label={row.status.toUpperCase()} 

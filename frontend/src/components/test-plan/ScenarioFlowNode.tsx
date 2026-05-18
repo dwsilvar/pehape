@@ -186,7 +186,12 @@ const ScenarioFlowNode: React.FC<ScenarioFlowNodeProps> = ({
                 <DragIndicatorRoundedIcon sx={{ fontSize: 14 }} />
               </Box>
 
-              {/* Scenario name */}
+              {/* Scenario icon + name */}
+              <ScenarioIcon
+                size={13}
+                color={theme.palette.primary.main}
+                sx={{ flexShrink: 0 }}
+              />
               <Typography
                 sx={{
                   flex: 1, minWidth: 0,

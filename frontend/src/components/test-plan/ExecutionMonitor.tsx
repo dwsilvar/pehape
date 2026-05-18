@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import {
   Box, Typography, alpha, useTheme, Chip, Tooltip,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
+  CircularProgress,
 } from '@mui/material';
 import CheckCircleRoundedIcon   from '@mui/icons-material/CheckCircleRounded';
 import CancelRoundedIcon        from '@mui/icons-material/CancelRounded';
@@ -28,6 +29,7 @@ interface ExecutionMonitorProps {
   selectedPlanId: string | null;
   taskId: string | null;
   isExecuting: boolean;
+  isGeneratingReport?: boolean;
 }
 
 // ── Status badge ──────────────────────────────────────────────────────────────
@@ -108,7 +110,7 @@ const SummaryChip: React.FC<{ count: number; status: ScenarioExecStatus }> = ({ 
 // ── Main component ────────────────────────────────────────────────────────────
 
 const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
-  plans, selectedPlanId, taskId, isExecuting,
+  plans, selectedPlanId, taskId, isExecuting, isGeneratingReport = false,
 }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
@@ -137,12 +139,17 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
     return { flatScenarios: flat, plan };
   }, [plans, selectedPlanId]);
 
+  const scenarioIds = useMemo(
+    () => flatScenarios.map(s => s.id),
+    [flatScenarios],
+  );
   const scenarioNames = useMemo(
     () => flatScenarios.map(s => s.scenarioName),
     [flatScenarios],
   );
 
-  const statusMap = useExecutionScenarioStatus(isExecuting ? taskId : null, scenarioNames);
+  // Always pass taskId (never null-ify on finish) so states are preserved after execution
+  const statusMap = useExecutionScenarioStatus(taskId, scenarioIds, scenarioNames);
 
   // ── Counters ───────────────────────────────────────────────────────────────
   const counts = useMemo(() => {
@@ -157,15 +164,66 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
 
   const totalScenarios = flatScenarios.length;
 
-  // ── Empty state ────────────────────────────────────────────────────────────
+  // ── Instance index map ──────────────────────────────────────────────────────
+  // For each scenario row, record its ordinal position among rows sharing the
+  // same scenarioName. Used to show "(#2)", "(#3)" badges for duplicate entries.
+  const instanceIndexMap = useMemo(() => {
+    const counter: Record<string, number> = {};
+    const map = new Map<string, number>();   // key: FlatScenario.id → instance index
+    for (const fs of flatScenarios) {
+      counter[fs.scenarioName] = (counter[fs.scenarioName] ?? 0) + 1;
+      map.set(fs.id, counter[fs.scenarioName]);
+    }
+    return map;
+  }, [flatScenarios]);
+
+  // Pre-compute which names appear more than once (to avoid rendering the badge
+  // on unique scenarios where it would just add visual noise).
+  const duplicateNames = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const fs of flatScenarios) counts[fs.scenarioName] = (counts[fs.scenarioName] ?? 0) + 1;
+    return new Set(Object.entries(counts).filter(([, c]) => c > 1).map(([n]) => n));
+  }, [flatScenarios]);
+
+  // ── Empty state (or generating-report-only state) ─────────────────────────
   if (totalScenarios === 0) {
     return (
-      <Box sx={{ p: 2, textAlign: 'center' }}>
-        <Typography sx={{ fontSize: '0.7rem', color: 'text.disabled' }}>
-          {selectedPlanId
-            ? 'Este plan no tiene scenarios configurados.'
-            : 'Selecciona un plan para ver sus scenarios.'}
-        </Typography>
+      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+        {/* Show generating indicator even when there are no scenario rows */}
+        {isGeneratingReport ? (
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1.5,
+              m: 2,
+              px: 2,
+              py: 1.25,
+              borderRadius: 1,
+              border: '1px solid',
+              borderColor: 'rgba(129,140,248,0.35)',
+              bgcolor: 'rgba(129,140,248,0.07)',
+              animation: 'reportPulse 1.8s ease-in-out infinite',
+              '@keyframes reportPulse': {
+                '0%, 100%': { opacity: 1 },
+                '50%': { opacity: 0.55 },
+              },
+            }}
+          >
+            <CircularProgress size={13} thickness={4.5} sx={{ color: '#818cf8', flexShrink: 0 }} />
+            <Typography sx={{ fontSize: '0.8rem', fontWeight: 600, color: '#818cf8' }}>
+              Generando reporte Allure...
+            </Typography>
+          </Box>
+        ) : (
+          <Box sx={{ p: 2, textAlign: 'center' }}>
+            <Typography sx={{ fontSize: '0.7rem', color: 'text.disabled' }}>
+              {selectedPlanId
+                ? 'Este plan no tiene scenarios configurados.'
+                : 'Selecciona un plan para ver sus scenarios.'}
+            </Typography>
+          </Box>
+        )}
       </Box>
     );
   }
@@ -175,7 +233,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
       {/* ── Summary chips ───────────────────────────────────────────────────── */}
       <Box sx={{ px: 1.5, py: 0.75, display: 'flex', flexWrap: 'wrap', gap: 0.5, flexShrink: 0, borderBottom: '1px solid', borderColor: 'divider' }}>
         <Typography sx={{ fontSize: '0.65rem', color: 'text.disabled', mr: 0.5, display: 'flex', alignItems: 'center' }}>
-          {totalScenarios} total
+          {plan ? `${plan.name} • ` : ''}{totalScenarios} total
         </Typography>
         <SummaryChip count={counts.running} status="running" />
         <SummaryChip count={counts.passed}  status="passed" />
@@ -189,18 +247,37 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
         <Table stickyHeader size="small" sx={{ '& .MuiTableCell-root': { fontSize: '0.75rem', fontFamily: 'inherit', borderColor: 'divider', py: 0.8 } }}>
           <TableHead>
             <TableRow>
-              <TableCell sx={{ width: 40, bgcolor: 'background.paper' }}></TableCell>
-              <TableCell sx={{ fontWeight: 600, bgcolor: 'background.paper', whiteSpace: 'nowrap' }}>Test Plan</TableCell>
-              <TableCell sx={{ fontWeight: 600, bgcolor: 'background.paper', whiteSpace: 'nowrap' }}>Test Cycle</TableCell>
-              <TableCell sx={{ fontWeight: 600, bgcolor: 'background.paper', whiteSpace: 'nowrap' }}>Test Flow</TableCell>
-              <TableCell sx={{ fontWeight: 600, bgcolor: 'background.paper', whiteSpace: 'nowrap' }}>Feature</TableCell>
-              <TableCell sx={{ fontWeight: 600, bgcolor: 'background.paper', width: '100%' }}>Scenario</TableCell>
+              <TableCell sx={{ fontWeight: 600, bgcolor: 'background.paper', whiteSpace: 'nowrap' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                  <CycleIcon size={14} color={theme.palette.text.secondary} />
+                  Test Cycle
+                </Box>
+              </TableCell>
+              <TableCell sx={{ fontWeight: 600, bgcolor: 'background.paper', whiteSpace: 'nowrap' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                  <FlowIcon size={14} color={theme.palette.text.secondary} />
+                  Test Flow
+                </Box>
+              </TableCell>
+              <TableCell sx={{ fontWeight: 600, bgcolor: 'background.paper', width: '50%' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                  <ScenarioIcon size={14} color={theme.palette.text.secondary} />
+                  Scenario
+                </Box>
+              </TableCell>
+              <TableCell sx={{ fontWeight: 600, bgcolor: 'background.paper', width: '30%' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                  <FeatureIcon size={14} color={theme.palette.text.secondary} />
+                  Feature
+                </Box>
+              </TableCell>
               <TableCell sx={{ fontWeight: 600, bgcolor: 'background.paper', whiteSpace: 'nowrap' }}>Resultado</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {flatScenarios.map((fs, idx) => {
-              const status: ScenarioExecStatus = statusMap.get(fs.scenarioName) ?? 'pending';
+              // Use scenario ID as map key for precise matching
+              const status: ScenarioExecStatus = statusMap.get(fs.id) ?? 'pending';
               const isRunning = status === 'running';
               const isFailed  = status === 'failed';
               const bg = isRunning
@@ -218,44 +295,61 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                     '&:hover': { bgcolor: isRunning || isFailed ? bg : alpha(theme.palette.action.hover, 0.5) },
                   }}
                 >
-                  <TableCell
-                    align="center"
-                    sx={{
-                      borderLeft: `2px solid ${isRunning ? theme.palette.warning.main : isFailed ? theme.palette.error.main : 'transparent'}`,
-                      p: 1
-                    }}
-                  >
-                    <StatusBadge status={status} />
-                  </TableCell>
-                  <TableCell sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>{fs.planName}</TableCell>
-                  <TableCell sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>{fs.cycleName}</TableCell>
+                  <TableCell sx={{ color: 'text.secondary', whiteSpace: 'nowrap', borderLeft: `2px solid ${isRunning ? theme.palette.warning.main : isFailed ? theme.palette.error.main : 'transparent'}` }}>{fs.cycleName}</TableCell>
                   <TableCell sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>{fs.flowName}</TableCell>
-                  <TableCell sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>
+                  <TableCell sx={{ width: '50%' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <StatusBadge status={status} />
+                      <Typography
+                        sx={{
+                          fontSize: '0.75rem',
+                          fontWeight: isRunning ? 700 : 500,
+                          color: isRunning ? 'warning.main' : isFailed ? 'error.main' : status === 'passed' ? 'success.main' : 'text.primary',
+                          whiteSpace: 'normal',
+                          wordBreak: 'break-word',
+                        }}
+                      >
+                        {fs.scenarioName}
+                      </Typography>
+                      {/* Instance badge — only shown when this name appears > 1 time */}
+                      {duplicateNames.has(fs.scenarioName) && (
+                        <Box
+                          component="span"
+                          sx={{
+                            flexShrink: 0,
+                            fontSize: '0.6rem',
+                            fontWeight: 700,
+                            letterSpacing: 0.3,
+                            px: 0.6,
+                            py: 0.15,
+                            borderRadius: '4px',
+                            bgcolor: alpha(theme.palette.primary.main, 0.12),
+                            color: 'primary.main',
+                            border: `1px solid ${alpha(theme.palette.primary.main, 0.3)}`,
+                            lineHeight: 1.5,
+                            userSelect: 'none',
+                          }}
+                        >
+                          #{instanceIndexMap.get(fs.id) ?? 1}
+                        </Box>
+                      )}
+                    </Box>
+                  </TableCell>
+                  <TableCell sx={{ color: 'text.secondary', width: '30%', whiteSpace: 'normal', wordBreak: 'break-word' }}>
                     <Tooltip title={fs.featurePath} placement="top-start" arrow enterDelay={400}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'help' }}>
-                        <FeatureIcon size={11} color={theme.palette.text.disabled} />
+                      <Box component="span" sx={{ cursor: 'help', lineHeight: 1.2 }}>
                         {fs.featureName}
                       </Box>
                     </Tooltip>
-                  </TableCell>
-                  <TableCell>
-                    <Typography
-                      sx={{
-                        fontSize: '0.75rem',
-                        fontWeight: isRunning ? 700 : 500,
-                        color: isRunning ? 'warning.main' : isFailed ? 'error.main' : status === 'passed' ? 'success.main' : 'text.primary',
-                      }}
-                    >
-                      {fs.scenarioName}
-                    </Typography>
                   </TableCell>
                   <TableCell sx={{ whiteSpace: 'nowrap' }}>
                     <Typography
                       sx={{
                         fontSize: '0.68rem',
                         fontWeight: 700,
+                        letterSpacing: '0.05em',
                         textTransform: 'uppercase',
-                        color: isRunning ? 'warning.main' : isFailed ? 'error.main' : status === 'passed' ? 'success.main' : 'text.disabled',
+                        color: isRunning ? 'warning.main' : isFailed ? 'error.main' : status === 'passed' ? 'success.main' : status === 'skipped' ? 'text.disabled' : 'text.disabled',
                       }}
                     >
                       {status}
@@ -264,6 +358,66 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                 </TableRow>
               );
             })}
+
+            {/* ── Allure report generation row ──────────────────────────────── */}
+            {isGeneratingReport && (
+              <TableRow
+                sx={{
+                  bgcolor: alpha('#818cf8', isDark ? 0.08 : 0.04),
+                  animation: 'reportPulse 1.8s ease-in-out infinite',
+                  '@keyframes reportPulse': {
+                    '0%, 100%': { opacity: 1 },
+                    '50%': { opacity: 0.55 },
+                  },
+                }}
+              >
+                {/* Left border accent */}
+                <TableCell
+                  colSpan={2}
+                  sx={{
+                    borderLeft: '2px solid #818cf8',
+                    color: 'text.disabled',
+                    fontSize: '0.7rem',
+                    whiteSpace: 'nowrap',
+                    fontStyle: 'italic',
+                  }}
+                >
+                  — Sistema —
+                </TableCell>
+                <TableCell colSpan={2}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    <CircularProgress
+                      size={11}
+                      thickness={4.5}
+                      sx={{ color: '#818cf8', flexShrink: 0 }}
+                    />
+                    <Typography
+                      sx={{
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        color: '#818cf8',
+                        letterSpacing: 0.2,
+                      }}
+                    >
+                      Generando reporte Allure...
+                    </Typography>
+                  </Box>
+                </TableCell>
+                <TableCell>
+                  <Typography
+                    sx={{
+                      fontSize: '0.68rem',
+                      fontWeight: 700,
+                      letterSpacing: '0.05em',
+                      textTransform: 'uppercase',
+                      color: '#818cf8',
+                    }}
+                  >
+                    building
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </TableContainer>
