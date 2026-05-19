@@ -9,6 +9,7 @@ import RepeatRoundedIcon from '@mui/icons-material/RepeatRounded';
 import AltRouteRoundedIcon from '@mui/icons-material/AltRouteRounded';
 import CodeRoundedIcon from '@mui/icons-material/CodeRounded';
 import LightbulbRoundedIcon from '@mui/icons-material/LightbulbRounded';
+import LibraryBooksRoundedIcon from '@mui/icons-material/LibraryBooksRounded';
 import { PlanIcon, FeatureIcon, ScenarioIcon } from '../components/PehapeIcons';
 
 // ── Concept definitions ───────────────────────────────────────────────────────
@@ -22,7 +23,7 @@ const CONCEPTS = [
     title: 'Feature',
     subtitle: 'El archivo .feature de Gherkin',
     description:
-      'Un archivo .feature es la unidad de escritura de pruebas. Agrupa un conjunto de escenarios relacionados a una misma funcionalidad del sistema, escritos en lenguaje natural (Gherkin).',
+      'Un archivo .feature es la unidad de escritura de pruebas. Contiene varios escenarios (Scenarios) agrupados y relacionados a una misma funcionalidad del sistema, escritos en lenguaje natural (Gherkin).',
     whenToUse: [
       'Documentar una funcionalidad completa del sistema',
       'Agrupar escenarios relacionados bajo un mismo contexto',
@@ -58,7 +59,7 @@ const CONCEPTS = [
     title: 'Test Flow',
     subtitle: 'La secuencia ordenada de escenarios',
     description:
-      'Un Test Flow es una secuencia de Scenarios (de uno o varios Features) organizados en el canvas para ejecutarse en un orden específico. Es el "flujo" que diseñas arrastrando scenarios desde la biblioteca.',
+      'Un Test Flow es una secuencia de Scenarios (de uno o varios Features) organizados en el canvas para ejecutarse en un orden específico. Es el "flujo" que diseñas arrastrando scenarios desde la biblioteca. Un Test Flow solo puede contener Scenarios.',
     whenToUse: [
       'Definir el orden de ejecución de un conjunto de escenarios',
       'Componer flujos complejos: login → navegar → acción → logout',
@@ -66,7 +67,25 @@ const CONCEPTS = [
     ],
     mnemonic: '¿En qué orden ejecuto estos escenarios?',
     example: 'Flujo Principal: login → retiro → verificar saldo → logout',
-    chips: ['Canvas drag & drop', 'Orden de ejecución', 'Composición'],
+    chips: ['Canvas drag & drop', 'Solo Scenarios', 'Orden de ejecución'],
+  },
+  {
+    id: 'test-set',
+    level: 'Agrupación',
+    levelColor: '#d946ef',
+    icon: <LibraryBooksRoundedIcon sx={{ fontSize: 28, color: '#d946ef' }} />,
+    title: 'Test Set',
+    subtitle: 'El generador matricial de flujos',
+    description:
+      'Un Test Set agrupa Features y/o Test Flows de forma lógica (ya no escenarios sueltos). Actúa como un multiplicador: si agregas un Feature (que tiene múltiples escenarios) junto a otros flujos, internamente creará una matriz de ejecución. Por ejemplo, al unir [Flow A] + [Feature B con 2 escenarios] + [Flow C], el Set generará dos flujos resultantes: (Flow A + Escenario B1 + Flow C) y (Flow A + Escenario B2 + Flow C).',
+    whenToUse: [
+      'Agrupar múltiples Test Flows y Features bajo un mismo propósito',
+      'Crear combinaciones matriciales de escenarios con pasos comunes de pre/post condición',
+      'Organizar módulos grandes de una aplicación en una misma agrupación',
+    ],
+    mnemonic: '¿Cómo agrupo de forma lógica estos flujos y features?',
+    example: 'Set de Pruebas de Pagos, Conjunto de Validaciones de Usuario',
+    chips: ['Matriz', 'Features + Flows', 'Multiplicador'],
   },
   {
     id: 'test-cycle',
@@ -76,15 +95,15 @@ const CONCEPTS = [
     title: 'Test Cycle',
     subtitle: 'La iteración o ronda de pruebas',
     description:
-      'Un Test Cycle agrupa uno o más Test Flows bajo una iteración específica de pruebas. Representa una "ronda" completa: puede contener múltiples flujos paralelos o complementarios que se ejecutan juntos.',
+      'Un Test Cycle agrupa uno o varios Test Sets y/o Test Flows bajo una iteración específica de pruebas. Representa una "ronda" completa: puede contener múltiples conjuntos o flujos paralelos que se ejecutan juntos.',
     whenToUse: [
-      'Agrupar flujos bajo una misma ronda o sprint de pruebas',
+      'Agrupar sets y flujos bajo una misma ronda o sprint de pruebas',
       'Organizar pruebas de regresión, smoke tests o sanity checks',
-      'Separar flujos por ambiente (staging, producción)',
+      'Separar ejecuciones por ambiente (staging, producción)',
     ],
-    mnemonic: '¿En qué iteración/ronda ejecuto estos flujos?',
+    mnemonic: '¿En qué iteración/ronda ejecuto estos sets y flujos?',
     example: 'Ciclo de Regresión Semanal, Sprint 12 - Smoke Tests',
-    chips: ['Iteración', 'Múltiples flujos', 'Agrupación'],
+    chips: ['Iteración', 'Múltiples sets/flujos', 'Agrupación'],
   },
   {
     id: 'test-plan',
@@ -114,9 +133,10 @@ const HierarchyDiagram: React.FC = () => {
 
   const levels = [
     { label: 'Test Plan', color: '#38bdf8', width: '100%' },
-    { label: 'Test Cycle', color: '#f97316', width: '85%' },
-    { label: 'Test Flow', color: '#6366f1', width: '70%' },
-    { label: 'Scenario', color: '#14b8a6', width: '55%' },
+    { label: 'Test Cycle', color: '#f97316', width: '88%' },
+    { label: 'Test Set', color: '#d946ef', width: '76%' },
+    { label: 'Test Flow', color: '#6366f1', width: '64%' },
+    { label: 'Scenario', color: '#14b8a6', width: '52%' },
     { label: 'Feature', color: '#22c55e', width: '40%' },
   ];
 
@@ -134,7 +154,7 @@ const HierarchyDiagram: React.FC = () => {
               flexShrink: 0,
             }}
           >
-            {i === 0 ? 'Nivel 1' : i === 1 ? 'Nivel 2' : i === 2 ? 'Nivel 3' : i === 3 ? 'Unidad' : 'Fuente'}
+            {i === 0 ? 'Nivel 1' : i === 1 ? 'Nivel 2' : i === 2 ? 'Nivel 3' : i === 3 ? 'Nivel 4' : i === 4 ? 'Unidad' : 'Fuente'}
           </Typography>
           <Box
             sx={{
@@ -346,6 +366,7 @@ const ConceptsGuidePage: React.FC = () => {
     feature: useRef<HTMLDivElement>(null),
     scenario: useRef<HTMLDivElement>(null),
     'test-flow': useRef<HTMLDivElement>(null),
+    'test-set': useRef<HTMLDivElement>(null),
     'test-cycle': useRef<HTMLDivElement>(null),
     'test-plan': useRef<HTMLDivElement>(null),
   };
@@ -455,7 +476,7 @@ const ConceptsGuidePage: React.FC = () => {
           >
             <AccountTreeRoundedIcon sx={{ fontSize: 14, color: 'primary.main', flexShrink: 0 }} />
             <Typography sx={{ fontSize: '0.7rem', color: 'text.secondary', lineHeight: 1.4 }}>
-              De abajo hacia arriba: Feature → Scenario → Flow → Cycle → Plan
+              De abajo hacia arriba: Feature → Scenario → Flow → Set → Cycle → Plan
             </Typography>
           </Box>
         </Box>

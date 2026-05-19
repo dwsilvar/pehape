@@ -20,15 +20,11 @@ export function useExecutionScenarioStatus(
 ): Map<string, ScenarioExecStatus> {
 
   const [statusMap, setStatusMap] = useState<Map<string, ScenarioExecStatus>>(new Map());
-  const statusMapRef      = useRef<Map<string, ScenarioExecStatus>>(statusMap); // sync ref for resolveId
+  const statusMapRef      = useRef<Map<string, ScenarioExecStatus>>(new Map()); // sync ref for resolveId
   const currentRunningId  = useRef<string | null>(null);  // ID of the running scenario
   const currentRunningName = useRef<string | null>(null); // name, for text-based matching
   const esRef             = useRef<EventSource | null>(null);
   const lastTaskId        = useRef<string | null>(null);
-
-  // Keep statusMapRef in sync so resolveId can read the latest state
-  // without depending on statusMap in the SSE useEffect closure.
-  statusMapRef.current = statusMap;
 
   // ── Reset map only when a NEW task starts ──────────────────────────────────
   useEffect(() => {
@@ -40,7 +36,8 @@ export function useExecutionScenarioStatus(
     // Reset all to pending for the new run
     const initial = new Map<string, ScenarioExecStatus>();
     scenarioIds.forEach(id => initial.set(id, 'pending'));
-    setStatusMap(initial);
+    statusMapRef.current = initial;
+    setStatusMap(new Map(initial));
     currentRunningId.current  = null;
     currentRunningName.current = null;
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -98,13 +95,12 @@ export function useExecutionScenarioStatus(
     const finalizeRunning = (overrideStatus?: ScenarioExecStatus) => {
       const id = currentRunningId.current;
       if (!id) return;
-      setStatusMap(prev => {
-        const next = new Map(prev);
-        if (next.get(id) === 'running') {
-          next.set(id, overrideStatus ?? 'passed');
-        }
-        return next;
-      });
+      
+      if (statusMapRef.current.get(id) === 'running') {
+        statusMapRef.current.set(id, overrideStatus ?? 'passed');
+        setStatusMap(new Map(statusMapRef.current));
+      }
+      
       currentRunningId.current   = null;
       currentRunningName.current = null;
     };
@@ -115,21 +111,18 @@ export function useExecutionScenarioStatus(
       if (!id) return;
       currentRunningId.current   = id;
       currentRunningName.current = name ?? null;
-      setStatusMap(prev => {
-        const next = new Map(prev);
-        next.set(id, 'running');
-        return next;
-      });
+      
+      statusMapRef.current.set(id, 'running');
+      setStatusMap(new Map(statusMapRef.current));
     };
 
     const markStatus = (status: ScenarioExecStatus, scenarioId?: string, name?: string) => {
       const id = resolveId(scenarioId, name);
       if (!id) return;
-      setStatusMap(prev => {
-        const next = new Map(prev);
-        next.set(id, status);
-        return next;
-      });
+      
+      statusMapRef.current.set(id, status);
+      setStatusMap(new Map(statusMapRef.current));
+      
       if (currentRunningId.current === id) {
         currentRunningId.current   = null;
         currentRunningName.current = null;

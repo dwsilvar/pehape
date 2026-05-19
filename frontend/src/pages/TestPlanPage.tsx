@@ -1,39 +1,36 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { Box, useTheme, Tabs, Tab, Tooltip, IconButton } from '@mui/material';
+import { Box, useTheme, Tabs, Tab, Tooltip, IconButton, CircularProgress } from '@mui/material';
 import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import LibraryBooksRoundedIcon from '@mui/icons-material/LibraryBooksRounded';
 import {
-  DndContext,
-  DragEndEvent,
-  closestCorners,
-  useSensor,
-  useSensors,
-  PointerSensor,
-  TouchSensor,
+  DndContext, DragEndEvent, closestCorners, useSensor, useSensors, PointerSensor, TouchSensor,
 } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
 import { v4 as uuidv4 } from 'uuid';
 
-import { TestPlan, TestCycle, TestFlow, ScenarioRef, FeatureWithScenarios } from '../types';
+import { FeatureWithScenarios, BlueprintsData, BlueprintRef, PlanBlueprint, CycleBlueprint, SetBlueprint, FlowBlueprint } from '../types';
 import PlanHeader from '../components/test-plan/PlanHeader';
-import PlanHierarchyPanel from '../components/test-plan/PlanHierarchyPanel';
-import FlowCanvas from '../components/test-plan/FlowCanvas';
+import BlueprintCatalogPanel from '../components/test-plan/BlueprintCatalogPanel';
+import CompositionCanvas from '../components/test-plan/CompositionCanvas';
+import CompositionAssetLibraryPanel from '../components/test-plan/CompositionAssetLibraryPanel';
 import ExecutionMonitor from '../components/test-plan/ExecutionMonitor';
-import AssetLibraryPanel from '../components/test-plan/AssetLibraryPanel';
 import ExecutionDrawer from '../components/test-plan/ExecutionDrawer';
 
-// ── Resize constants ─────────────────────────────────────────────────────────
 const LEFT_WIDTH_DEFAULT = 260;
 const RIGHT_WIDTH_DEFAULT = 320;
 const MIN_PANEL_WIDTH = 180;
 
 const TestPlanPage: React.FC = () => {
-  // ── Plans state ─────────────────────────────────────────────────────────────
-  const [plans, setPlans] = useState<TestPlan[]>([]);
-  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
-  const [selectedCycleId, setSelectedCycleId] = useState<string | null>(null);
-  const [selectedFlowId, setSelectedFlowId] = useState<string | null>(null);
+  // ── State ─────────────────────────────────────────────────────────────
+  const [blueprints, setBlueprints] = useState<BlueprintsData>({ plans: [], cycles: [], sets: [], flows: [] });
+  const [activeCategory, setActiveCategory] = useState<'plans' | 'cycles' | 'sets' | 'flows'>('flows');
+  const [selectedBlueprintId, setSelectedBlueprintId] = useState<string | null>(null);
+
+  const [features, setFeatures] = useState<FeatureWithScenarios[]>([]);
+  const [isLibraryLoading, setIsLibraryLoading] = useState(true);
+  const [isBlueprintsLoading, setIsBlueprintsLoading] = useState(true);
+
   const [isSaved, setIsSaved] = useState(true);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
@@ -41,218 +38,122 @@ const TestPlanPage: React.FC = () => {
   const [executionStatus, setExecutionStatus] = useState<string>('idle');
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
-  // ── Library state ───────────────────────────────────────────────────────────
-  const [features, setFeatures] = useState<FeatureWithScenarios[]>([]);
-  const [isLibraryLoading, setIsLibraryLoading] = useState(true);
-
-  // ── Resize state ────────────────────────────────────────────────────────────
+  // ── Layout State ────────────────────────────────────────────────────────────
   const [leftWidth, setLeftWidth] = useState(LEFT_WIDTH_DEFAULT);
   const [rightWidth, setRightWidth] = useState(RIGHT_WIDTH_DEFAULT);
   const [libraryVisible, setLibraryVisible] = useState(true);
   const theme = useTheme();
   const layoutRef = useRef<HTMLDivElement>(null);
-
-  // ── Center tab state ────────────────────────────────────────────────────────
   const [centerTab, setCenterTab] = useState<'canvas' | 'monitor'>('canvas');
 
-  useEffect(() => {
-    if (isExecuting) {
-      setCenterTab('monitor');
-    }
-  }, [isExecuting]);
+  useEffect(() => { if (isExecuting) setCenterTab('monitor'); }, [isExecuting]);
 
-  // ── Derived ──────────────────────────────────────────────────────────────────
-  const selectedPlan = plans.find(p => p.id === selectedPlanId) ?? null;
-  const selectedCycle = selectedPlan?.cycles.find(c => c.id === selectedCycleId) ?? null;
-  const selectedFlow = selectedCycle?.flows?.find(f => f.id === selectedFlowId) ?? null;
-
-  // ── Load plans ───────────────────────────────────────────────────────────────
+  // ── Initial Load ──────────────────────────────────────────────────────────────
   useEffect(() => {
-    fetch('/api/test-plans')
-      .then(r => r.ok ? r.json() : [])
-      .then((data: TestPlan[]) => {
-        setPlans(Array.isArray(data) ? data : []);
-        if (data.length > 0) {
-          setSelectedPlanId(data[0].id);
-          if (data[0].cycles?.length > 0) {
-            setSelectedCycleId(data[0].cycles[0].id);
-            if (data[0].cycles[0].flows?.length > 0) {
-              setSelectedFlowId(data[0].cycles[0].flows[0].id);
-            }
-          }
-        }
-      })
-      .catch(() => setPlans([]));
-  }, []);
+    setIsBlueprintsLoading(true);
+    fetch('/api/blueprints')
+      .then(r => r.ok ? r.json() : { plans: [], cycles: [], sets: [], flows: [] })
+      .then(data => setBlueprints(data))
+      .catch(() => setBlueprints({ plans: [], cycles: [], sets: [], flows: [] }))
+      .finally(() => setIsBlueprintsLoading(false));
 
-  // ── Load features with scenarios ─────────────────────────────────────────────
-  useEffect(() => {
     setIsLibraryLoading(true);
     fetch('/api/features-with-scenarios')
       .then(r => r.ok ? r.json() : [])
-      .then((data: FeatureWithScenarios[]) => setFeatures(Array.isArray(data) ? data : []))
+      .then(data => setFeatures(Array.isArray(data) ? data : []))
       .catch(() => setFeatures([]))
       .finally(() => setIsLibraryLoading(false));
   }, []);
 
   // ── Persistence ───────────────────────────────────────────────────────────────
+  const markDirty = useCallback(() => setIsSaved(false), []);
+
   const handleSave = useCallback(async () => {
     try {
-      await fetch('/api/test-plans', {
+      await fetch('/api/blueprints', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(plans),
+        body: JSON.stringify(blueprints),
       });
       setIsSaved(true);
     } catch (e) {
-      console.error('Failed to save test plans', e);
+      console.error('Failed to save blueprints', e);
     }
-  }, [plans]);
+  }, [blueprints]);
 
-  const markDirty = useCallback(() => setIsSaved(false), []);
-
-  // ── Plan CRUD ─────────────────────────────────────────────────────────────────
-  const handleAddPlan = useCallback((name: string) => {
-    const newPlan: TestPlan = { id: uuidv4(), name, status: 'draft', cycles: [] };
-    setPlans(prev => [...prev, newPlan]);
-    setSelectedPlanId(newPlan.id);
-    setSelectedCycleId(null);
-    setSelectedFlowId(null);
-    markDirty();
-  }, [markDirty]);
-
-  const handleAddCycle = useCallback((planId: string, name: string) => {
-    const newCycle: TestCycle = { id: uuidv4(), name, flows: [] };
-    setPlans(prev => prev.map(p =>
-      p.id === planId ? { ...p, cycles: [...(p.cycles || []), newCycle] } : p
-    ));
-    setSelectedCycleId(newCycle.id);
-    setSelectedFlowId(null);
-    markDirty();
-  }, [markDirty]);
-
-  const handleAddFlow = useCallback((planId: string, cycleId: string, name: string) => {
-    const newFlow: TestFlow = { id: uuidv4(), name, scenarios: [] };
-    setPlans(prev => prev.map(p =>
-      p.id === planId ? {
-        ...p,
-        cycles: p.cycles.map(c =>
-          c.id === cycleId ? { ...c, flows: [...(c.flows || []), newFlow] } : c
-        )
-      } : p
-    ));
-    setSelectedFlowId(newFlow.id);
-    markDirty();
-  }, [markDirty]);
-
-  const handleDeletePlan = useCallback((planId: string) => {
-    setPlans(prev => prev.filter(p => p.id !== planId));
-    if (selectedPlanId === planId) {
-      setSelectedPlanId(null);
-      setSelectedCycleId(null);
-      setSelectedFlowId(null);
+  // ── Active Blueprint Helpers ─────────────────────────────────────────────────
+  const getActiveBlueprintList = useCallback(() => {
+    switch (activeCategory) {
+      case 'plans': return blueprints.plans;
+      case 'cycles': return blueprints.cycles;
+      case 'sets': return blueprints.sets;
+      case 'flows': return blueprints.flows;
+      default: return [];
     }
-    markDirty();
-  }, [selectedPlanId, markDirty]);
+  }, [activeCategory, blueprints]);
 
-  const handleDeleteCycle = useCallback((planId: string, cycleId: string) => {
-    setPlans(prev => prev.map(p =>
-      p.id === planId ? { ...p, cycles: p.cycles.filter(c => c.id !== cycleId) } : p
-    ));
-    if (selectedCycleId === cycleId) {
-      setSelectedCycleId(null);
-      setSelectedFlowId(null);
-    }
-    markDirty();
-  }, [selectedCycleId, markDirty]);
+  const activeBlueprint = getActiveBlueprintList().find(b => b.id === selectedBlueprintId) || null;
 
-  const handleDeleteFlow = useCallback((planId: string, cycleId: string, flowId: string) => {
-    setPlans(prev => prev.map(p =>
-      p.id === planId ? {
-        ...p,
-        cycles: p.cycles.map(c =>
-          c.id === cycleId ? { ...c, flows: (c.flows || []).filter(f => f.id !== flowId) } : c
-        )
-      } : p
-    ));
-    if (selectedFlowId === flowId) setSelectedFlowId(null);
-    markDirty();
-  }, [selectedFlowId, markDirty]);
-
-  const handleSelectNode = useCallback((planId: string, cycleId: string | null, flowId: string | null) => {
-    setSelectedPlanId(planId);
-    setSelectedCycleId(cycleId);
-    setSelectedFlowId(flowId);
-  }, []);
-
-  // ── Scenario CRUD inside flow ─────────────────────────────────────────────
-  const updateFlowScenarios = useCallback((updater: (prev: ScenarioRef[]) => ScenarioRef[]) => {
-    if (!selectedPlanId || !selectedCycleId || !selectedFlowId) return;
-    setPlans(prev => prev.map(p =>
-      p.id === selectedPlanId
-        ? {
-            ...p,
-            cycles: p.cycles.map(c =>
-              c.id === selectedCycleId
-                ? {
-                    ...c,
-                    flows: (c.flows || []).map(f =>
-                      f.id === selectedFlowId
-                        ? { ...f, scenarios: updater(f.scenarios || []) }
-                        : f
-                    )
-                  }
-                : c
-            ),
-          }
-        : p
-    ));
-    markDirty();
-  }, [selectedPlanId, selectedCycleId, selectedFlowId, markDirty]);
-
-  const handleFlowNameChange = useCallback((newName: string) => {
-    if (!selectedPlanId || !selectedCycleId || !selectedFlowId) return;
-    setPlans(prev => prev.map(p =>
-      p.id === selectedPlanId
-        ? {
-            ...p,
-            cycles: p.cycles.map(c =>
-              c.id === selectedCycleId
-                ? {
-                    ...c,
-                    flows: (c.flows || []).map(f =>
-                      f.id === selectedFlowId
-                        ? { ...f, name: newName }
-                        : f
-                    )
-                  }
-                : c
-            ),
-          }
-        : p
-    ));
-    markDirty();
-  }, [selectedPlanId, selectedCycleId, selectedFlowId, markDirty]);
-
-  const handleRemoveScenario = useCallback((id: string) => {
-    updateFlowScenarios(prev => prev.filter(s => s.id !== id));
-  }, [updateFlowScenarios]);
-
-  const handleMoveUp = useCallback((id: string) => {
-    updateFlowScenarios(prev => {
-      const idx = prev.findIndex(s => s.id === id);
-      if (idx <= 0) return prev;
-      return arrayMove(prev, idx, idx - 1);
+  const updateActiveBlueprint = useCallback((updater: (prev: any) => any) => {
+    if (!selectedBlueprintId) return;
+    setBlueprints(prev => {
+      const next = { ...prev };
+      next[activeCategory] = (next[activeCategory] as any[]).map(b =>
+        b.id === selectedBlueprintId ? updater(b) : b
+      );
+      return next as BlueprintsData;
     });
-  }, [updateFlowScenarios]);
+    markDirty();
+  }, [activeCategory, selectedBlueprintId, markDirty]);
 
-  const handleMoveDown = useCallback((id: string) => {
-    updateFlowScenarios(prev => {
-      const idx = prev.findIndex(s => s.id === id);
-      if (idx === -1 || idx >= prev.length - 1) return prev;
-      return arrayMove(prev, idx, idx + 1);
+  // ── Catalog Actions ──────────────────────────────────────────────────────────
+  const handleAddBlueprint = (cat: 'plans' | 'cycles' | 'sets' | 'flows', name: string) => {
+    const newBp = { id: uuidv4(), name, items: [] };
+    setBlueprints(prev => ({ ...prev, [cat]: [...prev[cat], newBp] }));
+    setActiveCategory(cat);
+    setSelectedBlueprintId(newBp.id);
+    markDirty();
+  };
+
+  const handleDeleteBlueprint = (cat: 'plans' | 'cycles' | 'sets' | 'flows', id: string) => {
+    setBlueprints(prev => ({ ...prev, [cat]: prev[cat].filter(b => b.id !== id) }));
+    if (activeCategory === cat && selectedBlueprintId === id) setSelectedBlueprintId(null);
+    markDirty();
+  };
+
+  const handleSelectBlueprint = (id: string | null) => {
+    setSelectedBlueprintId(id);
+  };
+
+  const handleCategoryChange = (cat: 'plans' | 'cycles' | 'sets' | 'flows') => {
+    setActiveCategory(cat);
+    setSelectedBlueprintId(null);
+  };
+
+  // ── Canvas Actions ───────────────────────────────────────────────────────────
+  const handleNameChange = (newName: string) => {
+    updateActiveBlueprint(b => ({ ...b, name: newName }));
+  };
+
+  const handleRemoveItem = (id: string) => {
+    updateActiveBlueprint(b => ({ ...b, items: b.items.filter((i: BlueprintRef) => i.id !== id) }));
+  };
+
+  const handleMoveUp = (id: string) => {
+    updateActiveBlueprint(b => {
+      const idx = b.items.findIndex((i: BlueprintRef) => i.id === id);
+      if (idx <= 0) return b;
+      return { ...b, items: arrayMove(b.items, idx, idx - 1) };
     });
-  }, [updateFlowScenarios]);
+  };
+
+  const handleMoveDown = (id: string) => {
+    updateActiveBlueprint(b => {
+      const idx = b.items.findIndex((i: BlueprintRef) => i.id === id);
+      if (idx === -1 || idx >= b.items.length - 1) return b;
+      return { ...b, items: arrayMove(b.items, idx, idx + 1) };
+    });
+  };
 
   // ── DnD ───────────────────────────────────────────────────────────────────────
   const sensors = useSensors(
@@ -262,78 +163,82 @@ const TestPlanPage: React.FC = () => {
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
-    if (!over || !selectedPlanId || !selectedCycleId || !selectedFlowId) return;
+    if (!over || !selectedBlueprintId) return;
 
     // Case 1: Drop from library into canvas
-    if (active.data.current?.type === 'library-scenario' &&
-        (over.id === 'flow-canvas-drop' || over.data.current?.type === 'flow-scenario')) {
-      const { featurePath, featureName, featureTitle, scenario } = active.data.current;
-      const newRef: ScenarioRef = {
-        id: uuidv4(),
-        featurePath,
-        featureName: featureTitle || featureName,
-        scenarioName: scenario.name,
-        tags: scenario.tags,
-        steps: scenario.steps,
-      };
-      updateFlowScenarios(prev => {
-        // If dropped on a specific node, insert before it; otherwise append
-        if (over.data.current?.type === 'flow-scenario') {
-          const overIdx = prev.findIndex(s => s.id === over.id);
-          const next = [...prev];
-          next.splice(overIdx >= 0 ? overIdx : next.length, 0, newRef);
-          return next;
+    if (active.data.current?.type === 'library-item' || active.data.current?.type === 'library-scenario') {
+      let newItem: BlueprintRef;
+
+      if (active.data.current.type === 'library-scenario') {
+        const { featurePath, featureName, featureTitle, scenario } = active.data.current;
+        newItem = {
+          id: uuidv4(),
+          refId: '',
+          type: 'scenario',
+          featurePath,
+          name: featureTitle || featureName,
+          scenarioName: scenario.name,
+          tags: scenario.tags,
+          steps: scenario.steps,
+        };
+      } else {
+        newItem = { ...active.data.current.item, id: uuidv4() };
+      }
+
+      updateActiveBlueprint(b => {
+        const prevItems = b.items;
+        if (over.data.current?.type === 'composition-item') {
+          const overIdx = prevItems.findIndex((i: BlueprintRef) => i.id === over.id);
+          const next = [...prevItems];
+          next.splice(overIdx >= 0 ? overIdx : next.length, 0, newItem);
+          return { ...b, items: next };
         }
-        return [...prev, newRef];
+        return { ...b, items: [...prevItems, newItem] };
       });
       return;
     }
 
     // Case 2: Reorder within canvas
-    if (active.data.current?.type === 'flow-scenario' && over.data.current?.type === 'flow-scenario' && active.id !== over.id) {
-      updateFlowScenarios(prev => {
-        const oldIdx = prev.findIndex(s => s.id === active.id);
-        const newIdx = prev.findIndex(s => s.id === over.id);
-        if (oldIdx === -1 || newIdx === -1) return prev;
-        return arrayMove(prev, oldIdx, newIdx);
+    if (active.data.current?.type === 'composition-item' && over.data.current?.type === 'composition-item' && active.id !== over.id) {
+      updateActiveBlueprint(b => {
+        const prevItems = b.items;
+        const oldIdx = prevItems.findIndex((i: BlueprintRef) => i.id === active.id);
+        const newIdx = prevItems.findIndex((i: BlueprintRef) => i.id === over.id);
+        if (oldIdx === -1 || newIdx === -1) return b;
+        return { ...b, items: arrayMove(prevItems, oldIdx, newIdx) };
       });
     }
-  }, [selectedPlanId, selectedCycleId, selectedFlowId, updateFlowScenarios]);
-
-  // ── Drawer callbacks (stable refs to avoid re-triggering the SSE useEffect) ─
-  const handleToggleDrawer        = useCallback(() => setIsDrawerOpen(v => !v), []);
-  const handleExecutionFinished   = useCallback(() => setIsExecuting(false), []);
+  }, [selectedBlueprintId, updateActiveBlueprint]);
 
   // ── Execution ───────────────────────────────────────────────────────────────
   const handleExecute = useCallback(async (scheduledAt?: string) => {
-    if (!selectedPlanId) return;
+    // Only allow execution from Plan category
+    if (activeCategory !== 'plans' || !selectedBlueprintId) return;
     setIsExecuting(true);
     setIsDrawerOpen(true);
-    setCurrentTaskId(null); // Reset
+    setCurrentTaskId(null);
     
     try {
       const url = scheduledAt
-        ? `/api/execute-plan/${selectedPlanId}?scheduled_at=${encodeURIComponent(scheduledAt)}`
-        : `/api/execute-plan/${selectedPlanId}`;
+        ? `/api/execute-plan/${selectedBlueprintId}?scheduled_at=${encodeURIComponent(scheduledAt)}`
+        : `/api/execute-plan/${selectedBlueprintId}`;
 
-      const res = await fetch(url, {
-        method: 'POST',
-      });
+      const res = await fetch(url, { method: 'POST' });
       if (res.ok) {
         const data = await res.json();
         setCurrentTaskId(data.task_id);
         setExecutionStatus(data.status || (scheduledAt ? 'scheduled' : 'pending'));
       } else {
-        console.error('Failed to start execution');
         setIsExecuting(false);
       }
     } catch (e) {
-      console.error('Error starting execution', e);
       setIsExecuting(false);
     }
-  }, [selectedPlanId]);
+  }, [selectedBlueprintId, activeCategory]);
 
-  // ── Resize handlers ─────────────────────────────────────────────────────────
+  const handleToggleDrawer = useCallback(() => setIsDrawerOpen(v => !v), []);
+  const handleExecutionFinished = useCallback(() => setIsExecuting(false), []);
+
   const makeResizeHandler = useCallback((side: 'left' | 'right') => {
     return (e: React.MouseEvent) => {
       e.preventDefault();
@@ -356,200 +261,82 @@ const TestPlanPage: React.FC = () => {
   }, [leftWidth, rightWidth]);
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCorners}
-      onDragEnd={handleDragEnd}
-    >
-      <Box
-        ref={layoutRef}
-        sx={{
-          display: 'flex',
-          flexDirection: 'column',
-          height: '100%',
-          overflow: 'hidden',
-          bgcolor: theme.palette.custom.bgMain,
-        }}
-      >
-        {/* ── Top header bar ── */}
+    <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
+      <Box ref={layoutRef} sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', bgcolor: theme.palette.custom.bgMain }}>
         <PlanHeader
-          plan={selectedPlan}
-          cycle={selectedCycle}
-          flow={selectedFlow}
-          isSaved={isSaved}
-          onSave={handleSave}
-          onExecute={handleExecute}
-          isExecuting={isExecuting}
-          executionStatus={executionStatus}
+          plan={null} cycle={null} flow={null} activeBlueprintName={activeBlueprint?.name}
+          isSaved={isSaved} onSave={handleSave} onExecute={handleExecute} isExecuting={isExecuting} executionStatus={executionStatus}
+          canExecute={activeCategory === 'plans' && !!selectedBlueprintId && (activeBlueprint?.items?.length ?? 0) > 0}
         />
 
-        {/* ── Three-column workspace ── */}
         <Box sx={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
-
-          {/* Left: Plan Hierarchy */}
+          {/* Left: Blueprint Catalog */}
           <Box sx={{ width: leftWidth, flexShrink: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-            <PlanHierarchyPanel
-              plans={plans}
-              selectedPlanId={selectedPlanId}
-              selectedCycleId={selectedCycleId}
-              selectedFlowId={selectedFlowId}
-              onSelectNode={handleSelectNode}
-              onAddPlan={handleAddPlan}
-              onAddCycle={handleAddCycle}
-              onAddFlow={handleAddFlow}
-              onDeletePlan={handleDeletePlan}
-              onDeleteCycle={handleDeleteCycle}
-              onDeleteFlow={handleDeleteFlow}
+            <BlueprintCatalogPanel
+              blueprints={blueprints}
+              activeCategory={activeCategory}
+              onCategoryChange={handleCategoryChange}
+              selectedBlueprintId={selectedBlueprintId}
+              onSelectBlueprint={handleSelectBlueprint}
+              onAddBlueprint={handleAddBlueprint}
+              onDeleteBlueprint={handleDeleteBlueprint}
             />
           </Box>
 
-          {/* Left resize handle */}
-          <Box
-            onMouseDown={makeResizeHandler('left')}
-            sx={{
-              width: 4,
-              cursor: 'col-resize',
-              bgcolor: theme.palette.custom.border,
-              flexShrink: 0,
-              '&:hover': { bgcolor: 'primary.main' },
-              transition: 'background-color 0.15s ease',
-            }}
-          />
+          <Box onMouseDown={makeResizeHandler('left')} sx={{ width: 4, cursor: 'col-resize', bgcolor: theme.palette.custom.border, flexShrink: 0, '&:hover': { bgcolor: 'primary.main' } }} />
 
-          {/* Center: Flow Canvas / Execution Monitor */}
+          {/* Center: Canvas / Monitor */}
           <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
-            {/* Center Header Tabs */}
             <Box sx={{ borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper', px: 2 }}>
-              <Tabs
-                value={centerTab}
-                onChange={(e, v) => setCenterTab(v)}
-                sx={{ minHeight: 40 }}
-                TabIndicatorProps={{ sx: { height: 3, borderTopLeftRadius: 3, borderTopRightRadius: 3 } }}
-              >
-                <Tab
-                  label="Diseñador de Flujo"
-                  value="canvas"
-                  sx={{ minHeight: 40, py: 0, fontSize: '0.75rem', fontWeight: 600, textTransform: 'none' }}
-                />
-                <Tab
-                  label="Monitor de Ejecución"
-                  value="monitor"
-                  sx={{ minHeight: 40, py: 0, fontSize: '0.75rem', fontWeight: 600, textTransform: 'none' }}
-                />
+              <Tabs value={centerTab} onChange={(e, v) => setCenterTab(v)} sx={{ minHeight: 40 }} TabIndicatorProps={{ sx: { height: 3, borderTopLeftRadius: 3, borderTopRightRadius: 3 } }}>
+                <Tab label="Diseñador" value="canvas" sx={{ minHeight: 40, py: 0, fontSize: '0.75rem', fontWeight: 600, textTransform: 'none' }} />
+                <Tab label="Monitor" value="monitor" sx={{ minHeight: 40, py: 0, fontSize: '0.75rem', fontWeight: 600, textTransform: 'none' }} />
               </Tabs>
             </Box>
 
-            {/* Center Content */}
             <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
               {centerTab === 'canvas' && (
-                <FlowCanvas
-                  flow={selectedFlow}
-                  noFlowSelected={!selectedFlowId}
-                  onRemoveScenario={handleRemoveScenario}
+                <CompositionCanvas
+                  category={activeCategory}
+                  blueprintId={selectedBlueprintId}
+                  name={activeBlueprint?.name || ''}
+                  items={activeBlueprint?.items || []}
+                  onNameChange={handleNameChange}
+                  onRemoveItem={handleRemoveItem}
                   onMoveUp={handleMoveUp}
                   onMoveDown={handleMoveDown}
-                  onFlowNameChange={handleFlowNameChange}
                 />
               )}
               {centerTab === 'monitor' && (
-                <ExecutionMonitor
-                  plans={plans}
-                  selectedPlanId={selectedPlanId}
-                  taskId={currentTaskId}
-                  isExecuting={isExecuting}
-                  isGeneratingReport={isGeneratingReport}
-                />
+                <ExecutionMonitor blueprints={blueprints} selectedPlanId={activeCategory === 'plans' ? selectedBlueprintId : null} taskId={currentTaskId} isExecuting={isExecuting} isGeneratingReport={isGeneratingReport} />
               )}
             </Box>
           </Box>
 
-          {/* Right resize handle + library toggle */}
           <Box
-            sx={{
-              width: libraryVisible ? 4 : 28,
-              flexShrink: 0,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              position: 'relative',
-              bgcolor: theme.palette.custom.border,
-              transition: 'width 0.2s ease, background-color 0.15s ease',
-              cursor: libraryVisible ? 'col-resize' : 'default',
-              '&:hover': { bgcolor: libraryVisible ? 'primary.main' : theme.palette.custom.border },
-            }}
+            sx={{ width: libraryVisible ? 4 : 28, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative', bgcolor: theme.palette.custom.border, cursor: libraryVisible ? 'col-resize' : 'default', '&:hover': { bgcolor: libraryVisible ? 'primary.main' : theme.palette.custom.border } }}
             onMouseDown={libraryVisible ? makeResizeHandler('right') : undefined}
           >
-            <Tooltip
-              title={libraryVisible ? 'Ocultar biblioteca' : 'Mostrar biblioteca'}
-              placement="left"
-            >
-              <IconButton
-                size="small"
-                onClick={() => setLibraryVisible(v => !v)}
-                onMouseDown={e => e.stopPropagation()}
-                sx={{
-                  position: libraryVisible ? 'absolute' : 'static',
-                  right: libraryVisible ? -12 : 'auto',
-                  width: 24,
-                  height: 24,
-                  bgcolor: theme.palette.background.paper,
-                  border: `1px solid ${theme.palette.custom.border}`,
-                  borderRadius: '50%',
-                  color: 'text.secondary',
-                  opacity: libraryVisible ? 0 : 1,
-                  transition: 'opacity 0.15s ease',
-                  zIndex: 10,
-                  '&:hover': {
-                    bgcolor: theme.palette.primary.main,
-                    color: 'white',
-                    borderColor: theme.palette.primary.main,
-                    opacity: 1,
-                  },
-                  '.MuiBox-root:hover &': { opacity: 1 },
-                  p: 0.25,
-                }}
-              >
-                {libraryVisible
-                  ? <ChevronRightRoundedIcon sx={{ fontSize: 14 }} />
-                  : <ChevronLeftRoundedIcon sx={{ fontSize: 14 }} />
-                }
+            <Tooltip title={libraryVisible ? 'Ocultar biblioteca' : 'Mostrar biblioteca'} placement="left">
+              <IconButton size="small" onClick={() => setLibraryVisible(v => !v)} onMouseDown={e => e.stopPropagation()} sx={{ position: libraryVisible ? 'absolute' : 'static', right: libraryVisible ? -12 : 'auto', width: 24, height: 24, bgcolor: theme.palette.background.paper, border: `1px solid ${theme.palette.custom.border}`, borderRadius: '50%', opacity: libraryVisible ? 0 : 1, zIndex: 10, '&:hover': { bgcolor: theme.palette.primary.main, color: 'white', opacity: 1 }, '.MuiBox-root:hover &': { opacity: 1 }, p: 0.25 }}>
+                {libraryVisible ? <ChevronRightRoundedIcon sx={{ fontSize: 14 }} /> : <ChevronLeftRoundedIcon sx={{ fontSize: 14 }} />}
               </IconButton>
             </Tooltip>
-            {!libraryVisible && (
-              <Tooltip title="Biblioteca de Assets" placement="left">
-                <LibraryBooksRoundedIcon sx={{ fontSize: 13, color: 'text.disabled', mt: 1 }} />
-              </Tooltip>
-            )}
+            {!libraryVisible && <Tooltip title="Biblioteca" placement="left"><LibraryBooksRoundedIcon sx={{ fontSize: 13, color: 'text.disabled', mt: 1 }} /></Tooltip>}
           </Box>
 
           {/* Right: Asset Library */}
-          <Box
-            sx={{
-              width: libraryVisible ? rightWidth : 0,
-              flexShrink: 0,
-              overflow: 'hidden',
-              display: 'flex',
-              flexDirection: 'column',
-              transition: 'width 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-            }}
-          >
-            <AssetLibraryPanel
+          <Box sx={{ width: libraryVisible ? rightWidth : 0, flexShrink: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', transition: 'width 0.25s cubic-bezier(0.4, 0, 0.2, 1)' }}>
+            <CompositionAssetLibraryPanel
               features={features}
-              isLoading={isLibraryLoading}
+              blueprints={blueprints}
+              isLoading={isLibraryLoading || isBlueprintsLoading}
+              activeCategory={activeCategory}
             />
           </Box>
         </Box>
 
-        {/* ── Execution Drawer (bottom) ── */}
-        <ExecutionDrawer
-          isOpen={isDrawerOpen}
-          onToggle={handleToggleDrawer}
-          taskId={currentTaskId}
-          onExecutionFinished={handleExecutionFinished}
-          onStatusChange={setExecutionStatus}
-          onReportGenerating={setIsGeneratingReport}
-        />
+        <ExecutionDrawer isOpen={isDrawerOpen} onToggle={handleToggleDrawer} taskId={currentTaskId} onExecutionFinished={handleExecutionFinished} onStatusChange={setExecutionStatus} onReportGenerating={setIsGeneratingReport} />
       </Box>
     </DndContext>
   );

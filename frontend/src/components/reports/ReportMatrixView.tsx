@@ -133,7 +133,7 @@ const ReportMatrixView: React.FC<ReportMatrixViewProps> = ({ data }) => {
                             try {
                                 const ev = JSON.parse(line);
                                 if (ev.type === 'scenario_status' && ev.gifExecutionId) {
-                                    gifExecutionId = ev.gifExecutionId;
+                                    gifExecutionId = String(ev.gifExecutionId);
                                     const tsSec = parseInt(gifExecutionId.split('_')[0], 10);
                                     if (!isNaN(tsSec)) gifStartSec = tsSec;
                                     break;
@@ -144,12 +144,24 @@ const ReportMatrixView: React.FC<ReportMatrixViewProps> = ({ data }) => {
 
                     const gherkinMatch = findBestMatch(sc.scenario_name, gifStartSec);
 
+                    const isFlow = sc.source_type === 'flow';
+                    const hasDetail = sc.set_detail && sc.set_detail !== '—';
+                    const matrixMatch = flow.flow_name?.match(/\(Matriz \d+\)/);
+                    const matrixSuffix = matrixMatch ? ` ${matrixMatch[0]}` : '';
+                    
+                    let finalFlowName = flow.flow_name;
+                    if (isFlow) {
+                        finalFlowName = hasDetail ? sc.set_detail : flow.flow_name;
+                    } else if (sc.source_type === 'feature') {
+                        finalFlowName = `${sc.set_detail}${matrixSuffix}`;
+                    }
+
                     result.push({
                         id: sc.id,
                         cycleName: cycle.cycle_name || cycle.cycle_id,
-                        flowName: flow.flow_name
-                            ? flow.flow_name.replace(' — Default', '').replace(' - Default', '')
-                            : 'Sin Grupo',
+                        setName: sc.set_name || '—',
+                        setDetail: sc.set_detail || '—',
+                        flowName: finalFlowName,
                         scenarioName: sc.scenario_name,
                         tags: sc.tags || [],
                         duration: sc.duration_ms || 0,
@@ -179,6 +191,8 @@ const ReportMatrixView: React.FC<ReportMatrixViewProps> = ({ data }) => {
                     <TableHead>
                         <TableRow>
                             <TableCell sx={{ fontWeight: 600 }}>Ciclo</TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>Set</TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>Set Detail</TableCell>
                             <TableCell sx={{ fontWeight: 600 }}>Flujo</TableCell>
                             <TableCell sx={{ fontWeight: 600 }}>Escenario</TableCell>
                             <TableCell sx={{ fontWeight: 600 }}>Tags</TableCell>
@@ -201,6 +215,8 @@ const ReportMatrixView: React.FC<ReportMatrixViewProps> = ({ data }) => {
                                     }}
                                 >
                                     <TableCell sx={{ fontSize: '0.8rem' }}>{row.cycleName}</TableCell>
+                                    <TableCell sx={{ fontSize: '0.8rem' }}>{row.setName}</TableCell>
+                                    <TableCell sx={{ fontSize: '0.8rem' }}>{row.setDetail}</TableCell>
                                     <TableCell sx={{ fontSize: '0.8rem' }}>{row.flowName}</TableCell>
                                     <TableCell sx={{ fontSize: '0.85rem', fontWeight: row.status === 'fail' ? 600 : 400 }}>{row.scenarioName}</TableCell>
                                     <TableCell>

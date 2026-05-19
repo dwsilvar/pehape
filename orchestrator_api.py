@@ -78,9 +78,9 @@ except ImportError:
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
 
-# PROJECT_ROOT ya está definido arriba
 FEATURES_DIR   = PROJECT_ROOT / "features"
 PLANS_DB_FILE  = FEATURES_DIR / "test_plans.json"
+BLUEPRINTS_DB_FILE = FEATURES_DIR / "blueprints.json"
 RESOURCES_DIR  = PROJECT_ROOT / "resources"
 IMAGES_DIR     = RESOURCES_DIR / "images"
 ALLURE_RESULTS = PROJECT_ROOT / "reports" / "allure_results"
@@ -195,6 +195,25 @@ def _save_plans(plans: List[dict]) -> None:
             json.dump(plans, fh, indent=2, ensure_ascii=False)
 
 
+_blueprints_lock = Lock()
+
+def _load_blueprints() -> dict:
+    with _blueprints_lock:
+        if not BLUEPRINTS_DB_FILE.exists():
+            return {"plans": [], "cycles": [], "sets": [], "flows": []}
+        try:
+            with open(BLUEPRINTS_DB_FILE, "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+            return data if isinstance(data, dict) else {"plans": [], "cycles": [], "sets": [], "flows": []}
+        except (json.JSONDecodeError, IOError):
+            return {"plans": [], "cycles": [], "sets": [], "flows": []}
+
+def _save_blueprints(data: dict) -> None:
+    with _blueprints_lock:
+        with open(BLUEPRINTS_DB_FILE, "w", encoding="utf-8") as fh:
+            json.dump(data, fh, indent=2, ensure_ascii=False)
+
+
 # ── Pydantic models ─────────────────────────────────────────────────────────────
 
 class ScenarioRef(BaseModel):
@@ -255,6 +274,19 @@ class StatusResponse(BaseModel):
     last_log:   Optional[str]
     report_url: Optional[str]
 
+
+# ── Routes — Blueprints ─────────────────────────────────────────────────────────
+
+@app.get("/api/blueprints", tags=["Blueprints"])
+def get_blueprints():
+    """Retrieve all blueprints from blueprints.json."""
+    return _load_blueprints()
+
+@app.put("/api/blueprints", tags=["Blueprints"])
+def update_blueprints(payload: dict):
+    """Overwrite all blueprints in blueprints.json."""
+    _save_blueprints(payload)
+    return {"message": "Blueprints saved successfully."}
 
 # ── Background worker ───────────────────────────────────────────────────────────
 
@@ -1709,16 +1741,15 @@ def delete_test_plan(plan_id: str):
 )
 def execute_plan(plan_id: str, background_tasks: BackgroundTasks, scheduled_at: Optional[str] = None):
     """
-    Trigger the execution of a specific Test Plan.
+    Trigger the execution of a specific Test Plan from Blueprints.
     """
-    # Retrieve plan
-    plans = _load_plans()
-    plan = next((p for p in plans if p.get("id") == plan_id), None)
+    blueprints = _load_blueprints()
+    plan = next((p for p in blueprints.get("plans", []) if p.get("id") == plan_id), None)
     if not plan:
         raise HTTPException(status_code=404, detail=f"Plan '{plan_id}' not found.")
 
-    # Convert UI plan format → orchestrator input format
-    orchestrator_input = _convert_plan_to_orchestrator_format(plan)
+    # Convert Composition Blueprint format → orchestrator input format
+    orchestrator_input = _convert_plan_to_orchestrator_format(plan, blueprints)
     plan_json_str = json.dumps(orchestrator_input, ensure_ascii=False)
 
     # Create execution state
@@ -1766,71 +1797,115 @@ def cancel_execution(task_id: str):
         raise HTTPException(status_code=400, detail=f"Cannot cancel task in status '{state.status}'.")
 
 
-def _convert_plan_to_orchestrator_format(plan: dict) -> dict:
+def _convert_plan_to_orchestrator_format(plan: dict, blueprints: dict) -> dict:
     """
-    Convert the UI-saved plan format (cycles[] → scenarios[])
+    Convert the Blueprint compositional format (Plan -> Cycles -> Sets/Flows)
     into the orchestrator engine format (test_cycles[] → test_flows[] → scenarios[]).
+    Includes Cartesian Product matrix expansion for Test Sets containing Features.
     """
-    global_config = plan.get("global_config", {})
+    import itertools
 
-    test_cycles = []
-    for cycle in plan.get("cycles", []):
-        test_flows = []
-        
-        # Backward compatibility: if cycle has 'scenarios', treat it as a single flow
-        legacy_scenarios = cycle.get("scenarios")
-        if legacy_scenarios is not None and len(legacy_scenarios) > 0:
-            flow = {
-                "flow_id":   f"FLOW-{cycle.get('id', uuid.uuid4())[:8].upper()}",
-                "flow_name": cycle.get('flowName') or "Sin Grupo",
-                "enabled":   cycle.get("enabled", True),
+    def expand_set(set_bp: dict) -> list:
+        choices_per_item = []
+        for ref in set_bp.get("items", []):
+            if ref.get("type") == "flow":
+                flow_bp = next((f for f in blueprints.get("flows", []) if f["id"] == ref.get("refId")), None)
+                if flow_bp:
+                    enhanced_items = [{**i, "source_name": flow_bp.get("name"), "source_type": "flow"} for i in flow_bp.get("items", [])]
+                    choices_per_item.append([enhanced_items])
+            elif ref.get("type") == "feature":
+                scenarios = []
+                for sname in ref.get("steps", []):
+                    scenarios.append([{
+                        "id": str(uuid.uuid4()),
+                        "type": "scenario",
+                        "featurePath": ref.get("featurePath", ""),
+                        "scenarioName": sname,
+                        "source_name": ref.get("name", ref.get("refId", "").split("/")[-1]),
+                        "source_type": "feature",
+                        "tags": [],
+                        "enabled": True,
+                    }])
+                if scenarios:
+                    choices_per_item.append(scenarios)
+
+        if not choices_per_item:
+            return []
+
+        combinations = list(itertools.product(*choices_per_item))
+        generated_flows = []
+        for i, combo in enumerate(combinations):
+            flattened = []
+            for block in combo:
+                flattened.extend(block)
+            
+            generated_flows.append({
+                "flow_id": f"{set_bp.get('id')}-exp-{i}",
+                "flow_name": f"{set_bp.get('name')} (Matriz {i+1})",
+                "enabled": True,
                 "scenarios": [
                     {
-                        "id":             s.get("id", ""),
-                        "feature_path":   s.get("featurePath", ""),
-                        "scenario_name":  s.get("scenarioName", ""),
-                        "tags":           s.get("tags", []),
-                        "enabled":        s.get("enabled", True),
-                        "userdata":       s.get("userdata", {}),
-                    }
-                    for s in legacy_scenarios
-                ],
-            }
-            test_flows.append(flow)
-        else:
-            # New nested flows structure
-            for f in cycle.get("flows", []):
-                flow = {
-                    "flow_id":   f.get("id", str(uuid.uuid4())),
-                    "flow_name": f.get("name", "Unnamed Flow"),
-                    "enabled":   True,
-                    "scenarios": [
-                        {
-                            "id":             s.get("id", ""),
-                            "feature_path":   s.get("featurePath", ""),
-                            "scenario_name":  s.get("scenarioName", ""),
-                            "tags":           s.get("tags", []),
-                            "enabled":        s.get("enabled", True),
-                            "userdata":       s.get("userdata", {}),
-                        }
-                        for s in f.get("scenarios", [])
-                    ],
-                }
-                test_flows.append(flow)
+                        "id": s.get("id", str(uuid.uuid4())),
+                        "feature_path": s.get("featurePath", ""),
+                        "scenario_name": s.get("scenarioName", ""),
+                        "tags": s.get("tags", []),
+                        "enabled": s.get("enabled", True),
+                        "set_name": set_bp.get("name", "—"),
+                        "set_detail": s.get("source_name", "—"),
+                        "source_type": s.get("source_type", "flow"),
+                        "userdata": s.get("userdata", {}),
+                    } for s in flattened
+                ]
+            })
+        return generated_flows
+
+    test_cycles = []
+    for c_ref in plan.get("items", []):
+        if c_ref.get("type") != "cycle": continue
+        cycle_bp = next((c for c in blueprints.get("cycles", []) if c["id"] == c_ref.get("refId")), None)
+        if not cycle_bp: continue
+
+        test_flows = []
+        for ref in cycle_bp.get("items", []):
+            if ref.get("type") == "flow":
+                flow_bp = next((f for f in blueprints.get("flows", []) if f["id"] == ref.get("refId")), None)
+                if flow_bp:
+                    test_flows.append({
+                        "flow_id": flow_bp.get("id"),
+                        "flow_name": flow_bp.get("name"),
+                        "enabled": True,
+                        "scenarios": [
+                            {
+                                "id": s.get("id", str(uuid.uuid4())),
+                                "feature_path": s.get("featurePath", ""),
+                                "scenario_name": s.get("scenarioName", ""),
+                                "tags": s.get("tags", []),
+                                "enabled": s.get("enabled", True),
+                                "set_name": "—",
+                                "set_detail": "—",
+                                "source_type": "flow",
+                                "userdata": s.get("userdata", {}),
+                            } for s in flow_bp.get("items", [])
+                        ]
+                    })
+            elif ref.get("type") == "set":
+                set_bp = next((s for s in blueprints.get("sets", []) if s["id"] == ref.get("refId")), None)
+                if set_bp:
+                    test_flows.extend(expand_set(set_bp))
 
         test_cycles.append({
-            "cycle_id":   cycle.get("id", str(uuid.uuid4())),
-            "cycle_name": cycle.get("name", "Cycle"),
-            "enabled":    cycle.get("enabled", True),
+            "cycle_id": cycle_bp.get("id"),
+            "cycle_name": cycle_bp.get("name"),
+            "enabled": True,
             "test_flows": test_flows,
         })
 
     return {
-        "plan_id":       plan.get("id", "UNKNOWN"),
-        "name":          plan.get("name", "Test Plan"),
-        "enabled":       plan.get("enabled", True),
-        "global_config": global_config,
-        "test_cycles":   test_cycles,
+        "plan_id": plan.get("id", "UNKNOWN"),
+        "name": plan.get("name", "Test Plan"),
+        "enabled": True,
+        "global_config": {},
+        "test_cycles": test_cycles,
     }
 
 

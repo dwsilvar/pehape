@@ -8,7 +8,9 @@ import CheckCircleRoundedIcon   from '@mui/icons-material/CheckCircleRounded';
 import CancelRoundedIcon        from '@mui/icons-material/CancelRounded';
 import RemoveCircleRoundedIcon  from '@mui/icons-material/RemoveCircleRounded';
 import RadioButtonUncheckedRoundedIcon from '@mui/icons-material/RadioButtonUncheckedRounded';
-import { TestPlan } from '../../types';
+import LibraryBooksRoundedIcon  from '@mui/icons-material/LibraryBooksRounded';
+import ViewListRoundedIcon from '@mui/icons-material/ViewListRounded';
+import { BlueprintsData, BlueprintRef, PlanBlueprint } from '../../types';
 import { ScenarioIcon, FeatureIcon, CycleIcon, FlowIcon } from '../PehapeIcons';
 import { useExecutionScenarioStatus, ScenarioExecStatus } from '../../hooks/useExecutionScenarioStatus';
 
@@ -21,11 +23,13 @@ interface FlatScenario {
   featurePath: string;
   planName: string;
   cycleName: string;
+  setName: string;
+  setDetail: string;
   flowName: string;
 }
 
 interface ExecutionMonitorProps {
-  plans: TestPlan[];
+  blueprints: BlueprintsData;
   selectedPlanId: string | null;
   taskId: string | null;
   isExecuting: boolean;
@@ -110,34 +114,109 @@ const SummaryChip: React.FC<{ count: number; status: ScenarioExecStatus }> = ({ 
 // ── Main component ────────────────────────────────────────────────────────────
 
 const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
-  plans, selectedPlanId, taskId, isExecuting, isGeneratingReport = false,
+  blueprints, selectedPlanId, taskId, isExecuting, isGeneratingReport = false,
 }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
 
   // ── Derive flat scenario list from the selected plan ───────────────────────
   const { flatScenarios, plan } = useMemo(() => {
-    const plan = plans.find(p => p.id === selectedPlanId) ?? null;
+    const plan = blueprints.plans.find(p => p.id === selectedPlanId) ?? null;
     if (!plan) return { flatScenarios: [], plan: null };
 
     const flat: FlatScenario[] = [];
-    for (const cycle of plan.cycles ?? []) {
-      for (const flow of cycle.flows ?? []) {
-        for (const s of flow.scenarios ?? []) {
-          flat.push({
-            id:           s.id,
-            scenarioName: s.scenarioName,
-            featureName:  s.featureName || s.featurePath.split('/').pop() || s.featurePath,
-            featurePath:  s.featurePath,
-            planName:     plan.name,
-            cycleName:    cycle.name,
-            flowName:     flow.name,
-          });
+
+    const product = (arr: any[][][]): any[][] => {
+      if (arr.length === 0) return [];
+      if (arr.length === 1) return arr[0];
+      const result: any[][] = [];
+      const allCasesOfRest = product(arr.slice(1));
+      for (let i = 0; i < arr[0].length; i++) {
+        for (let j = 0; j < allCasesOfRest.length; j++) {
+          result.push([...arr[0][i], ...allCasesOfRest[j]]);
+        }
+      }
+      return result;
+    };
+
+    for (const cRef of plan.items ?? []) {
+      if (cRef.type !== 'cycle') continue;
+      const cycle = blueprints.cycles.find(c => c.id === cRef.refId);
+      if (!cycle) continue;
+
+      for (const ref of cycle.items ?? []) {
+        if (ref.type === 'flow') {
+          const flow = blueprints.flows.find(f => f.id === ref.refId);
+          if (flow) {
+            for (const s of flow.items ?? []) {
+              flat.push({
+                id: s.id,
+                scenarioName: s.scenarioName || s.name,
+                featureName: s.featurePath ? s.featurePath.split('/').pop()! : '',
+                featurePath: s.featurePath || '',
+                planName: plan.name,
+                cycleName: cycle.name,
+                setName: '—',
+                setDetail: '—',
+                flowName: flow.name,
+              });
+            }
+          }
+        } else if (ref.type === 'set') {
+          const set = blueprints.sets.find(s => s.id === ref.refId);
+          if (set) {
+            const choicesPerItem: any[][][] = [];
+            for (const setRef of set.items ?? []) {
+              if (setRef.type === 'flow') {
+                const flow = blueprints.flows.find(f => f.id === setRef.refId);
+                if (flow && flow.items.length > 0) {
+                  const enhancedItems = flow.items.map(i => ({ ...i, sourceName: flow.name, sourceType: 'flow' }));
+                  choicesPerItem.push([enhancedItems]);
+                }
+              } else if (setRef.type === 'feature') {
+                const scenarios: any[][] = [];
+                for (const sname of setRef.steps ?? []) {
+                  scenarios.push([{
+                    id: `${setRef.refId}-${sname}`,
+                    refId: '',
+                    type: 'scenario',
+                    scenarioName: sname,
+                    name: sname,
+                    featurePath: setRef.featurePath || setRef.refId,
+                    sourceName: setRef.name || setRef.refId.split('/').pop(),
+                    sourceType: 'feature'
+                  }]);
+                }
+                if (scenarios.length > 0) {
+                  choicesPerItem.push(scenarios);
+                }
+              }
+            }
+
+            if (choicesPerItem.length > 0) {
+              const combinations = product(choicesPerItem);
+              combinations.forEach((combo, idx) => {
+                combo.forEach((s, sIdx) => {
+                  flat.push({
+                    id: `${s.id}-${idx}-${sIdx}`,
+                    scenarioName: s.scenarioName || s.name,
+                    featureName: s.featurePath ? s.featurePath.split('/').pop()! : '',
+                    featurePath: s.featurePath || '',
+                    planName: plan.name,
+                    cycleName: cycle.name,
+                    setName: set.name,
+                    setDetail: s.sourceName || '—',
+                    flowName: s.sourceType === 'flow' ? s.sourceName : `${s.sourceName || set.name} (Matriz ${idx + 1})`,
+                  });
+                });
+              });
+            }
+          }
         }
       }
     }
     return { flatScenarios: flat, plan };
-  }, [plans, selectedPlanId]);
+  }, [blueprints, selectedPlanId]);
 
   const scenarioIds = useMemo(
     () => flatScenarios.map(s => s.id),
@@ -255,6 +334,18 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
               </TableCell>
               <TableCell sx={{ fontWeight: 600, bgcolor: 'background.paper', whiteSpace: 'nowrap' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                  <LibraryBooksRoundedIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                  Test Set
+                </Box>
+              </TableCell>
+              <TableCell sx={{ fontWeight: 600, bgcolor: 'background.paper', whiteSpace: 'nowrap' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                  <ViewListRoundedIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                  Test Set Detail
+                </Box>
+              </TableCell>
+              <TableCell sx={{ fontWeight: 600, bgcolor: 'background.paper', whiteSpace: 'nowrap' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                   <FlowIcon size={14} color={theme.palette.text.secondary} />
                   Test Flow
                 </Box>
@@ -296,6 +387,8 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                   }}
                 >
                   <TableCell sx={{ color: 'text.secondary', whiteSpace: 'nowrap', borderLeft: `2px solid ${isRunning ? theme.palette.warning.main : isFailed ? theme.palette.error.main : 'transparent'}` }}>{fs.cycleName}</TableCell>
+                  <TableCell sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>{fs.setName}</TableCell>
+                  <TableCell sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>{fs.setDetail}</TableCell>
                   <TableCell sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>{fs.flowName}</TableCell>
                   <TableCell sx={{ width: '50%' }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>

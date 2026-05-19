@@ -117,6 +117,51 @@ export interface FeatureWithScenarios {
   scenarios: ScenarioMeta[];
 }
 
+// ── Blueprint Designer Types ──────────────────────────────────────────────────
+
+export interface BlueprintRef {
+  id: string; // instance id within the canvas
+  refId: string; // the ID of the referenced blueprint or feature path
+  type: 'scenario' | 'feature' | 'flow' | 'set' | 'cycle';
+  name: string; // display name
+  // For scenarios
+  featurePath?: string;
+  scenarioName?: string;
+  tags?: string[];
+  steps?: string[];
+}
+
+export interface FlowBlueprint {
+  id: string;
+  name: string;
+  items: BlueprintRef[]; // Should be only 'scenario'
+}
+
+export interface SetBlueprint {
+  id: string;
+  name: string;
+  items: BlueprintRef[]; // Can be 'flow' or 'feature'
+}
+
+export interface CycleBlueprint {
+  id: string;
+  name: string;
+  items: BlueprintRef[]; // Can be 'flow' or 'set'
+}
+
+export interface PlanBlueprint {
+  id: string;
+  name: string;
+  items: BlueprintRef[]; // Can be 'cycle'
+}
+
+export interface BlueprintsData {
+  plans: PlanBlueprint[];
+  cycles: CycleBlueprint[];
+  sets: SetBlueprint[];
+  flows: FlowBlueprint[];
+}
+
 // ── Execution Status Types ─────────────────────────────────────────────────────
 
 /**

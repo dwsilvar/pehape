@@ -9,18 +9,20 @@ import SaveRoundedIcon from '@mui/icons-material/SaveRounded';
 import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import { useTranslation } from 'react-i18next';
-import { TestPlan, TestCycle, TestFlow } from '../../types';
+import { PlanBlueprint, CycleBlueprint, FlowBlueprint } from '../../types';
 import TestPlanScheduleDialog from './TestPlanScheduleDialog';
 
 interface PlanHeaderProps {
-  plan: TestPlan | null;
-  cycle: TestCycle | null;
-  flow: TestFlow | null;
+  plan: PlanBlueprint | null;
+  cycle: CycleBlueprint | null;
+  flow: FlowBlueprint | null;
+  activeBlueprintName?: string;
   isSaved: boolean;
   onSave: () => void;
   onExecute: (scheduledAt?: string) => void;
   isExecuting: boolean;
   executionStatus?: string;
+  canExecute?: boolean;
 }
 
 const statusColors: Record<string, 'default' | 'warning' | 'success' | 'info'> = {
@@ -29,7 +31,7 @@ const statusColors: Record<string, 'default' | 'warning' | 'success' | 'info'> =
   completed: 'success',
 };
 
-const PlanHeader: React.FC<PlanHeaderProps> = ({ plan, cycle, flow, isSaved, onSave, onExecute, isExecuting, executionStatus }) => {
+const PlanHeader: React.FC<PlanHeaderProps> = ({ plan, cycle, flow, activeBlueprintName, isSaved, onSave, onExecute, isExecuting, executionStatus, canExecute = false }) => {
   const { t } = useTranslation();
   const theme = useTheme();
 
@@ -61,8 +63,8 @@ const PlanHeader: React.FC<PlanHeaderProps> = ({ plan, cycle, flow, isSaved, onS
     }
   };
 
-  const statusLabel = plan ? t(`pages.testPlan.status.${plan.status}`) : '';
-  const statusColor = plan ? statusColors[plan.status] : 'default';
+  const statusLabel = plan ? t(`pages.testPlan.status.draft`) : '';
+  const statusColor = plan ? statusColors['draft'] : 'default';
 
   return (
     <Box
@@ -91,58 +93,22 @@ const PlanHeader: React.FC<PlanHeaderProps> = ({ plan, cycle, flow, isSaved, onS
         >
           {t('pages.testPlan.title')}
         </Link>
-        {plan ? (
+        {activeBlueprintName ? (
           <Typography
-            sx={{
-              fontSize: '0.8rem',
-              fontWeight: 600,
-              color: 'text.primary',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              maxWidth: 200,
-            }}
+            sx={{ fontSize: '0.8rem', fontWeight: 600, color: 'text.primary', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 300 }}
           >
-            {plan.name}
+            {activeBlueprintName}
           </Typography>
         ) : (
           <Typography sx={{ fontSize: '0.8rem', color: 'text.disabled' }}>—</Typography>
         )}
-        {cycle && (
-          <Typography
-            sx={{
-              fontSize: '0.8rem',
-              color: flow ? 'text.secondary' : 'primary.main',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              maxWidth: 160,
-            }}
-          >
-            {cycle.name}
-          </Typography>
-        )}
-        {flow && (
-          <Typography
-            sx={{
-              fontSize: '0.8rem',
-              color: 'primary.main',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              maxWidth: 160,
-            }}
-          >
-            {flow.name}
-          </Typography>
-        )}
       </Breadcrumbs>
 
       {/* Status chip */}
-      {plan && (
+      {activeBlueprintName && (
         <Chip
-          label={statusLabel}
-          color={statusColor}
+          label="Borrador"
+          color="default"
           size="small"
           variant="outlined"
           sx={{ fontSize: '0.7rem', fontWeight: 600, letterSpacing: 0.5 }}
@@ -156,7 +122,7 @@ const PlanHeader: React.FC<PlanHeaderProps> = ({ plan, cycle, flow, isSaved, onS
             size="small"
             variant="outlined"
             onClick={onSave}
-            disabled={!plan || isExecuting}
+            disabled={isExecuting}
             startIcon={
               isSaved ? (
                 <CheckRoundedIcon sx={{ fontSize: '16px !important', color: 'success.main' }} />
@@ -203,7 +169,7 @@ const PlanHeader: React.FC<PlanHeaderProps> = ({ plan, cycle, flow, isSaved, onS
             whiteSpace: 'nowrap',
           }}
         >
-          {plan ? plan.name : '—'}
+          {activeBlueprintName || '—'}
         </Typography>
 
         <Tooltip title={isExecuting && executionStatus !== 'scheduled' ? t('pages.testPlan.executing') : t('pages.testPlan.executePlan')} arrow>
@@ -211,7 +177,7 @@ const PlanHeader: React.FC<PlanHeaderProps> = ({ plan, cycle, flow, isSaved, onS
             variant="contained"
             size="small"
             ref={anchorRef}
-            disabled={!plan || !isSaved || (isExecuting && executionStatus !== 'scheduled')}
+            disabled={!canExecute || !isSaved || (isExecuting && executionStatus !== 'scheduled')}
             sx={{
               background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.8)}, ${alpha(theme.palette.secondary.main, 0.8)})`,
               '& .MuiButton-root': {

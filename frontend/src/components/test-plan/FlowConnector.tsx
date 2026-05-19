@@ -15,7 +15,7 @@
  *                         (if isBroken=true: line turns red, dashes stop, shows ✕ badge)
  */
 import React from 'react';
-import { Box, Tooltip, useTheme, alpha } from '@mui/material';
+import { Box, Tooltip, useTheme } from '@mui/material';
 
 interface FlowConnectorProps {
   /** If true, renders in error/break state (break_flow_on_failure) */
