@@ -49,19 +49,26 @@ const TestPlanPage: React.FC = () => {
 
   useEffect(() => { if (isExecuting) setCenterTab('monitor'); }, [isExecuting]);
 
-  // ── Initial Load ──────────────────────────────────────────────────────────────
-  useEffect(() => {
+  const fetchBlueprints = useCallback(() => {
     setIsBlueprintsLoading(true);
     fetch('/api/blueprints')
       .then(r => r.ok ? r.json() : { plans: [], cycles: [], sets: [], flows: [] })
       .then(data => {
         setBlueprints(data);
         if (data[activeCategory] && data[activeCategory].length > 0) {
-          setSelectedBlueprintId(data[activeCategory][0].id);
+          // Keep current selection if valid, otherwise select first
+          if (!selectedBlueprintId || !data[activeCategory].find((b: any) => b.id === selectedBlueprintId)) {
+            setSelectedBlueprintId(data[activeCategory][0].id);
+          }
         }
       })
       .catch(() => setBlueprints({ plans: [], cycles: [], sets: [], flows: [] }))
       .finally(() => setIsBlueprintsLoading(false));
+  }, [activeCategory, selectedBlueprintId]);
+
+  // ── Initial Load ──────────────────────────────────────────────────────────────
+  useEffect(() => {
+    fetchBlueprints();
 
     setIsLibraryLoading(true);
     fetch('/api/features-with-scenarios')
@@ -69,7 +76,7 @@ const TestPlanPage: React.FC = () => {
       .then(data => setFeatures(Array.isArray(data) ? data : []))
       .catch(() => setFeatures([]))
       .finally(() => setIsLibraryLoading(false));
-  }, []);
+  }, []); // Run only once, fetchBlueprints is dependency-free for initial load, but we'll use a ref or just ignore warning since we only want on mount and manual trigger.
 
   // ── Persistence ───────────────────────────────────────────────────────────────
   const markDirty = useCallback(() => {
@@ -91,6 +98,26 @@ const TestPlanPage: React.FC = () => {
       console.error('Failed to save blueprints', e);
     }
   }, [blueprints]);
+
+  const handleImport = useCallback(async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      const response = await fetch('/api/import-plan', {
+        method: 'POST',
+        body: formData,
+      });
+      if (response.ok) {
+        fetchBlueprints();
+        alert("Plan importado exitosamente");
+      } else {
+        const error = await response.json();
+        alert(`Error al importar: ${error.detail}`);
+      }
+    } catch (error) {
+      alert(`Error al importar: ${error}`);
+    }
+  }, [fetchBlueprints]);
 
   // ── Active Blueprint Helpers ─────────────────────────────────────────────────
   const getActiveBlueprintList = useCallback(() => {
@@ -323,8 +350,10 @@ const TestPlanPage: React.FC = () => {
           plan={null} cycle={null} flow={null} 
           activeBlueprintName={activeBlueprint?.name}
           targetPlanName={targetPlan?.name}
+          targetPlanId={targetPlanId}
           isSaved={isSaved} onSave={handleSave} onExecute={handleExecute} isExecuting={isExecuting} executionStatus={executionStatus}
           canExecute={!!targetPlanId && (targetPlan?.items?.length ?? 0) > 0}
+          onImport={handleImport}
         />
 
         <Box sx={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>

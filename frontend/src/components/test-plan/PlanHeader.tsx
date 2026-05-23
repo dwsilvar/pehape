@@ -1,13 +1,15 @@
 import React, { useState, useRef } from 'react';
 import {
   Box, Typography, Chip, Tooltip, Button, Breadcrumbs,
-  Link, useTheme, alpha, ButtonGroup, ClickAwayListener, Grow, Paper, Popper, MenuList, MenuItem
+  Link, useTheme, alpha, ButtonGroup, ClickAwayListener, Grow, Paper, Popper, MenuList, MenuItem, IconButton
 } from '@mui/material';
 import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import SaveRoundedIcon from '@mui/icons-material/SaveRounded';
 import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import FileDownloadRoundedIcon from '@mui/icons-material/FileDownloadRounded';
+import FileUploadRoundedIcon from '@mui/icons-material/FileUploadRounded';
 import { useTranslation } from 'react-i18next';
 import { PlanBlueprint, CycleBlueprint, FlowBlueprint } from '../../types';
 import TestPlanScheduleDialog from './TestPlanScheduleDialog';
@@ -18,12 +20,14 @@ interface PlanHeaderProps {
   flow: FlowBlueprint | null;
   activeBlueprintName?: string;
   targetPlanName?: string;
+  targetPlanId?: string | null;
   isSaved: boolean;
   onSave: () => void;
   onExecute: (scheduledAt?: string) => void;
   isExecuting: boolean;
   executionStatus?: string;
   canExecute?: boolean;
+  onImport?: (file: File) => void;
 }
 
 const statusColors: Record<string, 'default' | 'warning' | 'success' | 'info'> = {
@@ -32,12 +36,13 @@ const statusColors: Record<string, 'default' | 'warning' | 'success' | 'info'> =
   completed: 'success',
 };
 
-const PlanHeader: React.FC<PlanHeaderProps> = ({ plan, cycle, flow, activeBlueprintName, targetPlanName, isSaved, onSave, onExecute, isExecuting, executionStatus, canExecute = false }) => {
+const PlanHeader: React.FC<PlanHeaderProps> = ({ plan, cycle, flow, activeBlueprintName, targetPlanName, targetPlanId, isSaved, onSave, onExecute, isExecuting, executionStatus, canExecute = false, onImport }) => {
   const { t } = useTranslation();
   const theme = useTheme();
 
   const [openSplit, setOpenSplit] = useState(false);
   const anchorRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const handleToggle = () => {
@@ -221,6 +226,43 @@ const PlanHeader: React.FC<PlanHeaderProps> = ({ plan, cycle, flow, activeBluepr
             </Button>
           </ButtonGroup>
         </Tooltip>
+
+        {/* Import/Export Buttons */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, borderLeft: 1, borderColor: 'divider', pl: 1, ml: 0.5 }}>
+          <Tooltip title="Exportar Plan (.desb)">
+            <span>
+              <IconButton 
+                size="small" 
+                disabled={!targetPlanId || !isSaved} 
+                onClick={() => window.location.href = `/api/export-plan/${targetPlanId}`}
+                sx={{ color: theme.palette.primary.main, '&.Mui-disabled': { opacity: 0.5 } }}
+              >
+                <FileDownloadRoundedIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+          <Tooltip title="Importar Plan (.desb)">
+            <IconButton 
+              size="small" 
+              onClick={() => fileInputRef.current?.click()}
+              sx={{ color: theme.palette.primary.main }}
+            >
+              <FileUploadRoundedIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <input
+            type="file"
+            accept=".desb"
+            ref={fileInputRef}
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              if (e.target.files && e.target.files.length > 0 && onImport) {
+                onImport(e.target.files[0]);
+                e.target.value = ''; // reset
+              }
+            }}
+          />
+        </Box>
 
         <Popper
           sx={{ zIndex: 1300 }}

@@ -962,29 +962,6 @@ def refresh_execution_order():
 
 # ── Routes — Tools & Tasks ───────────────────────────────────────────────────
 
-@app.get("/api/tasks", tags=["Tasks"])
-def list_tasks():
-    """
-    Endpoint para listar todas las tareas registradas y su documentación.
-    """
-    try:
-        tasks_data = []
-        registered_tasks = get_all_tasks()
-        
-        for task_name, task_class in registered_tasks.items():
-            tasks_data.append({
-                "name": task_name,
-                "class_name": task_class.__name__,
-                "module": task_class.__module__,
-                "scope": getattr(task_class, "scope", "General"),
-                "doc": task_class.__doc__.strip() if task_class.__doc__ else "Sin documentación",
-                "args_schema": task_class.get_args_schema()
-            })
-            
-        return {"tasks": tasks_data}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.get("/api/tools/running-apps", tags=["Tools"])
 def get_running_apps():
@@ -2019,6 +1996,137 @@ async def stream_execution_logs(task_id: str, request: Request):
         },
     )
 
+
+# ── Routes — Export/Import ────────────────────────────────────────────────────────
+
+import zipfile
+import io
+import tempfile
+import shutil
+from fastapi.responses import Response
+
+@app.get("/api/export-plan/{plan_id}", tags=["Export/Import"])
+def export_plan(plan_id: str):
+    """
+    Exports a test plan, its hierarchy, and required .feature files
+    into a downloadable .desb (ZIP) file.
+    """
+    blueprints = _load_blueprints()
+    
+    # 1. Find the plan
+    plan = next((p for p in blueprints.get("plans", []) if p["id"] == plan_id), None)
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+        
+    export_data = {
+        "plans": [plan],
+        "cycles": [],
+        "sets": [],
+        "flows": []
+    }
+    
+    feature_paths = set()
+    
+    # 2. Traverse hierarchy
+    for item in plan.get("items", []):
+        if item.get("type") == "cycle":
+            cycle = next((c for c in blueprints.get("cycles", []) if c["id"] == item["refId"]), None)
+            if cycle and cycle not in export_data["cycles"]:
+                export_data["cycles"].append(cycle)
+                for c_item in cycle.get("items", []):
+                    if c_item.get("type") == "set":
+                        test_set = next((s for s in blueprints.get("sets", []) if s["id"] == c_item["refId"]), None)
+                        if test_set and test_set not in export_data["sets"]:
+                            export_data["sets"].append(test_set)
+                            for s_item in test_set.get("items", []):
+                                if s_item.get("type") == "flow":
+                                    flow = next((f for f in blueprints.get("flows", []) if f["id"] == s_item["refId"]), None)
+                                    if flow and flow not in export_data["flows"]:
+                                        export_data["flows"].append(flow)
+                                        # collect feature paths from scenarios
+                                        for f_item in flow.get("items", []):
+                                            if f_item.get("type") == "scenario" and f_item.get("featurePath"):
+                                                feature_paths.add(f_item["featurePath"])
+                                elif s_item.get("type") == "feature" and s_item.get("featurePath"):
+                                    feature_paths.add(s_item["featurePath"])
+                                    
+    # 3. Create ZIP archive in memory
+    memory_file = io.BytesIO()
+    with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
+        # Add blueprints.json
+        zf.writestr("blueprints_export.json", json.dumps(export_data, indent=2))
+        
+        # Add feature files
+        for fpath in feature_paths:
+            full_path = FEATURES_DIR / fpath
+            if full_path.exists() and full_path.is_file():
+                # Store in features/ folder inside the zip
+                zf.write(full_path, arcname=f"features/{fpath}")
+                
+    memory_file.seek(0)
+    
+    headers = {
+        'Content-Disposition': f'attachment; filename="{plan.get("name", "plan")}.desb"'
+    }
+    
+    return Response(memory_file.read(), media_type="application/octet-stream", headers=headers)
+
+
+@app.post("/api/import-plan", tags=["Export/Import"])
+async def import_plan(file: UploadFile = File(...)):
+    """
+    Imports a .desb file containing a test plan and its features.
+    Merges the blueprints and overwrites .feature files.
+    """
+    if not file.filename.endswith('.desb'):
+        raise HTTPException(status_code=400, detail="El archivo debe tener extensión .desb")
+        
+    try:
+        content = await file.read()
+        memory_file = io.BytesIO(content)
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            with zipfile.ZipFile(memory_file, 'r') as zf:
+                zf.extractall(tmp_path)
+                
+            export_json_path = tmp_path / "blueprints_export.json"
+            if not export_json_path.exists():
+                raise HTTPException(status_code=400, detail="Archivo .desb inválido: falta blueprints_export.json")
+                
+            with open(export_json_path, 'r', encoding='utf-8') as f:
+                import_data = json.load(f)
+                
+            # Copy feature files
+            features_tmp = tmp_path / "features"
+            if features_tmp.exists() and features_tmp.is_dir():
+                # Copy tree, overwriting existing
+                shutil.copytree(features_tmp, FEATURES_DIR, dirs_exist_ok=True)
+                
+            # Merge blueprints
+            blueprints = _load_blueprints()
+            
+            for key in ["plans", "cycles", "sets", "flows"]:
+                if key not in import_data:
+                    continue
+                imported_items = import_data[key]
+                existing_items = blueprints.get(key, [])
+                
+                for i_item in imported_items:
+                    # Remove existing item with same id
+                    existing_items = [e for e in existing_items if e["id"] != i_item["id"]]
+                    existing_items.append(i_item)
+                    
+                blueprints[key] = existing_items
+                
+            _save_blueprints(blueprints)
+            
+            return {"status": "success", "message": "Plan importado correctamente"}
+            
+    except zipfile.BadZipFile:
+        raise HTTPException(status_code=400, detail="El archivo .desb está corrupto o no es un ZIP válido")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ── Routes — Utility ────────────────────────────────────────────────────────────
 
