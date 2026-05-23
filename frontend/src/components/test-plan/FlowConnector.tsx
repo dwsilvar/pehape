@@ -42,10 +42,10 @@ const FlowConnector: React.FC<FlowConnectorProps> = ({ isBroken = false, index =
   const arrowId    = `arrow-head-${index}`;
 
   // SVG geometry
-  const cx = 50;          // center X (%)
-  const lineTop    = 4;
-  const lineBottom = CONNECTOR_HEIGHT - ARROW_HEAD_SIZE - 4;
-  const arrowTip   = CONNECTOR_HEIGHT - 4;
+  const cx = 20;          // center X (out of 40)
+  const lineTop    = 0;
+  const lineBottom = CONNECTOR_HEIGHT - ARROW_HEAD_SIZE;
+  const arrowTip   = CONNECTOR_HEIGHT;
   const dashLen    = 6;
   const gapLen     = 4;
 
@@ -66,8 +66,7 @@ const FlowConnector: React.FC<FlowConnectorProps> = ({ isBroken = false, index =
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          width: '320px',    // matches node width so connector centers under the card
-          maxWidth: '400px',
+          width: '40px',     // narrow width to keep SVG centered
           mx: 'auto',        // centered_in_sequence
           my: 0,             // vertical spacing handled by ScenarioFlowNode mb + this svg height
           position: 'relative',
@@ -77,8 +76,8 @@ const FlowConnector: React.FC<FlowConnectorProps> = ({ isBroken = false, index =
         <svg
           width="100%"
           height={CONNECTOR_HEIGHT}
-          viewBox={`0 0 100 ${CONNECTOR_HEIGHT}`}
-          preserveAspectRatio="xMidYMid meet"
+          viewBox={`0 0 40 ${CONNECTOR_HEIGHT}`}
+          preserveAspectRatio="none"
           aria-hidden="true"
         >
           <defs>

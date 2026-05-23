@@ -37,6 +37,7 @@ const TestPlanPage: React.FC = () => {
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
   const [executionStatus, setExecutionStatus] = useState<string>('idle');
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [monitorVersion, setMonitorVersion] = useState(0);
 
   // ── Layout State ────────────────────────────────────────────────────────────
   const [leftWidth, setLeftWidth] = useState(LEFT_WIDTH_DEFAULT);
@@ -53,7 +54,12 @@ const TestPlanPage: React.FC = () => {
     setIsBlueprintsLoading(true);
     fetch('/api/blueprints')
       .then(r => r.ok ? r.json() : { plans: [], cycles: [], sets: [], flows: [] })
-      .then(data => setBlueprints(data))
+      .then(data => {
+        setBlueprints(data);
+        if (data[activeCategory] && data[activeCategory].length > 0) {
+          setSelectedBlueprintId(data[activeCategory][0].id);
+        }
+      })
       .catch(() => setBlueprints({ plans: [], cycles: [], sets: [], flows: [] }))
       .finally(() => setIsBlueprintsLoading(false));
 
@@ -66,7 +72,12 @@ const TestPlanPage: React.FC = () => {
   }, []);
 
   // ── Persistence ───────────────────────────────────────────────────────────────
-  const markDirty = useCallback(() => setIsSaved(false), []);
+  const markDirty = useCallback(() => {
+    setIsSaved(false);
+    setCurrentTaskId(null);
+    setExecutionStatus('idle');
+    setMonitorVersion(v => v + 1);
+  }, []);
 
   const handleSave = useCallback(async () => {
     try {
@@ -116,8 +127,26 @@ const TestPlanPage: React.FC = () => {
   };
 
   const handleDeleteBlueprint = (cat: 'plans' | 'cycles' | 'sets' | 'flows', id: string) => {
-    setBlueprints(prev => ({ ...prev, [cat]: prev[cat].filter(b => b.id !== id) }));
-    if (activeCategory === cat && selectedBlueprintId === id) setSelectedBlueprintId(null);
+    setBlueprints(prev => {
+      // 1. Remove the entity itself
+      const updatedList = prev[cat].filter(b => b.id !== id);
+      const newPrev = { ...prev, [cat]: updatedList };
+      
+      // 2. Cascade delete: remove references to this ID from all other blueprints
+      const cleanItems = (items: any[]) => items.filter(item => item.refId !== id);
+      
+      (['plans', 'cycles', 'sets', 'flows'] as const).forEach((c) => {
+        newPrev[c] = newPrev[c].map((bp: any) => ({
+          ...bp,
+          items: cleanItems(bp.items || [])
+        }));
+      });
+
+      if (activeCategory === cat && selectedBlueprintId === id) {
+        setSelectedBlueprintId(updatedList.length > 0 ? updatedList[0].id : null);
+      }
+      return newPrev;
+    });
     markDirty();
   };
 
@@ -125,9 +154,27 @@ const TestPlanPage: React.FC = () => {
     setSelectedBlueprintId(id);
   };
 
+  const handleNavigateToBlueprint = (type: string, id: string) => {
+    let targetCategory: 'plans' | 'cycles' | 'sets' | 'flows' | null = null;
+    if (type === 'cycle') targetCategory = 'cycles';
+    else if (type === 'set') targetCategory = 'sets';
+    else if (type === 'flow') targetCategory = 'flows';
+    else if (type === 'plan') targetCategory = 'plans';
+    
+    if (targetCategory) {
+      setActiveCategory(targetCategory);
+      setSelectedBlueprintId(id);
+    }
+  };
+
   const handleCategoryChange = (cat: 'plans' | 'cycles' | 'sets' | 'flows') => {
     setActiveCategory(cat);
-    setSelectedBlueprintId(null);
+    const categoryBlueprints = blueprints[cat] || [];
+    if (categoryBlueprints.length > 0) {
+      setSelectedBlueprintId(categoryBlueprints[0].id);
+    } else {
+      setSelectedBlueprintId(null);
+    }
   };
 
   // ── Canvas Actions ───────────────────────────────────────────────────────────
@@ -211,17 +258,26 @@ const TestPlanPage: React.FC = () => {
   }, [selectedBlueprintId, updateActiveBlueprint]);
 
   // ── Execution ───────────────────────────────────────────────────────────────
+  const targetPlan = blueprints.plans?.[0];
+  const targetPlanId = targetPlan?.id;
+
+  useEffect(() => {
+    setCurrentTaskId(null);
+    setExecutionStatus('idle');
+    setMonitorVersion(v => v + 1);
+  }, [targetPlanId]);
+
   const handleExecute = useCallback(async (scheduledAt?: string) => {
-    // Only allow execution from Plan category
-    if (activeCategory !== 'plans' || !selectedBlueprintId) return;
+    // Always execute the target test plan regardless of the active category
+    if (!targetPlanId) return;
     setIsExecuting(true);
     setIsDrawerOpen(true);
     setCurrentTaskId(null);
     
     try {
       const url = scheduledAt
-        ? `/api/execute-plan/${selectedBlueprintId}?scheduled_at=${encodeURIComponent(scheduledAt)}`
-        : `/api/execute-plan/${selectedBlueprintId}`;
+        ? `/api/execute-plan/${targetPlanId}?scheduled_at=${encodeURIComponent(scheduledAt)}`
+        : `/api/execute-plan/${targetPlanId}`;
 
       const res = await fetch(url, { method: 'POST' });
       if (res.ok) {
@@ -234,7 +290,7 @@ const TestPlanPage: React.FC = () => {
     } catch (e) {
       setIsExecuting(false);
     }
-  }, [selectedBlueprintId, activeCategory]);
+  }, [targetPlanId]);
 
   const handleToggleDrawer = useCallback(() => setIsDrawerOpen(v => !v), []);
   const handleExecutionFinished = useCallback(() => setIsExecuting(false), []);
@@ -264,9 +320,11 @@ const TestPlanPage: React.FC = () => {
     <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
       <Box ref={layoutRef} sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', bgcolor: theme.palette.custom.bgMain }}>
         <PlanHeader
-          plan={null} cycle={null} flow={null} activeBlueprintName={activeBlueprint?.name}
+          plan={null} cycle={null} flow={null} 
+          activeBlueprintName={activeBlueprint?.name}
+          targetPlanName={targetPlan?.name}
           isSaved={isSaved} onSave={handleSave} onExecute={handleExecute} isExecuting={isExecuting} executionStatus={executionStatus}
-          canExecute={activeCategory === 'plans' && !!selectedBlueprintId && (activeBlueprint?.items?.length ?? 0) > 0}
+          canExecute={!!targetPlanId && (targetPlan?.items?.length ?? 0) > 0}
         />
 
         <Box sx={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
@@ -280,6 +338,7 @@ const TestPlanPage: React.FC = () => {
               onSelectBlueprint={handleSelectBlueprint}
               onAddBlueprint={handleAddBlueprint}
               onDeleteBlueprint={handleDeleteBlueprint}
+              onNavigateToBlueprint={handleNavigateToBlueprint}
             />
           </Box>
 
@@ -295,7 +354,7 @@ const TestPlanPage: React.FC = () => {
             </Box>
 
             <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-              {centerTab === 'canvas' && (
+              <Box sx={{ display: centerTab === 'canvas' ? 'flex' : 'none', flex: 1, flexDirection: 'column', overflow: 'hidden' }}>
                 <CompositionCanvas
                   category={activeCategory}
                   blueprintId={selectedBlueprintId}
@@ -305,11 +364,12 @@ const TestPlanPage: React.FC = () => {
                   onRemoveItem={handleRemoveItem}
                   onMoveUp={handleMoveUp}
                   onMoveDown={handleMoveDown}
+                  blueprints={blueprints}
                 />
-              )}
-              {centerTab === 'monitor' && (
-                <ExecutionMonitor blueprints={blueprints} selectedPlanId={activeCategory === 'plans' ? selectedBlueprintId : null} taskId={currentTaskId} isExecuting={isExecuting} isGeneratingReport={isGeneratingReport} />
-              )}
+              </Box>
+              <Box sx={{ display: centerTab === 'monitor' ? 'flex' : 'none', flex: 1, flexDirection: 'column', overflow: 'hidden' }}>
+                <ExecutionMonitor key={`${targetPlanId}-${monitorVersion}`} blueprints={blueprints} selectedPlanId={targetPlanId || null} taskId={currentTaskId} isExecuting={isExecuting} isGeneratingReport={isGeneratingReport} />
+              </Box>
             </Box>
           </Box>
 

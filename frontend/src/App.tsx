@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { Box } from '@mui/material';
 import { DndContext, DragEndEvent, DragStartEvent, DragOverEvent, useSensor, useSensors, PointerSensor, TouchSensor } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
@@ -46,6 +46,8 @@ const AppLayout: React.FC = () => {
   const [draggedItemPath, setDraggedItemPath] = useState<string | null>(null);
   const [, setIsOverExecutionOrder] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+  const isTestPlanVisible = location.pathname === '/';
 
   const handleFileSelect = (path: string) => {
     setSelectedFile(path);
@@ -190,8 +192,10 @@ const AppLayout: React.FC = () => {
         <Sidebar />
         <Box sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           <AppNavbar />
+          <Box sx={{ display: isTestPlanVisible ? 'flex' : 'none', flex: 1, overflow: 'hidden', flexDirection: 'column' }}>
+            <TestPlanPage />
+          </Box>
           <Routes>
-            <Route path="/" element={<TestPlanPage />} />
             <Route path="/editor" element={
               <HomePage
                 selectedFile={selectedFile}

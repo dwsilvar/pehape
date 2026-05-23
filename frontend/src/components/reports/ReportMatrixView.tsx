@@ -77,7 +77,7 @@ const ReportMatrixView: React.FC<ReportMatrixViewProps> = ({ data }) => {
 
         // Helper: find the best (closest in time) non-consumed candidate for a
         // given scenario name and optional gif-timestamp.
-        const findBestMatch = (scenarioName: string, gifStartSec: number | null): any | null => {
+        const findBestMatch = (scenarioName: string, gifStartSec: number | null, resultStatus: string): any | null => {
             const nameKey = scenarioName.toLowerCase().trim();
 
             // Try exact name match first, then partial-match fallback.
@@ -94,25 +94,52 @@ const ReportMatrixView: React.FC<ReportMatrixViewProps> = ({ data }) => {
             if (!candidates || candidates.length === 0) return null;
 
             const available = candidates.filter(c => !c._consumed);
-            if (available.length === 0) return null;
+            
+            // If none are available (all consumed), just return the first one as a fallback 
+            // so we can at least show the steps in the UI, but we can't consume it.
+            if (available.length === 0) {
+                return candidates[0];
+            }
+
+            // If the orchestrator skipped this scenario (e.g. fail-fast, disabled),
+            // it didn't actually run behave for it. We return null so we don't
+            // show steps for a skipped scenario.
+            if (resultStatus === 'skip') {
+                return null;
+            }
+
+            // --- For executed scenarios (pass/fail), we must find and consume the best match ---
+            
+            // Filter by expected status roughly (pass -> passed, fail -> failed/broken)
+            const allureStatus = resultStatus === 'pass' ? 'passed' :
+                                 resultStatus === 'fail' ? ['failed', 'broken'] : null;
+            
+            let poolToSearch = available;
+            if (allureStatus) {
+                const statusMatched = available.filter(c => {
+                    if (Array.isArray(allureStatus)) return allureStatus.includes(c.status);
+                    return c.status === allureStatus;
+                });
+                if (statusMatched.length > 0) poolToSearch = statusMatched;
+            }
 
             if (gifStartSec === null) {
                 // No timestamp info → take the first available in order
-                available[0]._consumed = true;
-                return available[0];
+                poolToSearch[0]._consumed = true;
+                return poolToSearch[0];
             }
 
             // Find the CLOSEST match by timestamp distance (no fixed window).
             // This correctly disambiguates when runs are only a few seconds apart.
             const gifStartMs = gifStartSec * 1000;
-            let best = available[0];
-            let bestDist = Math.abs((available[0].start_ms ?? 0) - gifStartMs);
+            let best = poolToSearch[0];
+            let bestDist = Math.abs((poolToSearch[0].start_ms ?? 0) - gifStartMs);
 
-            for (let i = 1; i < available.length; i++) {
-                const dist = Math.abs((available[i].start_ms ?? 0) - gifStartMs);
+            for (let i = 1; i < poolToSearch.length; i++) {
+                const dist = Math.abs((poolToSearch[i].start_ms ?? 0) - gifStartMs);
                 if (dist < bestDist) {
                     bestDist = dist;
-                    best = available[i];
+                    best = poolToSearch[i];
                 }
             }
 
@@ -141,9 +168,7 @@ const ReportMatrixView: React.FC<ReportMatrixViewProps> = ({ data }) => {
                             } catch { /* not JSON */ }
                         }
                     }
-
-                    const gherkinMatch = findBestMatch(sc.scenario_name, gifStartSec);
-
+                    const gherkinMatch = findBestMatch(sc.scenario_name, gifStartSec, sc.result_status || 'skip');
                     const isFlow = sc.source_type === 'flow';
                     const hasDetail = sc.set_detail && sc.set_detail !== '—';
                     const matrixMatch = flow.flow_name?.match(/\(Matriz \d+\)/);
@@ -274,6 +299,7 @@ const ReportMatrixView: React.FC<ReportMatrixViewProps> = ({ data }) => {
                                             variant="outlined" 
                                             size="small" 
                                             startIcon={<ListAltRoundedIcon />}
+                                            disabled={row.status === 'skip' || !row.steps || row.steps.length === 0}
                                             onClick={() => {
                                                 setSelectedScenario(row);
                                                 setIsInspectorOpen(true);

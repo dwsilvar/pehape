@@ -10,7 +10,7 @@ import KeyboardArrowUpRoundedIcon from '@mui/icons-material/KeyboardArrowUpRound
 import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded';
 import AccountTreeRoundedIcon from '@mui/icons-material/AccountTreeRounded';
 import CallSplitRoundedIcon from '@mui/icons-material/CallSplitRounded';
-import { BlueprintRef } from '../../types';
+import { BlueprintRef, BlueprintsData } from '../../types';
 import { CycleIcon, FlowIcon, ScenarioIcon, FeatureIcon } from '../PehapeIcons';
 import LibraryBooksRoundedIcon from '@mui/icons-material/LibraryBooksRounded';
 
@@ -34,10 +34,11 @@ interface CompositionNodeProps {
   onMoveDown: (id: string) => void;
   compact: boolean;
   isSetContext?: boolean;
+  blueprints?: BlueprintsData;
 }
 
 const CompositionNode: React.FC<CompositionNodeProps> = ({
-  item, index, total, onRemove, onMoveUp, onMoveDown, compact, isSetContext
+  item, index, total, onRemove, onMoveUp, onMoveDown, compact, isSetContext, blueprints
 }) => {
   const theme = useTheme();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -66,6 +67,19 @@ const CompositionNode: React.FC<CompositionNodeProps> = ({
     }
   };
 
+  const getEntityColor = () => {
+    switch (item.type) {
+      case 'scenario': return theme.palette.success.main;
+      case 'feature': return theme.palette.secondary.main;
+      case 'flow': return theme.palette.info.main;
+      case 'set': return theme.palette.warning.main;
+      case 'cycle': return theme.palette.error.main;
+      default: return theme.palette.divider;
+    }
+  };
+
+  const entityColor = getEntityColor();
+
   return (
     <Box ref={setNodeRef} style={style} sx={{ mb: compact ? 0.5 : 0 }}>
       <Box
@@ -78,11 +92,12 @@ const CompositionNode: React.FC<CompositionNodeProps> = ({
           bgcolor: 'background.paper',
           border: '1px solid',
           borderColor: isDragging ? 'primary.main' : 'divider',
+          borderLeft: `4px solid ${entityColor}`,
           borderRadius: 2,
           boxShadow: isDragging ? `0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}` : 'none',
           '&:hover': {
-            borderColor: 'primary.main',
-            bgcolor: alpha(theme.palette.primary.main, 0.02),
+            borderColor: entityColor,
+            bgcolor: alpha(entityColor, 0.03),
           },
         }}
       >
@@ -106,7 +121,7 @@ const CompositionNode: React.FC<CompositionNodeProps> = ({
             <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary', fontSize: compact ? '0.75rem' : '0.8rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {item.type === 'scenario' && item.scenarioName ? item.scenarioName : item.name}
             </Typography>
-            <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 0.5, bgcolor: 'action.hover', px: 0.75, py: 0.25, borderRadius: 1 }}>
+            <Typography variant="caption" sx={{ color: entityColor, fontWeight: 700, fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 0.5, bgcolor: alpha(entityColor, 0.1), border: `1px solid ${alpha(entityColor, 0.2)}`, px: 0.75, py: 0.25, borderRadius: 1 }}>
               {item.type}
             </Typography>
           </Box>

@@ -283,10 +283,16 @@ def _build_behave_command(
     else:
         resolved_path = feature_path
 
+    import re
+    # Behave treats --name as a regex. We escape special characters and anchor it
+    # to ensure it ONLY matches the exact scenario we want, avoiding duplicate runs
+    # when one scenario name is a substring of another.
+    exact_match_name = f"^{re.escape(scenario_name)}$"
+
     cmd = [
         sys.executable, "-m", "behave",          # Use the venv Python's behave
         resolved_path,
-        "--name", scenario_name,
+        "--name", exact_match_name,
         "--no-capture",                            # Stream output in real-time
     ]
 

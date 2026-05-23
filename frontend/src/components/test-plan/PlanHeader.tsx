@@ -17,6 +17,7 @@ interface PlanHeaderProps {
   cycle: CycleBlueprint | null;
   flow: FlowBlueprint | null;
   activeBlueprintName?: string;
+  targetPlanName?: string;
   isSaved: boolean;
   onSave: () => void;
   onExecute: (scheduledAt?: string) => void;
@@ -31,7 +32,7 @@ const statusColors: Record<string, 'default' | 'warning' | 'success' | 'info'> =
   completed: 'success',
 };
 
-const PlanHeader: React.FC<PlanHeaderProps> = ({ plan, cycle, flow, activeBlueprintName, isSaved, onSave, onExecute, isExecuting, executionStatus, canExecute = false }) => {
+const PlanHeader: React.FC<PlanHeaderProps> = ({ plan, cycle, flow, activeBlueprintName, targetPlanName, isSaved, onSave, onExecute, isExecuting, executionStatus, canExecute = false }) => {
   const { t } = useTranslation();
   const theme = useTheme();
 
@@ -169,7 +170,7 @@ const PlanHeader: React.FC<PlanHeaderProps> = ({ plan, cycle, flow, activeBluepr
             whiteSpace: 'nowrap',
           }}
         >
-          {activeBlueprintName || '—'}
+          {targetPlanName || '—'}
         </Typography>
 
         <Tooltip title={isExecuting && executionStatus !== 'scheduled' ? t('pages.testPlan.executing') : t('pages.testPlan.executePlan')} arrow>

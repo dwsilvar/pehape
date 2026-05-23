@@ -152,31 +152,9 @@ export function useExecutionScenarioStatus(
               } else if (['passed', 'failed', 'skipped'].includes(ev.status)) {
                 markStatus(ev.status as ScenarioExecStatus, sid, name);
               }
-              return;
             }
           } catch {
-            // not JSON
-          }
-
-          // ── 2. [SKIP] from orchestrator logger ────────────────────────────
-          // "  WARNING   [SKIP] Scenario 'name' — skipped due to..."
-          const skipMatch = line.match(/\[SKIP\]\s+Scenario\s+'([^']+)'/);
-          if (skipMatch) {
-            markStatus('skipped', undefined, skipMatch[1].trim());
-            return;
-          }
-
-          // ── 3. Behave plain-text fallback: "  Scenario: name" ────────────
-          const scenMatch = line.match(/^\s+Scenario(?:\s+Outline)?:\s+(.+?)(?:\s+#.*)?$/);
-          if (scenMatch) {
-            markRunning(undefined, scenMatch[1].trim());
-            return;
-          }
-
-          // Behave result: "  Scenario: name ... passed"
-          const resultMatch = line.match(/Scenario.*?:\s+(.+?)\s+\.\.\.\s+(passed|failed|skipped)/i);
-          if (resultMatch) {
-            markStatus(resultMatch[2].toLowerCase() as ScenarioExecStatus, undefined, resultMatch[1].trim());
+            // Ignore parse errors for non-JSON lines
           }
         }
 

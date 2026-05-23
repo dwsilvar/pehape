@@ -8,7 +8,7 @@ import AccountTreeRoundedIcon from '@mui/icons-material/AccountTreeRounded';
 import DragIndicatorRoundedIcon from '@mui/icons-material/DragIndicatorRounded';
 import ViewAgendaRoundedIcon from '@mui/icons-material/ViewAgendaRounded';
 import ViewListRoundedIcon from '@mui/icons-material/ViewListRounded';
-import { BlueprintRef } from '../../types';
+import { BlueprintRef, BlueprintsData } from '../../types';
 import CompositionNode from './CompositionNode';
 import FlowConnector from './FlowConnector';
 
@@ -21,12 +21,13 @@ interface CompositionCanvasProps {
   onRemoveItem: (id: string) => void;
   onMoveUp: (id: string) => void;
   onMoveDown: (id: string) => void;
+  blueprints?: BlueprintsData;
 }
 
 const DROPPABLE_ID = 'composition-canvas-drop';
 
 const CompositionCanvas: React.FC<CompositionCanvasProps> = ({
-  category, blueprintId, name, items, onNameChange, onRemoveItem, onMoveUp, onMoveDown
+  category, blueprintId, name, items, onNameChange, onRemoveItem, onMoveUp, onMoveDown, blueprints
 }) => {
   const theme = useTheme();
 
@@ -77,11 +78,12 @@ const CompositionCanvas: React.FC<CompositionCanvasProps> = ({
         sx={{
           flex: 1, overflow: 'auto', px: 2, py: 2, transition: 'background-color 0.2s ease',
           bgcolor: isOver ? alpha(theme.palette.primary.main, 0.06) : 'transparent',
-          '&::-webkit-scrollbar': { width: 5 }, '&::-webkit-scrollbar-thumb': { bgcolor: 'divider', borderRadius: 3 }
+          '&::-webkit-scrollbar': { width: 5 }, '&::-webkit-scrollbar-thumb': { bgcolor: 'divider', borderRadius: 3 },
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
         }}
       >
         {items.length === 0 ? (
-          <Box sx={{ minHeight: 300, border: '2px dashed', borderColor: isOver ? 'primary.main' : alpha(theme.palette.divider, 0.6), borderRadius: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1.5, bgcolor: isOver ? alpha(theme.palette.primary.main, 0.04) : 'transparent' }}>
+          <Box sx={{ minHeight: 300, width: '100%', border: '2px dashed', borderColor: isOver ? 'primary.main' : alpha(theme.palette.divider, 0.6), borderRadius: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1.5, bgcolor: isOver ? alpha(theme.palette.primary.main, 0.04) : 'transparent' }}>
             <DragIndicatorRoundedIcon sx={{ fontSize: 40, color: isOver ? 'primary.main' : 'text.disabled', opacity: isOver ? 0.8 : 0.3 }} />
             <Typography variant="body2" sx={{ color: isOver ? 'primary.main' : 'text.disabled', fontWeight: isOver ? 600 : 400 }}>
               Arrastra elementos aquí
@@ -100,6 +102,7 @@ const CompositionCanvas: React.FC<CompositionCanvasProps> = ({
                   onMoveDown={onMoveDown}
                   compact={compact}
                   isSetContext={category === 'sets'}
+                  blueprints={blueprints}
                 />
                 {!compact && index < items.length - 1 && (
                   <FlowConnector index={index} isBroken={false} />
