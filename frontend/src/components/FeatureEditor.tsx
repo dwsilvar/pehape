@@ -58,6 +58,7 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
     valid: boolean;
     undefined_steps: { keyword: string; name: string; note?: string }[];
     snippets: string[];
+    error?: string | null;
   } | null>(null);
   const [monacoInstance, setMonacoInstance] = useState<any>(null);
   const [editorInstance, setEditorInstance] = useState<any>(null);
@@ -967,15 +968,38 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
           {/* Error Alert */}
           {selectedFile && validationResult && !validationResult.valid && (
             <Paper elevation={3} sx={{ p: 1.5, borderTop: 1, borderColor: 'error.main', bgcolor: 'error.dark', color: 'white' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <ErrorOutlineIcon sx={{ mr: 1 }} />
-                <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
-                  {t('editor.validation_failed', { count: validationResult.undefined_steps.length })}
-                </Typography>
-                <Box sx={{ flexGrow: 1 }} />
-                <IconButton size="small" color="inherit" onClick={() => setValidationResult(null)}>
-                  <CloseIcon fontSize="small" />
-                </IconButton>
+              <Box sx={{ display: 'flex', alignItems: 'flex-start', flexDirection: 'column', gap: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                  <ErrorOutlineIcon sx={{ mr: 1 }} />
+                  <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                    {validationResult.error 
+                      ? "Error de ejecución al validar el feature"
+                      : t('editor.validation_failed', { count: validationResult.undefined_steps.length })}
+                  </Typography>
+                  <Box sx={{ flexGrow: 1 }} />
+                  <IconButton size="small" color="inherit" onClick={() => setValidationResult(null)}>
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
+                </Box>
+                {validationResult.error && (
+                  <Typography
+                    variant="caption"
+                    component="pre"
+                    sx={{
+                      width: '100%',
+                      p: 1,
+                      bgcolor: 'rgba(0,0,0,0.2)',
+                      borderRadius: 1,
+                      fontFamily: 'monospace',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-all',
+                      maxHeight: 120,
+                      overflowY: 'auto'
+                    }}
+                  >
+                    {validationResult.error}
+                  </Typography>
+                )}
               </Box>
             </Paper>
           )}

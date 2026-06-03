@@ -20,7 +20,7 @@
  *   primary: #38BDF8  success: #22C55E  error: #EF4444  warning: #F59E0B
  */
 import React, { useState, useCallback, useRef } from 'react';
-import { Box, useTheme, Typography, IconButton, Tooltip } from '@mui/material';
+import { Box, useTheme, Typography, IconButton, Tooltip, Snackbar, Alert } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import FileExplorer from '../components/FileExplorer';
@@ -30,6 +30,8 @@ import CloseIcon from '@mui/icons-material/Close';
 import CircleIcon from '@mui/icons-material/Circle';
 import FolderOpenRoundedIcon from '@mui/icons-material/FolderOpenRounded';
 import CodeRoundedIcon from '@mui/icons-material/CodeRounded';
+import FileDownloadRoundedIcon from '@mui/icons-material/FileDownloadRounded';
+import FileUploadRoundedIcon from '@mui/icons-material/FileUploadRounded';
 
 // ── Shared accents (theme-invariant) ──────────────────────────────────────────
 const ACCENT = {
@@ -98,6 +100,19 @@ const FeatureEditorPage: React.FC = () => {
   // ── Tabs state ──────────────────────────────────────────────────
   const [tabs, setTabs] = useState<EditorTab[]>([]);
   const [activeTabPath, setActiveTabPath] = useState<string | null>(null);
+
+  // ── Explorer key state (for force refreshing explorer) ──────────
+  const [explorerKey, setExplorerKey] = useState(0);
+
+  // ── Snackbar notification state ─────────────────────────────────
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'info' | 'warning' | 'error';
+  }>({ open: false, message: '', severity: 'info' });
+
+  // ── File input reference for ZIP import ─────────────────────────
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── Resize state ────────────────────────────────────────────────
   const [isSidebarResizing, setIsSidebarResizing] = useState(false);
@@ -212,6 +227,85 @@ const FeatureEditorPage: React.FC = () => {
     }
   }, [activeTabPath, searchParams, setSearchParams]);
 
+  // ── Export all features ──────────────────────────────────────────
+  const handleExportAllFeatures = useCallback(async () => {
+    try {
+      const response = await fetch('/api/export-all-features');
+      if (!response.ok) throw new Error('Failed to export features');
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'all_features.zip');
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode?.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      setSnackbar({
+        open: true,
+        message: 'Features exportados exitosamente.',
+        severity: 'success'
+      });
+    } catch (err) {
+      console.error('Error exporting features:', err);
+      setSnackbar({
+        open: true,
+        message: 'Error al exportar features.',
+        severity: 'error'
+      });
+    }
+  }, []);
+
+  // ── Import features ──────────────────────────────────────────────
+  const handleImportFeatures = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const file = files[0];
+    
+    e.target.value = '';
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      setSnackbar({
+        open: true,
+        message: 'Importando features...',
+        severity: 'info'
+      });
+      
+      const res = await fetch('/api/import-features', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.detail || 'Failed to import features');
+      }
+
+      const result = await res.json();
+      setSnackbar({
+        open: true,
+        message: result.message || 'Features importados correctamente.',
+        severity: 'success'
+      });
+
+      setExplorerKey(prev => prev + 1);
+    } catch (err) {
+      console.error('Error importing features:', err);
+      setSnackbar({
+        open: true,
+        message: err instanceof Error ? err.message : 'Error al importar features.',
+        severity: 'error'
+      });
+    }
+  }, []);
+
   // ── Validation texts ─────────────────────────────────────────────
   const handleValidationTextsChange = useCallback(
     (update: React.SetStateAction<string[]>) => {
@@ -280,10 +374,43 @@ const FeatureEditorPage: React.FC = () => {
           >
             {t('common.file_explorer')}
           </Typography>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            accept=".zip"
+            style={{ display: 'none' }}
+          />
+          <Tooltip title={t('editor.import_features') || "Importar features (.zip)"}>
+            <IconButton
+              size="small"
+              onClick={handleImportFeatures}
+              sx={{
+                p: 0.25,
+                color: T.TEXT_MUTED,
+                '&:hover': { color: ACCENT.PRIMARY },
+              }}
+            >
+              <FileUploadRoundedIcon sx={{ fontSize: 16 }} />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title={t('editor.export_all_features') || "Exportar todos los features"}>
+            <IconButton
+              size="small"
+              onClick={handleExportAllFeatures}
+              sx={{
+                p: 0.25,
+                color: T.TEXT_MUTED,
+                '&:hover': { color: ACCENT.PRIMARY },
+              }}
+            >
+              <FileDownloadRoundedIcon sx={{ fontSize: 16 }} />
+            </IconButton>
+          </Tooltip>
         </Box>
 
         <Box sx={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
-          <FileExplorer onFileSelect={handleFileSelect} fontSize={13} />
+          <FileExplorer key={explorerKey} onFileSelect={handleFileSelect} fontSize={13} />
         </Box>
       </Box>
 
@@ -519,6 +646,21 @@ const FeatureEditorPage: React.FC = () => {
           )}
         </Box>
       </Box>
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert
+          onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+          severity={snackbar.severity}
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

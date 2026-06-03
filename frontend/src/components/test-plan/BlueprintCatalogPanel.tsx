@@ -12,7 +12,7 @@ import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownR
 import AccountTreeRoundedIcon from '@mui/icons-material/AccountTreeRounded';
 import { useTranslation } from 'react-i18next';
 import { BlueprintsData, PlanBlueprint, CycleBlueprint, SetBlueprint, FlowBlueprint } from '../../types';
-import { PlanIcon, CycleIcon, FlowIcon } from '../PehapeIcons';
+import { PlanIcon, CycleIcon, FlowIcon, FeatureIcon, ScenarioIcon } from '../PehapeIcons';
 
 interface BlueprintCatalogPanelProps {
   blueprints: BlueprintsData;
@@ -24,6 +24,160 @@ interface BlueprintCatalogPanelProps {
   onDeleteBlueprint: (category: 'plans' | 'cycles' | 'sets' | 'flows', id: string) => void;
   onNavigateToBlueprint?: (type: string, id: string) => void;
 }
+
+// ── Recursive tree helpers (module-level) ──────────────────────────────────────
+
+/** Resolve the direct children of a BlueprintRef from the blueprints store. */
+const resolveChildNodes = (node: any, blueprints: BlueprintsData): any[] | null => {
+  switch (node.type) {
+    case 'cycle': {
+      const bp = blueprints.cycles?.find((c: any) => c.id === node.refId);
+      return bp?.items?.length ? bp.items : null;
+    }
+    case 'set': {
+      const bp = blueprints.sets?.find((s: any) => s.id === node.refId);
+      return bp?.items?.length ? bp.items : null;
+    }
+    case 'flow': {
+      const bp = blueprints.flows?.find((f: any) => f.id === node.refId);
+      return bp?.items?.length ? bp.items : null;
+    }
+    case 'feature': {
+      // Feature.steps = scenario names (strings) — synthesise leaf scenario refs
+      if (!node.steps?.length) return null;
+      return node.steps.map((name: string, i: number) => ({
+        id: `${node.id}__scen__${i}`,
+        refId: '',
+        type: 'scenario',
+        name,
+        scenarioName: name,
+        featurePath: node.featurePath,
+        tags: [],
+        steps: [],
+      }));
+    }
+    case 'scenario':
+    default:
+      return null; // leaf
+  }
+};
+
+const TREE_TYPE_COLORS: Record<string, string> = {
+  cycle:    '#f97316',
+  set:      '#d946ef',
+  flow:     '#6366f1',
+  feature:  '#22c55e',
+  scenario: '#14b8a6',
+};
+
+const getTreeNodeIcon = (type: string, color: string) => {
+  switch (type) {
+    case 'cycle':    return <CycleIcon size={12} color={color} />;
+    case 'set':      return <LibraryBooksRoundedIcon sx={{ fontSize: 12, color }} />;
+    case 'flow':     return <FlowIcon size={12} color={color} />;
+    case 'feature':  return <FeatureIcon size={12} color={color} />;
+    case 'scenario': return <ScenarioIcon size={11} color={color} />;
+    default:         return <AccountTreeRoundedIcon sx={{ fontSize: 11, color }} />;
+  }
+};
+
+interface TreeChildNodeProps {
+  node: any;
+  blueprints: BlueprintsData;
+  depth: number;             // starts at 1 for first-level children
+  onNavigate?: (type: string, id: string) => void;
+}
+
+/** Self-contained recursive tree node with local expand/collapse state. */
+const TreeChildNode: React.FC<TreeChildNodeProps> = ({ node, blueprints, depth, onNavigate }) => {
+  const theme = useTheme();
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const children = resolveChildNodes(node, blueprints);
+  const hasChildren = !!children?.length;
+  const canNavigate = node.type !== 'scenario' && !!node.refId;
+  const nodeColor = TREE_TYPE_COLORS[node.type] || theme.palette.text.secondary;
+  // Each depth level adds 14px of indentation; base indent = 3.5 * 8px = 28px
+  const basePl = 3.5 + depth * 1.75;
+
+  const displayName = node.type === 'scenario' && node.scenarioName ? node.scenarioName : node.name;
+
+  return (
+    <>
+      <ListItemButton
+        dense
+        onClick={() => { if (hasChildren) setIsExpanded(e => !e); }}
+        onDoubleClick={() => { if (canNavigate && onNavigate) onNavigate(node.type, node.refId); }}
+        sx={{
+          pl: basePl,
+          pr: 1,
+          py: 0.3,
+          cursor: hasChildren || canNavigate ? 'pointer' : 'default',
+          '&:hover': {
+            bgcolor: hasChildren || canNavigate
+              ? alpha(nodeColor, 0.07)
+              : 'transparent',
+          },
+        }}
+        disableRipple={!hasChildren && !canNavigate}
+      >
+        {/* Expand chevron — rotates -90° when collapsed, 0° when expanded */}
+        <Box sx={{ width: 14, flexShrink: 0, display: 'flex', alignItems: 'center', mr: 0.5 }}>
+          {hasChildren && (
+            <KeyboardArrowDownRoundedIcon
+              sx={{
+                fontSize: 13,
+                color: 'text.disabled',
+                transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)',
+                transition: 'transform 0.18s ease',
+              }}
+            />
+          )}
+        </Box>
+
+        <ListItemIcon sx={{ minWidth: 20 }}>
+          {getTreeNodeIcon(node.type, nodeColor)}
+        </ListItemIcon>
+
+        <ListItemText
+          primary={displayName}
+          secondary={node.type}
+          primaryTypographyProps={{
+            sx: {
+              fontSize: '0.7rem',
+              fontWeight: hasChildren ? 600 : 400,
+              color: hasChildren || canNavigate ? 'text.primary' : 'text.secondary',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            },
+          }}
+          secondaryTypographyProps={{
+            sx: { fontSize: '0.55rem', textTransform: 'uppercase', mt: -0.2, color: nodeColor },
+          }}
+        />
+      </ListItemButton>
+
+      {hasChildren && (
+        <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+          <List component="div" disablePadding>
+            {children!.map((child: any, idx: number) => (
+              <TreeChildNode
+                key={child.id || `${node.id}-c-${idx}`}
+                node={child}
+                blueprints={blueprints}
+                depth={depth + 1}
+                onNavigate={onNavigate}
+              />
+            ))}
+          </List>
+        </Collapse>
+      )}
+    </>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const BlueprintCatalogPanel: React.FC<BlueprintCatalogPanelProps> = ({
   blueprints,
@@ -82,6 +236,18 @@ const BlueprintCatalogPanel: React.FC<BlueprintCatalogPanelProps> = ({
       case 'sets': return <LibraryBooksRoundedIcon sx={{ fontSize: 18, color }} />;
       case 'flows': return <FlowIcon size={18} color={color} />;
       default: return null;
+    }
+  };
+
+  const getChildIcon = (type: string, clickable: boolean) => {
+    const color = clickable ? theme.palette.primary.main : theme.palette.text.disabled;
+    switch (type) {
+      case 'cycle':    return <CycleIcon size={13} color={color} />;
+      case 'set':      return <LibraryBooksRoundedIcon sx={{ fontSize: 13, color }} />;
+      case 'flow':     return <FlowIcon size={13} color={color} />;
+      case 'feature':  return <FeatureIcon size={13} color={color} />;
+      case 'scenario': return <ScenarioIcon size={13} color={color} />;
+      default:         return <AccountTreeRoundedIcon sx={{ fontSize: 12, color }} />;
     }
   };
 
@@ -198,32 +364,15 @@ const BlueprintCatalogPanel: React.FC<BlueprintCatalogPanelProps> = ({
 
                   <Collapse in={isExpanded} timeout="auto" unmountOnExit>
                     <List component="div" disablePadding>
-                      {item.items?.map((child: any, idx: number) => {
-                        const isClickable = child.type !== 'feature' && child.type !== 'scenario';
-                        return (
-                          <ListItemButton 
-                            key={idx} 
-                            onDoubleClick={() => handleChildClick(child)}
-                            sx={{ 
-                              pl: 4, 
-                              py: 0.25, 
-                              '&:hover': { bgcolor: isClickable ? alpha(theme.palette.primary.main, 0.05) : 'transparent' }, 
-                              cursor: isClickable ? 'pointer' : 'default' 
-                            }} 
-                            disableRipple={!isClickable}
-                          >
-                            <ListItemIcon sx={{ minWidth: 24 }}>
-                               <AccountTreeRoundedIcon sx={{ fontSize: 12, color: isClickable ? theme.palette.primary.main : 'text.disabled' }} />
-                            </ListItemIcon>
-                            <ListItemText 
-                              primary={child.type === 'scenario' && child.scenarioName ? child.scenarioName : child.name} 
-                              secondary={child.type}
-                              primaryTypographyProps={{ sx: { fontSize: '0.7rem', color: isClickable ? 'text.primary' : 'text.secondary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }}
-                              secondaryTypographyProps={{ sx: { fontSize: '0.55rem', textTransform: 'uppercase', mt: -0.2 } }}
-                            />
-                          </ListItemButton>
-                        );
-                      })}
+                      {item.items?.map((child: any, idx: number) => (
+                        <TreeChildNode
+                          key={child.id || idx}
+                          node={child}
+                          blueprints={blueprints}
+                          depth={1}
+                          onNavigate={onNavigateToBlueprint}
+                        />
+                      ))}
                     </List>
                   </Collapse>
                 </React.Fragment>

@@ -13,6 +13,7 @@ import FileUploadRoundedIcon from '@mui/icons-material/FileUploadRounded';
 import { useTranslation } from 'react-i18next';
 import { PlanBlueprint, CycleBlueprint, FlowBlueprint } from '../../types';
 import TestPlanScheduleDialog from './TestPlanScheduleDialog';
+import ExportPlanDialog from './ExportPlanDialog';
 
 interface PlanHeaderProps {
   plan: PlanBlueprint | null;
@@ -44,6 +45,7 @@ const PlanHeader: React.FC<PlanHeaderProps> = ({ plan, cycle, flow, activeBluepr
   const anchorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
 
   const handleToggle = () => {
     setOpenSplit((prevOpen) => !prevOpen);
@@ -231,10 +233,10 @@ const PlanHeader: React.FC<PlanHeaderProps> = ({ plan, cycle, flow, activeBluepr
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, borderLeft: 1, borderColor: 'divider', pl: 1, ml: 0.5 }}>
           <Tooltip title="Exportar Plan (.desb)">
             <span>
-              <IconButton 
-                size="small" 
-                disabled={!targetPlanId || !isSaved} 
-                onClick={() => window.location.href = `/api/export-plan/${targetPlanId}`}
+              <IconButton
+                size="small"
+                disabled={!targetPlanId || !isSaved}
+                onClick={() => setExportDialogOpen(true)}
                 sx={{ color: theme.palette.primary.main, '&.Mui-disabled': { opacity: 0.5 } }}
               >
                 <FileDownloadRoundedIcon fontSize="small" />
@@ -310,6 +312,14 @@ const PlanHeader: React.FC<PlanHeaderProps> = ({ plan, cycle, flow, activeBluepr
           setDialogOpen(false);
           onExecute(scheduledAt);
         }}
+      />
+
+      {/* Export Options Dialog */}
+      <ExportPlanDialog
+        open={exportDialogOpen}
+        planId={targetPlanId}
+        planName={targetPlanName}
+        onClose={() => setExportDialogOpen(false)}
       />
     </Box>
   );

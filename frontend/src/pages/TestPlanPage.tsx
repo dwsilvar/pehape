@@ -83,7 +83,6 @@ const TestPlanPage: React.FC = () => {
     setIsSaved(false);
     setCurrentTaskId(null);
     setExecutionStatus('idle');
-    setMonitorVersion(v => v + 1);
   }, []);
 
   const handleSave = useCallback(async () => {
@@ -291,7 +290,6 @@ const TestPlanPage: React.FC = () => {
   useEffect(() => {
     setCurrentTaskId(null);
     setExecutionStatus('idle');
-    setMonitorVersion(v => v + 1);
   }, [targetPlanId]);
 
   const handleExecute = useCallback(async (scheduledAt?: string) => {
@@ -397,7 +395,7 @@ const TestPlanPage: React.FC = () => {
                 />
               </Box>
               <Box sx={{ display: centerTab === 'monitor' ? 'flex' : 'none', flex: 1, flexDirection: 'column', overflow: 'hidden' }}>
-                <ExecutionMonitor key={`${targetPlanId}-${monitorVersion}`} blueprints={blueprints} selectedPlanId={targetPlanId || null} taskId={currentTaskId} isExecuting={isExecuting} isGeneratingReport={isGeneratingReport} />
+                <ExecutionMonitor key={targetPlanId ?? 'no-plan'} blueprints={blueprints} selectedPlanId={targetPlanId || null} taskId={currentTaskId} isExecuting={isExecuting} isGeneratingReport={isGeneratingReport} />
               </Box>
             </Box>
           </Box>

@@ -105,7 +105,11 @@ const CompositionCanvas: React.FC<CompositionCanvasProps> = ({
                   blueprints={blueprints}
                 />
                 {!compact && index < items.length - 1 && (
-                  <FlowConnector index={index} isBroken={false} />
+                  <FlowConnector
+                    index={index}
+                    isBroken={false}
+                    mode={category === 'plans' || category === 'cycles' ? 'independent' : 'sequential'}
+                  />
                 )}
               </React.Fragment>
             ))}

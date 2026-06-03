@@ -59,15 +59,17 @@ const CONCEPTS = [
     title: 'Test Flow',
     subtitle: 'La secuencia ordenada de escenarios',
     description:
-      'Un Test Flow es una secuencia de Scenarios (de uno o varios Features) organizados en el canvas para ejecutarse en un orden específico. Es el "flujo" que diseñas arrastrando scenarios desde la biblioteca. Un Test Flow solo puede contener Scenarios.',
+      'Un Test Flow es una secuencia de Scenarios (de uno o varios Features) organizados en el canvas para ejecutarse en un orden específico. Es el "flujo" que diseñas arrastrando scenarios desde la biblioteca. Un Test Flow solo puede contener Scenarios. ' +
+      '⚠️ Regla de ejecución — Fail-Fast: si un Scenario dentro de un Flow falla, todos los Scenarios restantes de ese mismo Flow se omiten (skip) automáticamente. La ejecución continúa con el siguiente Flow o Cycle; el Plan global nunca se detiene por el fallo de un Flow.',
     whenToUse: [
       'Definir el orden de ejecución de un conjunto de escenarios',
       'Componer flujos complejos: login → navegar → acción → logout',
       'Garantizar dependencias entre pasos de prueba',
+      'Aislar un bloque de escenarios con Fail-Fast propio (fallo en uno no afecta otros Flows)',
     ],
     mnemonic: '¿En qué orden ejecuto estos escenarios?',
     example: 'Flujo Principal: login → retiro → verificar saldo → logout',
-    chips: ['Canvas drag & drop', 'Solo Scenarios', 'Orden de ejecución'],
+    chips: ['Canvas drag & drop', 'Solo Scenarios', 'Orden de ejecución', 'Fail-Fast'],
   },
   {
     id: 'test-set',
@@ -77,15 +79,17 @@ const CONCEPTS = [
     title: 'Test Set',
     subtitle: 'El generador matricial de flujos',
     description:
-      'Un Test Set agrupa Features y/o Test Flows de forma lógica (ya no escenarios sueltos). Actúa como un multiplicador: si agregas un Feature (que tiene múltiples escenarios) junto a otros flujos, internamente creará una matriz de ejecución. Por ejemplo, al unir [Flow A] + [Feature B con 2 escenarios] + [Flow C], el Set generará dos flujos resultantes: (Flow A + Escenario B1 + Flow C) y (Flow A + Escenario B2 + Flow C).',
+      'Un Test Set agrupa Features y/o Test Flows de forma lógica (ya no escenarios sueltos). Actúa como un multiplicador: si agregas un Feature (que tiene múltiples escenarios) junto a otros flujos, internamente creará una matriz de ejecución. Por ejemplo, al unir [Flow A] + [Feature B con 2 escenarios] + [Flow C], el Set generará dos flujos resultantes: (Flow A + Escenario B1 + Flow C) y (Flow A + Escenario B2 + Flow C). ' +
+      '⚠️ Entidad de diseño solamente — el Test Set no existe en tiempo de ejecución. Antes de que el orquestador arranque, cada Set se expande mediante Producto Cartesiano y se convierte en N Test Flows independientes. Cada Flow resultante hereda el comportamiento Fail-Fast normal: un fallo en una combinación no afecta a las demás combinaciones del mismo Set.',
     whenToUse: [
       'Agrupar múltiples Test Flows y Features bajo un mismo propósito',
       'Crear combinaciones matriciales de escenarios con pasos comunes de pre/post condición',
       'Organizar módulos grandes de una aplicación en una misma agrupación',
+      'Cuando necesitas que un mismo pre/post-condición se combine con múltiples variantes de escenario',
     ],
     mnemonic: '¿Cómo agrupo de forma lógica estos flujos y features?',
     example: 'Set de Pruebas de Pagos, Conjunto de Validaciones de Usuario',
-    chips: ['Matriz', 'Features + Flows', 'Multiplicador'],
+    chips: ['Matriz', 'Features + Flows', 'Multiplicador', 'Solo diseño — no ejecutable'],
   },
   {
     id: 'test-cycle',
