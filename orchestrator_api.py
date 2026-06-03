@@ -25,6 +25,7 @@ from api.routers import (
     features,
     ocr,
     reports,
+    settings,
     test_plans,
     tools,
 )
@@ -34,6 +35,7 @@ app.include_router(blueprints.router)
 app.include_router(features.router)
 app.include_router(ocr.router)
 app.include_router(reports.router)
+app.include_router(settings.router)
 app.include_router(execution_plan.router)
 app.include_router(execution.router)
 app.include_router(test_plans.router)

@@ -11,6 +11,7 @@ import {
     BarChart as BarChartIcon,
     BugReport as BugReportIcon,
     MenuBookRounded as MenuBookIcon,
+    Settings as SettingsIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useLayout } from '../context/LayoutContext';
@@ -144,6 +145,15 @@ const Sidebar: React.FC = () => {
                             onClick={() => handleNavigation('/maintenance')}
                         >
                             <BuildIcon />
+                        </IconButton>
+                    </Tooltip>
+
+                    <Tooltip title={t('common.sidebar.settings', 'Configuración')} placement="right">
+                        <IconButton
+                            color={isActive('/settings') ? 'primary' : 'default'}
+                            onClick={() => handleNavigation('/settings')}
+                        >
+                            <SettingsIcon />
                         </IconButton>
                     </Tooltip>
 
@@ -345,6 +355,18 @@ const Sidebar: React.FC = () => {
                                 <BuildIcon />
                             </ListItemIcon>
                             <ListItemText primary={t('common.sidebar.maintenance')} />
+                        </ListItemButton>
+                    </ListItem>
+
+                    <ListItem disablePadding>
+                        <ListItemButton
+                            selected={isActive('/settings')}
+                            onClick={() => handleNavigation('/settings')}
+                        >
+                            <ListItemIcon>
+                                <SettingsIcon />
+                            </ListItemIcon>
+                            <ListItemText primary={t('common.sidebar.settings', 'Configuración')} />
                         </ListItemButton>
                     </ListItem>
 
