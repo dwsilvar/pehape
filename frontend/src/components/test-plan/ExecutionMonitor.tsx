@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Box, Typography, alpha, useTheme, Chip, Tooltip,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
@@ -10,6 +10,8 @@ import RemoveCircleRoundedIcon  from '@mui/icons-material/RemoveCircleRounded';
 import RadioButtonUncheckedRoundedIcon from '@mui/icons-material/RadioButtonUncheckedRounded';
 import LibraryBooksRoundedIcon  from '@mui/icons-material/LibraryBooksRounded';
 import ViewListRoundedIcon from '@mui/icons-material/ViewListRounded';
+import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded';
+import KeyboardArrowRightRoundedIcon from '@mui/icons-material/KeyboardArrowRightRounded';
 import { BlueprintsData, BlueprintRef, PlanBlueprint } from '../../types';
 import { ScenarioIcon, FeatureIcon, CycleIcon, FlowIcon } from '../PehapeIcons';
 import { useExecutionScenarioStatus, ScenarioExecStatus } from '../../hooks/useExecutionScenarioStatus';
@@ -24,8 +26,12 @@ interface FlatScenario {
   planName: string;
   cycleName: string;
   setName: string;
-  setDetail: string;
   flowName: string;
+  parentGroupId?: string;
+  parentGroupName?: string;
+  groupId: string;
+  groupName: string;
+  isSetCombo: boolean;
 }
 
 interface ExecutionMonitorProps {
@@ -157,8 +163,10 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                 planName: plan.name,
                 cycleName: cycle.name,
                 setName: '—',
-                setDetail: '—',
                 flowName: flow.name,
+                groupId: `flow-${cRef.id}-${ref.id}`,
+                groupName: flow.name,
+                isSetCombo: false,
               });
             }
           }
@@ -196,6 +204,8 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
             if (choicesPerItem.length > 0) {
               const combinations = product(choicesPerItem);
               combinations.forEach((combo, idx) => {
+                const groupId = `set-${cRef.id}-${ref.id}-combo-${idx}`;
+                const groupName = `Matriz ${idx + 1}`;
                 combo.forEach((s, sIdx) => {
                   flat.push({
                     id: `${s.id}-${idx}-${sIdx}`,
@@ -205,8 +215,12 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                     planName: plan.name,
                     cycleName: cycle.name,
                     setName: set.name,
-                    setDetail: s.sourceName || '—',
                     flowName: s.sourceType === 'flow' ? s.sourceName : `${s.sourceName || set.name} (Matriz ${idx + 1})`,
+                    parentGroupId: `set-${cRef.id}-${ref.id}`,
+                    parentGroupName: set.name,
+                    groupId,
+                    groupName,
+                    isSetCombo: true,
                   });
                 });
               });
@@ -229,6 +243,17 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
 
   // Always pass taskId (never null-ify on finish) so states are preserved after execution
   const statusMap = useExecutionScenarioStatus(taskId, scenarioIds, scenarioNames);
+
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+
+  const toggleGroup = (groupId: string) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      return next;
+    });
+  };
 
   // ── Counters ───────────────────────────────────────────────────────────────
   const counts = useMemo(() => {
@@ -340,12 +365,6 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
               </TableCell>
               <TableCell sx={{ fontWeight: 600, bgcolor: 'background.paper', whiteSpace: 'nowrap' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                  <ViewListRoundedIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
-                  Test Set Detail
-                </Box>
-              </TableCell>
-              <TableCell sx={{ fontWeight: 600, bgcolor: 'background.paper', whiteSpace: 'nowrap' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                   <FlowIcon size={14} color={theme.palette.text.secondary} />
                   Test Flow
                 </Box>
@@ -366,91 +385,188 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
             </TableRow>
           </TableHead>
           <TableBody>
-            {flatScenarios.map((fs, idx) => {
-              // Use scenario ID as map key for precise matching
-              const status: ScenarioExecStatus = statusMap.get(fs.id) ?? 'pending';
-              const isRunning = status === 'running';
-              const isFailed  = status === 'failed';
-              const bg = isRunning
-                ? alpha(theme.palette.warning.main, isDark ? 0.08 : 0.05)
-                : isFailed
-                  ? alpha(theme.palette.error.main, isDark ? 0.07 : 0.04)
-                  : 'transparent';
+            {(() => {
+              let currentSetId: string | null = null;
+              let currentGroupId: string | null = null;
+              const rows: React.ReactNode[] = [];
+              
+              flatScenarios.forEach((fs, idx) => {
+                const statusColors: Record<string, string> = {
+                  running: theme.palette.warning.main,
+                  passed:  theme.palette.success.main,
+                  failed:  theme.palette.error.main,
+                  skipped: theme.palette.text.disabled,
+                  pending: theme.palette.text.disabled,
+                };
+                
+                const isFirstOfSet = fs.parentGroupId && fs.parentGroupId !== currentSetId;
+                if (isFirstOfSet) {
+                  currentSetId = fs.parentGroupId ?? null;
+                } else if (!fs.parentGroupId && currentSetId !== null) {
+                  currentSetId = null;
+                }
 
-              return (
-                <TableRow
-                  key={`${fs.id}-${idx}`}
-                  sx={{
-                    bgcolor: bg,
-                    transition: 'all 0.2s ease',
-                    '&:hover': { bgcolor: isRunning || isFailed ? bg : alpha(theme.palette.action.hover, 0.5) },
-                  }}
-                >
-                  <TableCell sx={{ color: 'text.secondary', whiteSpace: 'nowrap', borderLeft: `2px solid ${isRunning ? theme.palette.warning.main : isFailed ? theme.palette.error.main : 'transparent'}` }}>{fs.cycleName}</TableCell>
-                  <TableCell sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>{fs.setName}</TableCell>
-                  <TableCell sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>{fs.setDetail}</TableCell>
-                  <TableCell sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>{fs.flowName}</TableCell>
-                  <TableCell sx={{ width: '50%' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <StatusBadge status={status} />
-                      <Typography
-                        sx={{
-                          fontSize: '0.75rem',
-                          fontWeight: isRunning ? 700 : 500,
-                          color: isRunning ? 'warning.main' : isFailed ? 'error.main' : status === 'passed' ? 'success.main' : 'text.primary',
-                          whiteSpace: 'normal',
-                          wordBreak: 'break-word',
-                        }}
-                      >
-                        {fs.scenarioName}
-                      </Typography>
-                      {/* Instance badge — only shown when this name appears > 1 time */}
-                      {duplicateNames.has(fs.scenarioName) && (
-                        <Box
-                          component="span"
-                          sx={{
-                            flexShrink: 0,
-                            fontSize: '0.6rem',
-                            fontWeight: 700,
-                            letterSpacing: 0.3,
-                            px: 0.6,
-                            py: 0.15,
-                            borderRadius: '4px',
-                            bgcolor: alpha(theme.palette.primary.main, 0.12),
-                            color: 'primary.main',
-                            border: `1px solid ${alpha(theme.palette.primary.main, 0.3)}`,
-                            lineHeight: 1.5,
-                            userSelect: 'none',
-                          }}
-                        >
-                          #{instanceIndexMap.get(fs.id) ?? 1}
+                const isSetCollapsed = fs.parentGroupId ? collapsedGroups.has(fs.parentGroupId) : false;
+                
+                // If set is collapsed, and this is NOT the first matrix, SKIP it completely
+                if (isSetCollapsed && !isFirstOfSet) {
+                  currentGroupId = fs.groupId; // keep it in sync
+                  return;
+                }
+
+                // Render Matrix / Flow Group Header
+                if (fs.groupId !== currentGroupId) {
+                  currentGroupId = fs.groupId;
+                  const isCollapsed = collapsedGroups.has(fs.groupId);
+                  
+                  const groupScenarios = (isSetCollapsed && fs.parentGroupId)
+                    ? flatScenarios.filter(s => s.parentGroupId === fs.parentGroupId)
+                    : flatScenarios.filter(s => s.groupId === fs.groupId);
+                  const groupStatuses = groupScenarios.map(s => statusMap.get(s.id) ?? 'pending');
+                  let groupStatus = 'pending';
+                  if (groupStatuses.some(s => s === 'running')) groupStatus = 'running';
+                  else if (groupStatuses.some(s => s === 'failed')) groupStatus = 'failed';
+                  else if (groupStatuses.every(s => s === 'skipped')) groupStatus = 'skipped';
+                  else if (groupStatuses.every(s => s === 'passed' || s === 'skipped')) groupStatus = 'passed';
+                  
+                  const statusColor = statusColors[groupStatus];
+                  
+                  rows.push(
+                    <TableRow key={`group-${fs.groupId}`} sx={{ bgcolor: isDark ? alpha('#000', 0.15) : alpha(theme.palette.primary.main, 0.04) }}>
+                      {/* Test Cycle */}
+                      <TableCell sx={{ py: 0, fontWeight: 600, color: 'text.secondary' }}>
+                        {fs.parentGroupId ? (isFirstOfSet ? fs.cycleName : '') : fs.cycleName}
+                      </TableCell>
+                      {/* Test Set */}
+                      <TableCell sx={{ py: 0, fontWeight: 600, color: 'text.secondary' }}>
+                        {isFirstOfSet ? (
+                          <Box 
+                            onClick={() => toggleGroup(fs.parentGroupId!)} 
+                            sx={{ display: 'flex', alignItems: 'center', py: 0.8, cursor: 'pointer', userSelect: 'none', gap: 0.5 }}
+                          >
+                            {isSetCollapsed ? <KeyboardArrowRightRoundedIcon sx={{ fontSize: 16, color: 'text.secondary' }} /> : <KeyboardArrowDownRoundedIcon sx={{ fontSize: 16, color: 'text.secondary' }} />}
+                            <LibraryBooksRoundedIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                            <Typography sx={{ fontWeight: 600, fontSize: '0.75rem', color: 'text.primary' }}>
+                              {fs.parentGroupName}
+                            </Typography>
+                          </Box>
+                        ) : (fs.parentGroupId ? '' : '—')}
+                      </TableCell>
+                      {/* Test Flow / Combo Group */}
+                      <TableCell sx={{ py: 0 }}>
+                        {!isSetCollapsed && (
+                          <Box 
+                            onClick={() => toggleGroup(fs.groupId)} 
+                            sx={{ display: 'flex', alignItems: 'center', py: 0.8, cursor: 'pointer', userSelect: 'none', gap: 0.5 }}
+                          >
+                            {isCollapsed ? <KeyboardArrowRightRoundedIcon sx={{ fontSize: 16, color: 'text.secondary' }} /> : <KeyboardArrowDownRoundedIcon sx={{ fontSize: 16, color: 'text.secondary' }} />}
+                            <Typography sx={{ fontWeight: 600, fontSize: '0.75rem', color: 'text.primary' }}>
+                              {fs.groupName}
+                            </Typography>
+                          </Box>
+                        )}
+                      </TableCell>
+                      {/* Scenarios, Feature, Status (Summary) */}
+                      <TableCell colSpan={3} sx={{ py: 0 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                           <Chip label={`${groupScenarios.length} scenarios`} size="small" sx={{ height: 16, fontSize: '0.6rem', bgcolor: alpha(theme.palette.text.secondary, 0.1) }} />
+                           {groupStatus !== 'pending' && <Chip label={groupStatus} size="small" sx={{ height: 16, fontSize: '0.6rem', color: statusColor, bgcolor: alpha(statusColor, 0.1), border: `1px solid ${alpha(statusColor, 0.3)}` }} />}
                         </Box>
-                      )}
-                    </Box>
-                  </TableCell>
-                  <TableCell sx={{ color: 'text.secondary', width: '30%', whiteSpace: 'normal', wordBreak: 'break-word' }}>
-                    <Tooltip title={fs.featurePath} placement="top-start" arrow enterDelay={400}>
-                      <Box component="span" sx={{ cursor: 'help', lineHeight: 1.2 }}>
-                        {fs.featureName}
-                      </Box>
-                    </Tooltip>
-                  </TableCell>
-                  <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                    <Typography
+                      </TableCell>
+                    </TableRow>
+                  );
+                }
+                
+                // If Matrix / Flow is collapsed OR Set is collapsed, skip rendering scenarios
+                if (collapsedGroups.has(fs.groupId) || isSetCollapsed) {
+                  return;
+                }
+                  const status: ScenarioExecStatus = statusMap.get(fs.id) ?? 'pending';
+                  const isRunning = status === 'running';
+                  const isFailed  = status === 'failed';
+                  const bg = isRunning
+                    ? alpha(theme.palette.warning.main, isDark ? 0.08 : 0.05)
+                    : isFailed
+                      ? alpha(theme.palette.error.main, isDark ? 0.07 : 0.04)
+                      : 'transparent';
+
+                  rows.push(
+                    <TableRow
+                      key={`${fs.id}-${idx}`}
                       sx={{
-                        fontSize: '0.68rem',
-                        fontWeight: 700,
-                        letterSpacing: '0.05em',
-                        textTransform: 'uppercase',
-                        color: isRunning ? 'warning.main' : isFailed ? 'error.main' : status === 'passed' ? 'success.main' : status === 'skipped' ? 'text.disabled' : 'text.disabled',
+                        bgcolor: bg,
+                        transition: 'all 0.2s ease',
+                        '&:hover': { bgcolor: isRunning || isFailed ? bg : alpha(theme.palette.action.hover, 0.5) },
                       }}
                     >
-                      {status}
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
+                      {/* Empty cells for Cycle, Set and Flow in children to create a tree-like look */}
+                      <TableCell sx={{ borderLeft: `2px solid ${isRunning ? theme.palette.warning.main : isFailed ? theme.palette.error.main : 'transparent'}` }}></TableCell>
+                      <TableCell></TableCell>
+                      <TableCell></TableCell>
+                      <TableCell sx={{ width: '50%' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <StatusBadge status={status} />
+                          <Typography
+                            sx={{
+                              fontSize: '0.75rem',
+                              fontWeight: isRunning ? 700 : 500,
+                              color: isRunning ? 'warning.main' : isFailed ? 'error.main' : status === 'passed' ? 'success.main' : 'text.primary',
+                              whiteSpace: 'normal',
+                              wordBreak: 'break-word',
+                            }}
+                          >
+                            {fs.scenarioName}
+                          </Typography>
+                          {/* Instance badge — only shown when this name appears > 1 time */}
+                          {duplicateNames.has(fs.scenarioName) && (
+                            <Box
+                              component="span"
+                              sx={{
+                                flexShrink: 0,
+                                fontSize: '0.6rem',
+                                fontWeight: 700,
+                                letterSpacing: 0.3,
+                                px: 0.6,
+                                py: 0.15,
+                                borderRadius: '4px',
+                                bgcolor: alpha(theme.palette.primary.main, 0.12),
+                                color: 'primary.main',
+                                border: `1px solid ${alpha(theme.palette.primary.main, 0.3)}`,
+                                lineHeight: 1.5,
+                                userSelect: 'none',
+                              }}
+                            >
+                              #{instanceIndexMap.get(fs.id) ?? 1}
+                            </Box>
+                          )}
+                        </Box>
+                      </TableCell>
+                      <TableCell sx={{ color: 'text.secondary', width: '30%', whiteSpace: 'normal', wordBreak: 'break-word' }}>
+                        <Tooltip title={fs.featurePath} placement="top-start" arrow enterDelay={400}>
+                          <Box component="span" sx={{ cursor: 'help', lineHeight: 1.2 }}>
+                            {fs.featureName}
+                          </Box>
+                        </Tooltip>
+                      </TableCell>
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                        <Typography
+                          sx={{
+                            fontSize: '0.68rem',
+                            fontWeight: 700,
+                            letterSpacing: '0.05em',
+                            textTransform: 'uppercase',
+                            color: isRunning ? 'warning.main' : isFailed ? 'error.main' : status === 'passed' ? 'success.main' : status === 'skipped' ? 'text.disabled' : 'text.disabled',
+                          }}
+                        >
+                          {status}
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  );
+              });
+              
+              return rows;
+            })()}
 
             {/* ── Allure report generation row ──────────────────────────────── */}
             {isGeneratingReport && (
