@@ -55,6 +55,8 @@
             "modules": "Modules"
         },
         "feature_editor": "Feature Editor",
+        "export_all_features": "Export all features",
+        "import_features": "Import features (.zip)",
         "dirty_marker": "* (Unsaved)",
         "unsaved": "Unsaved",
         "loading_file": "Loading {{path}}...",

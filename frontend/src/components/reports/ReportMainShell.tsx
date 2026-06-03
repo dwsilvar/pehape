@@ -159,9 +159,9 @@ const ReportMainShell: React.FC = () => {
     };
 
     return (
-        <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: 0 }}>
             {/* Header / View Selector */}
-            <Box className="no-print" sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, pb: 2, borderBottom: 1, borderColor: 'divider' }}>
+            <Box className="no-print" sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, pb: 3, borderBottom: 1, borderColor: 'divider' }}>
                 <Box>
                     <Typography variant="h6" sx={{ fontWeight: 600 }}>Centro de Resultados</Typography>
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
@@ -226,9 +226,9 @@ const ReportMainShell: React.FC = () => {
             </Box>
 
             {/* View Container */}
-            <Box className="print-container" sx={{ flex: 1, overflow: 'auto', pr: 1 }}>
-                {view === 'V_DASH' && <ReportExecutiveView data={data} />}
-                {view === 'V_TIME' && <ReportTimelineView data={data} />}
+            <Box className="print-container" sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                {view === 'V_DASH' && <Box sx={{ flex: 1, overflow: 'auto' }}><ReportExecutiveView data={data} /></Box>}
+                {view === 'V_TIME' && <Box sx={{ flex: 1, overflow: 'auto' }}><ReportTimelineView data={data} /></Box>}
                 {view === 'V_MATR' && <ReportMatrixView data={data} />}
             </Box>
         </Box>

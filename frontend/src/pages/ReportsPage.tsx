@@ -538,7 +538,7 @@ const ReportsPage: React.FC = () => {
     const [activeTab, setActiveTab] = useState(0);
 
     return (
-        <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
             <AppToolbar title={t('pages.reports.title')} icon={<BarChartIcon sx={{ fontSize: 32 }} />} />
             <Box sx={{ px: 2, pt: 0 }}>
                 <Tabs
@@ -565,7 +565,7 @@ const ReportsPage: React.FC = () => {
                     />
                 </Tabs>
             </Box>
-            <Box sx={{ p: 2, flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <Box sx={{ px: 4, pt: 3, pb: '5px', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
                 {activeTab === 0 && <ReportMainShell />}
                 {activeTab === 1 && <AllureTabContent t={t} />}
             </Box>

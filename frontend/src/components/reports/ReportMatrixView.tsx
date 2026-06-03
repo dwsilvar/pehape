@@ -1,7 +1,11 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Chip, useTheme, alpha, Button, Select, MenuItem, FormControl } from '@mui/material';
+import { Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Chip, useTheme, alpha, Button, Select, MenuItem, FormControl, Typography } from '@mui/material';
 import ListAltRoundedIcon from '@mui/icons-material/ListAltRounded';
+import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded';
+import KeyboardArrowRightRoundedIcon from '@mui/icons-material/KeyboardArrowRightRounded';
+import LibraryBooksRoundedIcon from '@mui/icons-material/LibraryBooksRounded';
 import StepInspectorDrawer from './StepInspectorDrawer';
+import { ScenarioIcon, CycleIcon, FlowIcon } from '../PehapeIcons';
 
 interface ReportMatrixViewProps {
     data: any;
@@ -42,6 +46,16 @@ const ReportMatrixView: React.FC<ReportMatrixViewProps> = ({ data }) => {
     const [gherkinData, setGherkinData] = useState<any[]>([]);
     const [selectedScenario, setSelectedScenario] = useState<any | null>(null);
     const [isInspectorOpen, setIsInspectorOpen] = useState(false);
+    const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+
+    const toggleGroup = (id: string) => {
+        setCollapsedGroups(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
 
     useEffect(() => {
         // Fetch Allure detailed data (gherkin-results)
@@ -150,7 +164,7 @@ const ReportMatrixView: React.FC<ReportMatrixViewProps> = ({ data }) => {
         // ── Build rows ────────────────────────────────────────────────────────
         data.test_cycles.forEach((cycle: any) => {
             cycle.test_flows?.forEach((flow: any) => {
-                flow.scenarios?.forEach((sc: any) => {
+                flow.scenarios?.forEach((sc: any, idx: number) => {
                     // Extract gifExecutionId and its seconds-timestamp from logs
                     let gifExecutionId: string | null = null;
                     let gifStartSec: number | null = null;
@@ -171,7 +185,7 @@ const ReportMatrixView: React.FC<ReportMatrixViewProps> = ({ data }) => {
                     const gherkinMatch = findBestMatch(sc.scenario_name, gifStartSec, sc.result_status || 'skip');
                     const isFlow = sc.source_type === 'flow';
                     const hasDetail = sc.set_detail && sc.set_detail !== '—';
-                    const matrixMatch = flow.flow_name?.match(/\(Matriz \d+\)/);
+                    const matrixMatch = flow.flow_name?.match(/\((Matriz \d+)\)/);
                     const matrixSuffix = matrixMatch ? ` ${matrixMatch[0]}` : '';
                     
                     let finalFlowName = flow.flow_name;
@@ -181,18 +195,27 @@ const ReportMatrixView: React.FC<ReportMatrixViewProps> = ({ data }) => {
                         finalFlowName = `${sc.set_detail}${matrixSuffix}`;
                     }
 
+                    const groupTitle = (sc.set_name && sc.set_name !== '—' && matrixMatch) 
+                        ? matrixMatch[1] 
+                        : flow.flow_name;
+
                     result.push({
-                        id: sc.id,
+                        id: sc.id || `${cycle.cycle_id}-${sc.scenario_name}-${idx}`,
                         cycleName: cycle.cycle_name || cycle.cycle_id,
                         setName: sc.set_name || '—',
-                        setDetail: sc.set_detail || '—',
                         flowName: finalFlowName,
                         scenarioName: sc.scenario_name,
                         tags: sc.tags || [],
                         duration: sc.duration_ms || 0,
                         status: sc.result_status || 'skip',
                         steps: gherkinMatch?.steps || [],
-                        gifExecutionId,   // from logs — always instance-specific
+                        gifExecutionId,
+                        
+                        parentGroupId: sc.set_name && sc.set_name !== '—' ? `set-${cycle.cycle_id}-${sc.set_name}` : undefined,
+                        parentGroupName: sc.set_name && sc.set_name !== '—' ? sc.set_name : undefined,
+                        groupId: `flow-${cycle.cycle_id}-${sc.set_name}-${flow.flow_name}`,
+                        groupName: groupTitle,
+                        sourceName: (sc.set_detail && sc.set_detail !== '—') ? sc.set_detail : flow.flow_name,
                     });
                 });
             });
@@ -210,16 +233,35 @@ const ReportMatrixView: React.FC<ReportMatrixViewProps> = ({ data }) => {
     };
 
     return (
-        <Box sx={{ pl: 1, pr: 1, height: '100%', display: 'flex', flexDirection: 'column' }}>
-            <TableContainer component={Paper} sx={{ flex: 1, overflow: 'auto', maxHeight: '100%' }}>
+        <Box sx={{ pl: 1, pr: 1, flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
+            <TableContainer component={Paper} sx={{ flex: 1, overflow: 'auto', mb: '5px' }}>
                 <Table size="small" stickyHeader>
                     <TableHead>
                         <TableRow>
-                            <TableCell sx={{ fontWeight: 600 }}>Ciclo</TableCell>
-                            <TableCell sx={{ fontWeight: 600 }}>Set</TableCell>
-                            <TableCell sx={{ fontWeight: 600 }}>Set Detail</TableCell>
-                            <TableCell sx={{ fontWeight: 600 }}>Flujo</TableCell>
-                            <TableCell sx={{ fontWeight: 600 }}>Escenario</TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                                    <CycleIcon size={14} color={theme.palette.text.secondary} />
+                                    Test Cycle
+                                </Box>
+                            </TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                                    <LibraryBooksRoundedIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                                    Test Set
+                                </Box>
+                            </TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                                    <FlowIcon size={14} color={theme.palette.text.secondary} />
+                                    Test Flow
+                                </Box>
+                            </TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                                    <ScenarioIcon size={14} color={theme.palette.text.secondary} />
+                                    Scenario
+                                </Box>
+                            </TableCell>
                             <TableCell sx={{ fontWeight: 600 }}>Tags</TableCell>
                             <TableCell sx={{ fontWeight: 600 }}>Duración</TableCell>
                             <TableCell sx={{ fontWeight: 600 }}>Resultado</TableCell>
@@ -228,90 +270,181 @@ const ReportMatrixView: React.FC<ReportMatrixViewProps> = ({ data }) => {
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {rows.map((row, idx) => {
-                            const color = getStatusColor(row.status, theme);
-                            return (
-                                <TableRow 
-                                    key={idx}
-                                    sx={{
-                                        '&:last-child td': { borderBottom: 0 },
-                                        backgroundColor: row.status === 'fail' ? alpha('#EF4444', 0.05) : 'inherit',
-                                        '&:hover': { backgroundColor: alpha(color, 0.08) }
-                                    }}
-                                >
-                                    <TableCell sx={{ fontSize: '0.8rem' }}>{row.cycleName}</TableCell>
-                                    <TableCell sx={{ fontSize: '0.8rem' }}>{row.setName}</TableCell>
-                                    <TableCell sx={{ fontSize: '0.8rem' }}>{row.setDetail}</TableCell>
-                                    <TableCell sx={{ fontSize: '0.8rem' }}>{row.flowName}</TableCell>
-                                    <TableCell sx={{ fontSize: '0.85rem', fontWeight: row.status === 'fail' ? 600 : 400 }}>{row.scenarioName}</TableCell>
-                                    <TableCell>
-                                        <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                                            {row.tags.map((t: string) => (
-                                                <Chip key={t} label={t} size="small" variant="outlined" sx={{ fontSize: '0.65rem', height: 20 }} />
-                                            ))}
-                                        </Box>
-                                    </TableCell>
-                                    <TableCell sx={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
-                                        <Box
-                                            title={row.duration > 0 ? `${row.duration.toLocaleString()} ms` : ''}
-                                            component="span"
-                                            sx={{ cursor: row.duration > 0 ? 'help' : 'default' }}
-                                        >
-                                            {formatDuration(row.duration)}
-                                        </Box>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Chip 
-                                            label={row.status.toUpperCase()} 
-                                            size="small" 
-                                            sx={{ 
-                                                fontSize: '0.65rem', 
-                                                height: 20, 
-                                                fontWeight: 700,
-                                                backgroundColor: alpha(color, 0.15),
-                                                color: color
-                                            }} 
-                                        />
-                                    </TableCell>
-                                    <TableCell>
-                                        <FormControl size="small" sx={{ minWidth: 120 }}>
-                                            <Select
-                                                value=""
-                                                displayEmpty
-                                                onChange={(e) => handleEvidenceChange(e, row.gifExecutionId)}
-                                                disabled={!row.gifExecutionId}
-                                                sx={{ fontSize: '0.75rem', height: 28 }}
-                                                renderValue={() => "Seleccionar..."}
+                        {(() => {
+                            let currentSetId: string | null = null;
+                            let currentGroupId: string | null = null;
+                            const renderedRows: React.ReactNode[] = [];
+                            
+                            rows.forEach((row, idx) => {
+                                const isFirstOfSet = row.parentGroupId && row.parentGroupId !== currentSetId;
+                                if (isFirstOfSet) {
+                                    currentSetId = row.parentGroupId;
+                                } else if (!row.parentGroupId && currentSetId !== null) {
+                                    currentSetId = null;
+                                }
+
+                                const isSetCollapsed = row.parentGroupId ? collapsedGroups.has(row.parentGroupId) : false;
+                                
+                                if (isSetCollapsed && !isFirstOfSet) {
+                                    currentGroupId = row.groupId;
+                                    return;
+                                }
+
+                                if (row.groupId !== currentGroupId) {
+                                    currentGroupId = row.groupId;
+                                    const isCollapsed = collapsedGroups.has(row.groupId);
+                                    
+                                    const groupScenarios = (isSetCollapsed && row.parentGroupId)
+                                        ? rows.filter(r => r.parentGroupId === row.parentGroupId)
+                                        : rows.filter(r => r.groupId === row.groupId);
+                                    
+                                    const groupStatuses = groupScenarios.map(r => r.status);
+                                    let groupStatus = 'skip';
+                                    if (groupStatuses.some(s => s === 'fail')) groupStatus = 'fail';
+                                    else if (groupStatuses.every(s => s === 'pass' || s === 'skip') && groupStatuses.some(s => s === 'pass')) groupStatus = 'pass';
+                                    else if (groupStatuses.every(s => s === 'skip')) groupStatus = 'skip';
+                                    
+                                    const totalDuration = groupScenarios.reduce((acc, r) => acc + r.duration, 0);
+                                    const statusColor = getStatusColor(groupStatus, theme);
+                                    
+                                    renderedRows.push(
+                                        <TableRow key={`group-${row.groupId}`} sx={{ bgcolor: alpha(theme.palette.primary.main, 0.04) }}>
+                                            <TableCell sx={{ py: 0, fontWeight: 600, color: 'text.secondary', fontSize: '0.8rem' }}>
+                                                {row.parentGroupId ? (isFirstOfSet ? row.cycleName : '') : row.cycleName}
+                                            </TableCell>
+                                            <TableCell sx={{ py: 0, fontWeight: 600, color: 'text.secondary', fontSize: '0.8rem' }}>
+                                                {isFirstOfSet ? (
+                                                    <Box 
+                                                        onClick={() => toggleGroup(row.parentGroupId!)} 
+                                                        sx={{ display: 'flex', alignItems: 'center', py: 0.8, cursor: 'pointer', userSelect: 'none', gap: 0.5 }}
+                                                    >
+                                                        {isSetCollapsed ? <KeyboardArrowRightRoundedIcon sx={{ fontSize: 16 }} /> : <KeyboardArrowDownRoundedIcon sx={{ fontSize: 16 }} />}
+                                                        <LibraryBooksRoundedIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                                                        <Typography sx={{ fontWeight: 600, fontSize: '0.75rem' }}>
+                                                            {row.parentGroupName}
+                                                        </Typography>
+                                                    </Box>
+                                                ) : (row.parentGroupId ? '' : '—')}
+                                            </TableCell>
+                                            <TableCell sx={{ py: 0 }}>
+                                                {!isSetCollapsed && (
+                                                    <Box 
+                                                        onClick={() => toggleGroup(row.groupId)} 
+                                                        sx={{ display: 'flex', alignItems: 'center', py: 0.8, cursor: 'pointer', userSelect: 'none', gap: 0.5 }}
+                                                    >
+                                                        {isCollapsed ? <KeyboardArrowRightRoundedIcon sx={{ fontSize: 16, color: 'text.secondary' }} /> : <KeyboardArrowDownRoundedIcon sx={{ fontSize: 16, color: 'text.secondary' }} />}
+                                                        <Typography sx={{ fontWeight: 600, fontSize: '0.75rem', color: 'text.primary' }}>
+                                                            {row.groupName}
+                                                        </Typography>
+                                                    </Box>
+                                                )}
+                                            </TableCell>
+                                            <TableCell sx={{ py: 0 }}>
+                                                <Chip label={`${groupScenarios.length} scenarios`} size="small" sx={{ height: 16, fontSize: '0.6rem', bgcolor: alpha(theme.palette.text.secondary, 0.1) }} />
+                                            </TableCell>
+                                            <TableCell sx={{ py: 0 }}></TableCell>
+                                            <TableCell sx={{ py: 0 }}>
+                                                {totalDuration > 0 && <Chip label={formatDuration(totalDuration)} size="small" sx={{ height: 16, fontSize: '0.6rem', bgcolor: alpha(theme.palette.text.secondary, 0.1) }} />}
+                                            </TableCell>
+                                            <TableCell sx={{ py: 0 }}>
+                                                <Chip label={groupStatus.toUpperCase()} size="small" sx={{ height: 16, fontSize: '0.6rem', color: statusColor, bgcolor: alpha(statusColor, 0.1), border: `1px solid ${alpha(statusColor, 0.3)}` }} />
+                                            </TableCell>
+                                            <TableCell sx={{ py: 0 }}></TableCell>
+                                            <TableCell sx={{ py: 0 }}></TableCell>
+                                        </TableRow>
+                                    );
+                                }
+                                
+                                if (collapsedGroups.has(row.groupId) || isSetCollapsed) {
+                                    return;
+                                }
+
+                                const color = getStatusColor(row.status, theme);
+                                renderedRows.push(
+                                    <TableRow 
+                                        key={`row-${row.id}-${idx}`}
+                                        sx={{
+                                            '&:last-child td': { borderBottom: 0 },
+                                            backgroundColor: row.status === 'fail' ? alpha('#EF4444', 0.05) : 'inherit',
+                                            '&:hover': { backgroundColor: alpha(color, 0.08) }
+                                        }}
+                                    >
+                                        <TableCell sx={{ borderLeft: `2px solid ${row.status === 'fail' ? theme.palette.error.main : 'transparent'}` }}></TableCell>
+                                        <TableCell></TableCell>
+                                        <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                                            {row.sourceName}
+                                        </TableCell>
+                                        <TableCell sx={{ fontSize: '0.85rem', fontWeight: row.status === 'fail' ? 600 : 400 }}>{row.scenarioName}</TableCell>
+                                        <TableCell>
+                                            <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                                                {row.tags.map((t: string) => (
+                                                    <Chip key={t} label={t} size="small" variant="outlined" sx={{ fontSize: '0.65rem', height: 20 }} />
+                                                ))}
+                                            </Box>
+                                        </TableCell>
+                                        <TableCell sx={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
+                                            <Box
+                                                title={row.duration > 0 ? `${row.duration.toLocaleString()} ms` : ''}
+                                                component="span"
+                                                sx={{ cursor: row.duration > 0 ? 'help' : 'default' }}
                                             >
-                                                {row.gifExecutionId && [
-                                                    <MenuItem key="gif" value={`/api/execution/${row.gifExecutionId}/gif`} sx={{ fontSize: '0.75rem' }}>
-                                                        Ver GIF Interactivo
-                                                    </MenuItem>,
-                                                    <MenuItem key="video" value={`/api/execution/${row.gifExecutionId}/video`} sx={{ fontSize: '0.75rem' }}>
-                                                        Ver Video MP4
-                                                    </MenuItem>
-                                                ]}
-                                            </Select>
-                                        </FormControl>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Button 
-                                            variant="outlined" 
-                                            size="small" 
-                                            startIcon={<ListAltRoundedIcon />}
-                                            disabled={row.status === 'skip' || !row.steps || row.steps.length === 0}
-                                            onClick={() => {
-                                                setSelectedScenario(row);
-                                                setIsInspectorOpen(true);
-                                            }}
-                                            sx={{ fontSize: '0.7rem', textTransform: 'none' }}
-                                        >
-                                            Ver Steps
-                                        </Button>
-                                    </TableCell>
-                                </TableRow>
-                            );
-                        })}
+                                                {formatDuration(row.duration)}
+                                            </Box>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Chip 
+                                                label={row.status.toUpperCase()} 
+                                                size="small" 
+                                                sx={{ 
+                                                    fontSize: '0.65rem', 
+                                                    height: 20, 
+                                                    fontWeight: 700,
+                                                    backgroundColor: alpha(color, 0.15),
+                                                    color: color
+                                                }} 
+                                            />
+                                        </TableCell>
+                                        <TableCell>
+                                            <FormControl size="small" sx={{ minWidth: 120 }}>
+                                                <Select
+                                                    value=""
+                                                    displayEmpty
+                                                    onChange={(e) => handleEvidenceChange(e, row.gifExecutionId)}
+                                                    disabled={!row.gifExecutionId}
+                                                    sx={{ fontSize: '0.75rem', height: 28 }}
+                                                    renderValue={() => "Seleccionar..."}
+                                                >
+                                                    {row.gifExecutionId && [
+                                                        <MenuItem key="gif" value={`/api/execution/${row.gifExecutionId}/gif`} sx={{ fontSize: '0.75rem' }}>
+                                                            Ver GIF Interactivo
+                                                        </MenuItem>,
+                                                        <MenuItem key="video" value={`/api/execution/${row.gifExecutionId}/video`} sx={{ fontSize: '0.75rem' }}>
+                                                            Ver Video MP4
+                                                        </MenuItem>
+                                                    ]}
+                                                </Select>
+                                            </FormControl>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Button 
+                                                variant="outlined" 
+                                                size="small" 
+                                                startIcon={<ListAltRoundedIcon />}
+                                                disabled={row.status === 'skip' || !row.steps || row.steps.length === 0}
+                                                onClick={() => {
+                                                    setSelectedScenario(row);
+                                                    setIsInspectorOpen(true);
+                                                }}
+                                                sx={{ fontSize: '0.7rem', textTransform: 'none' }}
+                                            >
+                                                Ver Steps
+                                            </Button>
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            });
+                            return renderedRows;
+                        })()}
                     </TableBody>
                 </Table>
             </TableContainer>

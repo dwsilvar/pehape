@@ -32,6 +32,8 @@ interface FlatScenario {
   groupId: string;
   groupName: string;
   isSetCombo: boolean;
+  sourceType: string;
+  sourceName: string;
 }
 
 interface ExecutionMonitorProps {
@@ -167,6 +169,8 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                 groupId: `flow-${cRef.id}-${ref.id}`,
                 groupName: flow.name,
                 isSetCombo: false,
+                sourceType: 'flow',
+                sourceName: flow.name,
               });
             }
           }
@@ -221,6 +225,8 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                     groupId,
                     groupName,
                     isSetCombo: true,
+                    sourceType: s.sourceType,
+                    sourceName: s.sourceName,
                   });
                 });
               });
@@ -347,7 +353,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
       </Box>
 
       {/* ── Scenario rows (Table) ────────────────────────────────────────────────────── */}
-      <TableContainer component={Box} sx={{ flex: 1, overflowY: 'auto' }}>
+      <TableContainer component={Box} sx={{ flex: 1, overflowY: 'auto', mb: '5px' }}>
         <Table stickyHeader size="small" sx={{ '& .MuiTableCell-root': { fontSize: '0.75rem', fontFamily: 'inherit', borderColor: 'divider', py: 0.8 } }}>
           <TableHead>
             <TableRow>
@@ -466,12 +472,15 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                           </Box>
                         )}
                       </TableCell>
-                      {/* Scenarios, Feature, Status (Summary) */}
-                      <TableCell colSpan={3} sx={{ py: 0 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                           <Chip label={`${groupScenarios.length} scenarios`} size="small" sx={{ height: 16, fontSize: '0.6rem', bgcolor: alpha(theme.palette.text.secondary, 0.1) }} />
-                           {groupStatus !== 'pending' && <Chip label={groupStatus} size="small" sx={{ height: 16, fontSize: '0.6rem', color: statusColor, bgcolor: alpha(statusColor, 0.1), border: `1px solid ${alpha(statusColor, 0.3)}` }} />}
-                        </Box>
+                      {/* Scenario Summary */}
+                      <TableCell sx={{ py: 0 }}>
+                        <Chip label={`${groupScenarios.length} scenarios`} size="small" sx={{ height: 16, fontSize: '0.6rem', bgcolor: alpha(theme.palette.text.secondary, 0.1) }} />
+                      </TableCell>
+                      {/* Feature column (empty for group) */}
+                      <TableCell sx={{ py: 0 }}></TableCell>
+                      {/* Status Summary */}
+                      <TableCell sx={{ py: 0 }}>
+                        {groupStatus !== 'pending' && <Chip label={groupStatus} size="small" sx={{ height: 16, fontSize: '0.6rem', color: statusColor, bgcolor: alpha(statusColor, 0.1), border: `1px solid ${alpha(statusColor, 0.3)}` }} />}
                       </TableCell>
                     </TableRow>
                   );
@@ -502,7 +511,9 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                       {/* Empty cells for Cycle, Set and Flow in children to create a tree-like look */}
                       <TableCell sx={{ borderLeft: `2px solid ${isRunning ? theme.palette.warning.main : isFailed ? theme.palette.error.main : 'transparent'}` }}></TableCell>
                       <TableCell></TableCell>
-                      <TableCell></TableCell>
+                      <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                        {fs.sourceName}
+                      </TableCell>
                       <TableCell sx={{ width: '50%' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <StatusBadge status={status} />
