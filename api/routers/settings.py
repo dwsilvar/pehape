@@ -1,6 +1,9 @@
+import re
+import subprocess
+import sys
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-import re
 
 from api.config import PROJECT_ROOT
 
@@ -47,6 +50,23 @@ def get_settings():
         
     return settings
 
+@router.get("/browse_file")
+def browse_file():
+    code = """
+import tkinter as tk
+from tkinter import filedialog
+root = tk.Tk()
+root.withdraw()
+root.attributes('-topmost', True)
+path = filedialog.askopenfilename(title="Seleccionar ejecutable de Tesseract", filetypes=[("Ejecutables", "*.exe"), ("Todos los archivos", "*.*")])
+print(path)
+"""
+    try:
+        result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
+        return {"path": result.stdout.strip()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.put("/")
 def update_settings(new_settings: SettingsModel):
     if not CONFIG_FILE_PATH.exists():
@@ -55,7 +75,10 @@ def update_settings(new_settings: SettingsModel):
     with open(CONFIG_FILE_PATH, "r", encoding="utf-8") as f:
         content = f.read()
         
-    settings_dict = new_settings.dict()
+    if hasattr(new_settings, "model_dump"):
+        settings_dict = new_settings.model_dump()
+    else:
+        settings_dict = new_settings.dict()
     
     for key, value in settings_dict.items():
         if isinstance(value, bool):

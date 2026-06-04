@@ -16,9 +16,11 @@ import {
     Divider,
     Alert,
     CircularProgress,
-    Snackbar
+    Snackbar,
+    InputAdornment,
+    IconButton
 } from '@mui/material';
-import { Settings as SettingsIcon, Save as SaveIcon } from '@mui/icons-material';
+import { Settings as SettingsIcon, Save as SaveIcon, FolderOpen as FolderOpenIcon } from '@mui/icons-material';
 import AppToolbar from '../components/AppToolbar';
 
 interface SettingsData {
@@ -85,7 +87,7 @@ const SettingsPage: React.FC = () => {
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-            <AppToolbar title={t('pages.settings.title', 'Configuraciones')} icon={<SettingsIcon sx={{ fontSize: 32 }} />} />
+            <AppToolbar title={t('pages.settings.title', 'Configuraciones')} icon={<SettingsIcon sx={{ fontSize: 32 }} />} showControls={false} />
             
             <Box sx={{ px: 4, pt: 4, flex: 1, overflowY: 'auto', backgroundColor: 'background.default' }}>
                 <Paper elevation={0} sx={{ p: 4, mb: '5px', maxWidth: 800, mx: 'auto', border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
@@ -122,6 +124,27 @@ const SettingsPage: React.FC = () => {
                                 onChange={(e) => handleChange('TESSERACT_CMD_PATH', e.target.value)}
                                 helperText="Ruta absoluta al ejecutable tesseract.exe"
                                 size="small"
+                                InputProps={{
+                                    endAdornment: (
+                                        <InputAdornment position="end">
+                                            <IconButton onClick={async () => {
+                                                try {
+                                                    const res = await fetch('/api/settings/browse_file');
+                                                    if (res.ok) {
+                                                        const data = await res.json();
+                                                        if (data.path) {
+                                                            handleChange('TESSERACT_CMD_PATH', data.path);
+                                                        }
+                                                    }
+                                                } catch (err) {
+                                                    console.error("Error al abrir explorador:", err);
+                                                }
+                                            }} edge="end">
+                                                <FolderOpenIcon />
+                                            </IconButton>
+                                        </InputAdornment>
+                                    )
+                                }}
                             />
                             
                             <FormControl fullWidth size="small">

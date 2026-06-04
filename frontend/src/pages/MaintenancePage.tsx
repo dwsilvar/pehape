@@ -64,7 +64,7 @@ const MaintenancePage: React.FC = () => {
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-            <AppToolbar title={t('pages.maintenance.title')} icon={<BuildIcon sx={{ fontSize: 32 }} />} />
+            <AppToolbar title={t('pages.maintenance.title')} icon={<BuildIcon sx={{ fontSize: 32 }} />} showControls={false} />
             <Box sx={{ p: 4, flex: 1, overflow: 'auto' }}>
                 <Box display="flex" justifyContent="flex-end" alignItems="center" mb={4}>
                     <Button startIcon={<RefreshIcon />} onClick={fetchUsage} variant="outlined">

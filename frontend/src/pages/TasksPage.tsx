@@ -110,7 +110,7 @@ const TasksPage: React.FC = () => {
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-            <AppToolbar title="Tareas y Herramientas" icon={<AssignmentIcon sx={{ fontSize: 32 }} />} />
+            <AppToolbar title="Tareas y Herramientas" icon={<AssignmentIcon sx={{ fontSize: 32 }} />} showControls={false} />
             <Box sx={{ p: 4, flex: 1, overflowY: 'auto' }}>
                 <Tabs value={tabValue} onChange={handleTabChange} sx={{ mb: 4, borderBottom: 1, borderColor: 'divider' }}>
                     <Tab icon={<BuildIcon />} iconPosition="start" label="Ejecutar Tareas" />

@@ -11,9 +11,11 @@ interface AppToolbarProps {
     title?: string;
     icon?: React.ReactNode;
     showViewMenu?: boolean;
+    showControls?: boolean;
+    children?: React.ReactNode;
 }
 
-const AppToolbar: React.FC<AppToolbarProps> = ({ title, icon, showViewMenu = false }) => {
+const AppToolbar: React.FC<AppToolbarProps> = ({ title, icon, showViewMenu = false, showControls = true, children }) => {
     const { t, i18n } = useTranslation();
     const { themeName, setThemeName } = useLayout();
     const [viewMenuAnchorEl, setViewMenuAnchorEl] = useState<null | HTMLElement>(null);
@@ -57,15 +59,17 @@ const AppToolbar: React.FC<AppToolbarProps> = ({ title, icon, showViewMenu = fal
                             </Box>
                         )}
                         {title && (
-                            <Typography variant="h6" component="h1" sx={{ fontWeight: 500 }}>
+                            <Typography variant="h6" component="h1" sx={{ fontWeight: 500, mr: 3 }}>
                                 {title}
                             </Typography>
                         )}
+                        {children}
                     </Box>
 
                     {/* Right side: View, Theme and Language controls */}
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        {/* View Menu Button */}
+                    {showControls && (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            {/* View Menu Button */}
                         {showViewMenu && (
                             <Button color="inherit" onClick={handleViewMenuClick} size="small">
                                 {t('common.view')}
@@ -107,6 +111,7 @@ const AppToolbar: React.FC<AppToolbarProps> = ({ title, icon, showViewMenu = fal
                             </Box>
                         </Tooltip>
                     </Box>
+                    )}
                 </Toolbar>
             </AppBar>
 

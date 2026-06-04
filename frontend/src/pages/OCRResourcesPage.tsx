@@ -129,7 +129,7 @@ const OCRResourcesPage: React.FC = () => {
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-            <AppToolbar title={t('editor.gallery.title')} icon={<ImageIcon sx={{ fontSize: 32 }} />} />
+            <AppToolbar title={t('editor.gallery.title')} icon={<ImageIcon sx={{ fontSize: 32 }} />} showControls={false} />
             <Box sx={{ p: 4, flex: 1, overflowY: 'auto' }}>
                 <Typography variant="body1" sx={{ mb: 3, color: 'text.secondary' }}>
                     {t('editor.gallery.subtitle')}

@@ -266,7 +266,7 @@ async def clean_reports(payload: CleanRequest):
 def get_execution_gif(execution_id: str):
     """Genera y sirve un GIF de la ejecución."""
     try:
-        from PIL import Image
+        from PIL import Image, ImageDraw, ImageFont
 
         gif_source_dir = PROJECT_ROOT / "reports" / "temp_gif" / execution_id
         if not gif_source_dir.exists():
@@ -276,19 +276,101 @@ def get_execution_gif(execution_id: str):
         if not images:
             raise HTTPException(status_code=404, detail="No images found for GIF")
 
-        frames = [Image.open(img) for img in images]
+        frames = []
+        for index, image_path in enumerate(images):
+            try:
+                img = Image.open(image_path).convert('RGB')
+                draw = ImageDraw.Draw(img)
+                try:
+                    font = ImageFont.truetype("arial.ttf", 36)
+                except IOError:
+                    font = ImageFont.load_default()
+                text = f"#{index + 1}"
+                x, y = 10, 10
+                text_bbox = draw.textbbox((x, y), text, font=font)
+                draw.rectangle(text_bbox, fill="black")
+                draw.text((x, y), text, font=font, fill="white")
+                frames.append(img)
+            except Exception as ex:
+                print(f"Error processing frame {image_path}: {ex}")
+
+        if not frames:
+            raise HTTPException(status_code=500, detail="Failed to process frames")
+
         output = io.BytesIO()
-        frames[0].save(output, format="GIF", append_images=frames[1:], save_all=True, duration=500, loop=0)
+        frames[0].save(output, format="GIF", append_images=frames[1:], save_all=True, duration=1000, loop=0)
         output.seek(0)
-        return StreamingResponse(output, media_type="image/gif")
+        return StreamingResponse(
+            output, 
+            media_type="image/gif",
+            headers={"Content-Disposition": f'attachment; filename="execution_{execution_id}.gif"'}
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/api/execution/{execution_id}/video", tags=["Execution Plan"])
 def get_execution_video(execution_id: str):
-    """Sirve el video de la ejecución si existe."""
-    video_path = PROJECT_ROOT / "reports" / "temp_gif" / execution_id / "execution.mp4"
-    if video_path.exists():
-        return FileResponse(str(video_path))
-    raise HTTPException(status_code=404, detail="Video not found")
+    """Genera y sirve un Video (MP4) de la ejecución."""
+    try:
+        import cv2
+        import numpy as np
+        import tempfile
+
+        video_source_dir = PROJECT_ROOT / "reports" / "temp_gif" / execution_id
+        if not video_source_dir.exists():
+            raise HTTPException(status_code=404, detail="Execution data not found")
+
+        images = sorted(glob.glob(str(video_source_dir / "*.png")))
+        if not images:
+            raise HTTPException(status_code=404, detail="No images found for Video")
+
+        first_frame = cv2.imread(images[0])
+        if first_frame is None:
+            raise HTTPException(status_code=500, detail="Failed to read first frame")
+
+        height, width, _ = first_frame.shape
+        temp_video = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
+        temp_video_path = temp_video.name
+        temp_video.close()
+
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        base_fps = 1
+        output_fps = 10
+        repeat_count = output_fps // base_fps
+
+        out = cv2.VideoWriter(temp_video_path, fourcc, output_fps, (width, height))
+        if not out.isOpened():
+            fourcc = cv2.VideoWriter_fourcc(*'avc1')
+            out = cv2.VideoWriter(temp_video_path, fourcc, output_fps, (width, height))
+        if not out.isOpened():
+            raise HTTPException(status_code=500, detail="Failed to initialize video writer")
+
+        for index, image_path in enumerate(images):
+            try:
+                frame = cv2.imread(image_path)
+                if frame is None:
+                    continue
+                text = f"#{index + 1}"
+                font = cv2.FONT_HERSHEY_SIMPLEX
+                font_scale = 1.2
+                thickness = 3
+                (text_width, text_height), baseline = cv2.getTextSize(text, font, font_scale, thickness)
+                x, y = 10, 10 + text_height
+                cv2.rectangle(frame, (x - 5, y - text_height - 5), (x + text_width + 5, y + baseline + 5), (0, 0, 0), -1)
+                cv2.putText(frame, text, (x, y), font, font_scale, (255, 255, 255), thickness)
+                for _ in range(repeat_count):
+                    out.write(frame)
+            except Exception as ex:
+                pass
+        
+        out.release()
+        return FileResponse(
+            temp_video_path, 
+            media_type="video/mp4", 
+            filename=f"execution_{execution_id}.mp4"
+        )
+    except ImportError:
+        raise HTTPException(status_code=500, detail="OpenCV (cv2) is not installed. Install with: pip install opencv-python")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
