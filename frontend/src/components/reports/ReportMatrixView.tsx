@@ -275,6 +275,10 @@ const ReportMatrixView: React.FC<ReportMatrixViewProps> = ({ data }) => {
                             let currentGroupId: string | null = null;
                             const renderedRows: React.ReactNode[] = [];
                             
+                            const customStyles = (theme.palette as any).custom || {};
+                            const tableRowGroupBg = customStyles.tableRowGroupBg || alpha(theme.palette.primary.main, 0.04);
+                            const borderStyle = `${customStyles.borderWidth || '1px'} solid ${customStyles.border || theme.palette.divider}`;
+                            
                             rows.forEach((row, idx) => {
                                 const isFirstOfSet = row.parentGroupId && row.parentGroupId !== currentSetId;
                                 if (isFirstOfSet) {
@@ -308,49 +312,49 @@ const ReportMatrixView: React.FC<ReportMatrixViewProps> = ({ data }) => {
                                     const statusColor = getStatusColor(groupStatus, theme);
                                     
                                     renderedRows.push(
-                                        <TableRow key={`group-${row.groupId}`} sx={{ bgcolor: alpha(theme.palette.primary.main, 0.04) }}>
-                                            <TableCell sx={{ py: 0, fontWeight: 600, color: 'text.secondary', fontSize: '0.8rem' }}>
+                                        <TableRow key={`group-${row.groupId}`} sx={{ bgcolor: tableRowGroupBg }}>
+                                            <TableCell sx={{ py: 1.5, fontWeight: 800, color: 'text.primary', fontSize: '0.8rem', borderBottom: borderStyle }}>
                                                 {row.parentGroupId ? (isFirstOfSet ? row.cycleName : '') : row.cycleName}
                                             </TableCell>
-                                            <TableCell sx={{ py: 0, fontWeight: 600, color: 'text.secondary', fontSize: '0.8rem' }}>
+                                            <TableCell sx={{ py: 1.5, fontWeight: 800, color: 'text.primary', fontSize: '0.8rem', borderBottom: borderStyle }}>
                                                 {isFirstOfSet ? (
                                                     <Box 
                                                         onClick={() => toggleGroup(row.parentGroupId!)} 
-                                                        sx={{ display: 'flex', alignItems: 'center', py: 0.8, cursor: 'pointer', userSelect: 'none', gap: 0.5 }}
+                                                        sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', userSelect: 'none', gap: 0.5 }}
                                                     >
                                                         {isSetCollapsed ? <KeyboardArrowRightRoundedIcon sx={{ fontSize: 16 }} /> : <KeyboardArrowDownRoundedIcon sx={{ fontSize: 16 }} />}
-                                                        <LibraryBooksRoundedIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
-                                                        <Typography sx={{ fontWeight: 600, fontSize: '0.75rem' }}>
+                                                        <LibraryBooksRoundedIcon sx={{ fontSize: 14, color: 'text.primary' }} />
+                                                        <Typography sx={{ fontWeight: 800, fontSize: '0.8rem' }}>
                                                             {row.parentGroupName}
                                                         </Typography>
                                                     </Box>
                                                 ) : (row.parentGroupId ? '' : '—')}
                                             </TableCell>
-                                            <TableCell sx={{ py: 0 }}>
+                                            <TableCell sx={{ py: 1.5, borderBottom: borderStyle }}>
                                                 {!isSetCollapsed && (
                                                     <Box 
                                                         onClick={() => toggleGroup(row.groupId)} 
-                                                        sx={{ display: 'flex', alignItems: 'center', py: 0.8, cursor: 'pointer', userSelect: 'none', gap: 0.5 }}
+                                                        sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', userSelect: 'none', gap: 0.5 }}
                                                     >
-                                                        {isCollapsed ? <KeyboardArrowRightRoundedIcon sx={{ fontSize: 16, color: 'text.secondary' }} /> : <KeyboardArrowDownRoundedIcon sx={{ fontSize: 16, color: 'text.secondary' }} />}
-                                                        <Typography sx={{ fontWeight: 600, fontSize: '0.75rem', color: 'text.primary' }}>
+                                                        {isCollapsed ? <KeyboardArrowRightRoundedIcon sx={{ fontSize: 16, color: 'text.primary' }} /> : <KeyboardArrowDownRoundedIcon sx={{ fontSize: 16, color: 'text.primary' }} />}
+                                                        <Typography sx={{ fontWeight: 800, fontSize: '0.8rem', color: 'text.primary' }}>
                                                             {row.groupName}
                                                         </Typography>
                                                     </Box>
                                                 )}
                                             </TableCell>
-                                            <TableCell sx={{ py: 0 }}>
-                                                <Chip label={`${groupScenarios.length} scenarios`} size="small" sx={{ height: 16, fontSize: '0.6rem', bgcolor: alpha(theme.palette.text.secondary, 0.1) }} />
+                                            <TableCell sx={{ py: 1.5, borderBottom: borderStyle }}>
+                                                <Chip label={`${groupScenarios.length} scenarios`} size="small" sx={{ height: 16, fontSize: '0.6rem', bgcolor: alpha(theme.palette.text.secondary, 0.1), fontWeight: 800 }} />
                                             </TableCell>
-                                            <TableCell sx={{ py: 0 }}></TableCell>
-                                            <TableCell sx={{ py: 0 }}>
-                                                {totalDuration > 0 && <Chip label={formatDuration(totalDuration)} size="small" sx={{ height: 16, fontSize: '0.6rem', bgcolor: alpha(theme.palette.text.secondary, 0.1) }} />}
+                                            <TableCell sx={{ py: 1.5, borderBottom: borderStyle }}></TableCell>
+                                            <TableCell sx={{ py: 1.5, borderBottom: borderStyle }}>
+                                                {totalDuration > 0 && <Chip label={formatDuration(totalDuration)} size="small" sx={{ height: 16, fontSize: '0.6rem', bgcolor: alpha(theme.palette.text.secondary, 0.1), fontWeight: 800 }} />}
                                             </TableCell>
-                                            <TableCell sx={{ py: 0 }}>
-                                                <Chip label={groupStatus.toUpperCase()} size="small" sx={{ height: 16, fontSize: '0.6rem', color: statusColor, bgcolor: alpha(statusColor, 0.1), border: `1px solid ${alpha(statusColor, 0.3)}` }} />
+                                            <TableCell sx={{ py: 1.5, borderBottom: borderStyle }}>
+                                                <Chip label={groupStatus.toUpperCase()} size="small" sx={{ height: 16, fontSize: '0.6rem', color: statusColor, bgcolor: alpha(statusColor, 0.1), border: `1px solid ${alpha(statusColor, 0.3)}`, fontWeight: 800 }} />
                                             </TableCell>
-                                            <TableCell sx={{ py: 0 }}></TableCell>
-                                            <TableCell sx={{ py: 0 }}></TableCell>
+                                            <TableCell sx={{ py: 1.5, borderBottom: borderStyle }}></TableCell>
+                                            <TableCell sx={{ py: 1.5, borderBottom: borderStyle }}></TableCell>
                                         </TableRow>
                                     );
                                 }

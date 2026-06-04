@@ -5,7 +5,9 @@ import Brightness4Icon from '@mui/icons-material/Brightness4';
 import Brightness7Icon from '@mui/icons-material/Brightness7';
 import LanguageIcon from '@mui/icons-material/Language';
 import CheckIcon from '@mui/icons-material/Check';
+import PaletteIcon from '@mui/icons-material/Palette';
 import { useLayout } from '../context/LayoutContext';
+import { appThemes } from '../theme';
 
 interface AppToolbarProps {
     title?: string;
@@ -19,6 +21,7 @@ const AppToolbar: React.FC<AppToolbarProps> = ({ title, icon, showViewMenu = fal
     const { t, i18n } = useTranslation();
     const { themeName, setThemeName } = useLayout();
     const [viewMenuAnchorEl, setViewMenuAnchorEl] = useState<null | HTMLElement>(null);
+    const [themeMenuAnchorEl, setThemeMenuAnchorEl] = useState<null | HTMLElement>(null);
     const [languageMenuAnchorEl, setLanguageMenuAnchorEl] = useState<null | HTMLElement>(null);
 
     const handleViewMenuClick = (event: React.MouseEvent<HTMLElement>) => {
@@ -29,9 +32,17 @@ const AppToolbar: React.FC<AppToolbarProps> = ({ title, icon, showViewMenu = fal
         setViewMenuAnchorEl(null);
     };
 
-    const handleThemeToggle = () => {
-        const newTheme = themeName === 'vs-dark' ? 'vs-light' : 'vs-dark';
+    const handleThemeMenuClick = (event: React.MouseEvent<HTMLElement>) => {
+        setThemeMenuAnchorEl(event.currentTarget);
+    };
+
+    const handleThemeMenuClose = () => {
+        setThemeMenuAnchorEl(null);
+    };
+
+    const handleThemeChange = (newTheme: string) => {
         setThemeName(newTheme);
+        handleThemeMenuClose();
     };
 
     const handleLanguageMenuClick = (event: React.MouseEvent<HTMLElement>) => {
@@ -76,15 +87,26 @@ const AppToolbar: React.FC<AppToolbarProps> = ({ title, icon, showViewMenu = fal
                             </Button>
                         )}
 
-                        {/* Theme Toggle Button */}
-                        <Tooltip title={themeName === 'vs-dark' ? t('common.theme') + ': Dark' : t('common.theme') + ': Light'}>
-                            <IconButton
-                                onClick={handleThemeToggle}
-                                color="inherit"
-                                size="small"
+                        {/* Theme Selector Button */}
+                        <Tooltip title={t('common.theme') || 'Theme'}>
+                            <Box
+                                onClick={handleThemeMenuClick}
+                                sx={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    cursor: 'pointer',
+                                    px: 1,
+                                    py: 0.5,
+                                    borderRadius: 1,
+                                    '&:hover': { bgcolor: 'action.hover' }
+                                }}
                             >
-                                {themeName === 'vs-dark' ? <Brightness7Icon /> : <Brightness4Icon />}
-                            </IconButton>
+                                <PaletteIcon fontSize="small" />
+                                <Typography variant="caption" sx={{ fontSize: '0.65rem', mt: 0.25 }}>
+                                    Tema
+                                </Typography>
+                            </Box>
                         </Tooltip>
 
                         {/* Language Selector Button */}
@@ -130,6 +152,23 @@ const AppToolbar: React.FC<AppToolbarProps> = ({ title, icon, showViewMenu = fal
                     </MenuItem>
                 </Menu>
             )}
+
+            {/* Theme Selection Menu */}
+            <Menu
+                anchorEl={themeMenuAnchorEl}
+                open={Boolean(themeMenuAnchorEl)}
+                onClose={handleThemeMenuClose}
+            >
+                {Object.values(appThemes).map((theme) => (
+                    <MenuItem key={theme.id} onClick={() => handleThemeChange(theme.id)}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', gap: 2 }}>
+                            <Box sx={{ width: 16, height: 16, borderRadius: '50%', bgcolor: theme.colors.accent, border: '1px solid', borderColor: theme.colors.border }} />
+                            <Box sx={{ flexGrow: 1, pr: 2 }}>{theme.name}</Box>
+                            {themeName === theme.id && <CheckIcon fontSize="small" color="primary" />}
+                        </Box>
+                    </MenuItem>
+                ))}
+            </Menu>
 
             {/* Language Selection Menu */}
             <Menu
