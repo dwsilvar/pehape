@@ -63,6 +63,7 @@ $dirs = @(
     "$PackageDir\dependencies\python",
     "$PackageDir\frontend\dist",
     "$PackageDir\backend",
+    "$PackageDir\api",
     "$PackageDir\config",
     "$PackageDir\resources",
     "$PackageDir\util",
@@ -136,7 +137,8 @@ $coreComponents = @(
     @{Name = "features"; Path = "features" },
     @{Name = "util"; Path = "util" },
     @{Name = "config"; Path = "config" },
-    @{Name = "resources"; Path = "resources" }
+    @{Name = "resources"; Path = "resources" },
+    @{Name = "api"; Path = "api" }
 )
 foreach ($component in $coreComponents) {
     if (Test-Path $component.Path) {
@@ -153,6 +155,27 @@ if (Test-Path "behave_master.py") {
 }
 else {
     Write-Log "behave_master.py not found" "WARNING"
+}
+if (Test-Path "orchestrator.py") {
+    Copy-Item "orchestrator.py" "$PackageDir\"
+    Write-Log "Copied orchestrator.py" "SUCCESS"
+}
+else {
+    Write-Log "orchestrator.py not found" "WARNING"
+}
+if (Test-Path "orchestrator_api.py") {
+    Copy-Item "orchestrator_api.py" "$PackageDir\"
+    Write-Log "Copied orchestrator_api.py" "SUCCESS"
+}
+else {
+    Write-Log "orchestrator_api.py not found" "WARNING"
+}
+if (Test-Path "run_behave.py") {
+    Copy-Item "run_behave.py" "$PackageDir\"
+    Write-Log "Copied run_behave.py" "SUCCESS"
+}
+else {
+    Write-Log "run_behave.py not found" "WARNING"
 }
 if (Test-Path "requirements.txt") {
     Copy-Item "requirements.txt" "$PackageDir\"
