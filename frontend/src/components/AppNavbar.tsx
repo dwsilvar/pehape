@@ -16,6 +16,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useLayout } from '../context/LayoutContext';
 import { appThemes } from '../theme';
+import { useAppVersion } from '../hooks/useAppVersion';
 
 // Material Icons
 import FileUploadRoundedIcon from '@mui/icons-material/FileUploadRounded';
@@ -33,6 +34,7 @@ const AppNavbar: React.FC = () => {
     const theme = useTheme();
     const { t, i18n } = useTranslation();
     const { themeName, setThemeName } = useLayout();
+    const appVersion = useAppVersion();
     const [langAnchorEl, setLangAnchorEl] = useState<null | HTMLElement>(null);
     const [themeAnchorEl, setThemeAnchorEl] = useState<null | HTMLElement>(null);
 
@@ -113,6 +115,25 @@ const AppNavbar: React.FC = () => {
                     >
                         Pehape
                     </Typography>
+                    {appVersion && (
+                        <Typography
+                            variant="caption"
+                            sx={{
+                                color: 'text.secondary',
+                                fontSize: '0.75rem',
+                                fontWeight: 600,
+                                bgcolor: alpha(theme.palette.text.primary, 0.05),
+                                px: 1,
+                                py: 0.25,
+                                borderRadius: 1,
+                                border: `1px solid ${theme.palette.divider}`,
+                                userSelect: 'none',
+                                ml: 0.5
+                            }}
+                        >
+                            v{appVersion.version}
+                        </Typography>
+                    )}
                 </Box>
 
                 {/* Center Section: Dummy Toolbar */}

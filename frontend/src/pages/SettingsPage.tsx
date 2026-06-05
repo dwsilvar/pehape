@@ -249,8 +249,18 @@ const SettingsPage: React.FC = () => {
                             {/* --- Version Info --- */}
                             <Typography variant="subtitle1" fontWeight="600" color="primary">Información del Sistema</Typography>
                             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 1 }}>
-                                <Typography variant="body2" color="text.secondary">
-                                    <strong>Versión de la Aplicación:</strong> {appVersion ? `v${appVersion.version}` : 'Cargando...'}
+                                <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'text.primary' }}>
+                                    <strong>Versión de la Aplicación:</strong>
+                                    <span style={{
+                                        backgroundColor: 'rgba(56, 189, 248, 0.15)',
+                                        color: '#38BDF8',
+                                        padding: '2px 8px',
+                                        borderRadius: '4px',
+                                        fontWeight: 600,
+                                        fontSize: '0.85rem'
+                                    }}>
+                                        {appVersion ? `v${appVersion.version}` : 'Cargando...'}
+                                    </span>
                                 </Typography>
                                 {appVersion && (
                                     <>

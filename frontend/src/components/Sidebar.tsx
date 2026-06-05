@@ -187,8 +187,8 @@ const Sidebar: React.FC = () => {
                                 variant="caption"
                                 sx={{
                                     color: 'text.disabled',
-                                    fontSize: '0.65rem',
-                                    fontWeight: 300,
+                                    fontSize: '0.7rem',
+                                    fontWeight: 400,
                                     textAlign: 'center',
                                     display: 'block'
                                 }}
@@ -200,9 +200,10 @@ const Sidebar: React.FC = () => {
                                     variant="caption"
                                     sx={{
                                         color: 'text.disabled',
-                                        fontSize: '0.55rem',
-                                        opacity: 0.7,
-                                        mt: -0.2,
+                                        fontSize: '0.7rem',
+                                        fontWeight: 500,
+                                        opacity: 0.8,
+                                        mt: 0.1,
                                         display: 'block',
                                         textAlign: 'center'
                                     }}
@@ -419,7 +420,7 @@ const Sidebar: React.FC = () => {
                                 variant="caption"
                                 sx={{
                                     color: 'text.disabled',
-                                    fontSize: '0.7rem',
+                                    fontSize: '0.75rem',
                                     fontWeight: 300
                                 }}
                             >
@@ -431,8 +432,9 @@ const Sidebar: React.FC = () => {
                                 variant="caption"
                                 sx={{
                                     color: 'text.disabled',
-                                    fontSize: '0.65rem',
-                                    opacity: 0.7
+                                    fontSize: '0.75rem',
+                                    fontWeight: 500,
+                                    opacity: 0.8
                                 }}
                             >
                                 v{appVersion.version}
