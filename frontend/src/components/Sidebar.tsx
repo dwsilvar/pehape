@@ -16,6 +16,7 @@ import {
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useLayout } from '../context/LayoutContext';
 import { PlanIcon, FeatureIcon } from './PehapeIcons';
+import { useAppVersion } from '../hooks/useAppVersion';
 
 const Sidebar: React.FC = () => {
     const { t } = useTranslation();
@@ -23,6 +24,7 @@ const Sidebar: React.FC = () => {
     const location = useLocation();
     const [isCollapsed, setIsCollapsed] = useState(true);
     const { activeView, setActiveView, toggleConsole, isConsoleOpen } = useLayout();
+    const appVersion = useAppVersion();
 
     const FEEDBACK_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSd9cr759DSc-2lhb51K_xtfJYfeb3-7erusvcTSJDZRjHAuGg/viewform?usp=publish-editor";
 
@@ -169,7 +171,7 @@ const Sidebar: React.FC = () => {
 
                 {/* Developer Branding - Collapsed */}
                 <Box sx={{ mb: 2, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                    <Tooltip title="Developed by dwsr" placement="right">
+                    <Tooltip title={appVersion ? `Developed by dwsr\nVersion: ${appVersion.version}` : "Developed by dwsr"} placement="right">
                         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
                             <img
                                 src="/chavin-head.png"
@@ -193,6 +195,21 @@ const Sidebar: React.FC = () => {
                             >
                                 dwsr
                             </Typography>
+                            {appVersion && (
+                                <Typography
+                                    variant="caption"
+                                    sx={{
+                                        color: 'text.disabled',
+                                        fontSize: '0.55rem',
+                                        opacity: 0.7,
+                                        mt: -0.2,
+                                        display: 'block',
+                                        textAlign: 'center'
+                                    }}
+                                >
+                                    v{appVersion.version}
+                                </Typography>
+                            )}
                         </Box>
                     </Tooltip>
                 </Box>
@@ -385,28 +402,44 @@ const Sidebar: React.FC = () => {
 
             {/* Developer Branding - Expanded */}
             <Box sx={{ p: 2, borderTop: 1, borderColor: 'divider' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
-                    <img
-                        src="/chavin-head.png"
-                        alt="Chavín Head"
-                        style={{
-                            width: '28px',
-                            height: '28px',
-                            opacity: 0.5,
-                            filter: 'grayscale(100%)'
-                        }}
-                    />
-                    <Typography
-                        variant="caption"
-                        sx={{
-                            color: 'text.disabled',
-                            fontSize: '0.7rem',
-                            fontWeight: 300
-                        }}
-                    >
-                        Developed by <strong>dwsr</strong>
-                    </Typography>
-                </Box>
+                <Tooltip title={appVersion ? `Build Date: ${appVersion.build_date}\nChangelog: ${appVersion.changelog}` : ''} placement="top">
+                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
+                            <img
+                                src="/chavin-head.png"
+                                alt="Chavín Head"
+                                style={{
+                                    width: '28px',
+                                    height: '28px',
+                                    opacity: 0.5,
+                                    filter: 'grayscale(100%)'
+                                }}
+                            />
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    color: 'text.disabled',
+                                    fontSize: '0.7rem',
+                                    fontWeight: 300
+                                }}
+                            >
+                                Developed by <strong>dwsr</strong>
+                            </Typography>
+                        </Box>
+                        {appVersion && (
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    color: 'text.disabled',
+                                    fontSize: '0.65rem',
+                                    opacity: 0.7
+                                }}
+                            >
+                                v{appVersion.version}
+                            </Typography>
+                        )}
+                    </Box>
+                </Tooltip>
             </Box>
         </Box>
     );

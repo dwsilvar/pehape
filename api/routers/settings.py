@@ -1,3 +1,4 @@
+import json
 import re
 import subprocess
 import sys
@@ -8,6 +9,17 @@ from pydantic import BaseModel
 from api.config import PROJECT_ROOT
 
 router = APIRouter(prefix="/api/settings", tags=["Settings"])
+
+VERSION_FILE = PROJECT_ROOT / "version.json"
+
+@router.get("/version", tags=["Settings"])
+def get_version():
+    """Return the contents of version.json."""
+    if not VERSION_FILE.exists():
+        return {"version": "unknown", "build_date": "", "changelog": "", "min_base_version": ""}
+    with open(VERSION_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
 
 CONFIG_FILE_PATH = PROJECT_ROOT / "config" / "config.py"
 

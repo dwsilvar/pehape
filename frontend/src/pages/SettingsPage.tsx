@@ -22,6 +22,7 @@ import {
 } from '@mui/material';
 import { Settings as SettingsIcon, Save as SaveIcon, FolderOpen as FolderOpenIcon } from '@mui/icons-material';
 import AppToolbar from '../components/AppToolbar';
+import { useAppVersion } from '../hooks/useAppVersion';
 
 interface SettingsData {
     IMAGES_BASE_PATH: string;
@@ -40,6 +41,7 @@ const SettingsPage: React.FC = () => {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState(false);
+    const appVersion = useAppVersion();
 
     useEffect(() => {
         fetchSettings();
@@ -241,6 +243,29 @@ const SettingsPage: React.FC = () => {
                                     </Box>
                                 }
                             />
+
+                            <Divider sx={{ my: 1 }} />
+
+                            {/* --- Version Info --- */}
+                            <Typography variant="subtitle1" fontWeight="600" color="primary">Información del Sistema</Typography>
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 1 }}>
+                                <Typography variant="body2" color="text.secondary">
+                                    <strong>Versión de la Aplicación:</strong> {appVersion ? `v${appVersion.version}` : 'Cargando...'}
+                                </Typography>
+                                {appVersion && (
+                                    <>
+                                        <Typography variant="body2" color="text.secondary">
+                                            <strong>Fecha de Compilación:</strong> {appVersion.build_date}
+                                        </Typography>
+                                        <Typography variant="body2" color="text.secondary">
+                                            <strong>Versión Mínima Requerida:</strong> {appVersion.min_base_version}
+                                        </Typography>
+                                        <Typography variant="body2" color="text.secondary">
+                                            <strong>Changelog / Novedades:</strong> {appVersion.changelog}
+                                        </Typography>
+                                    </>
+                                )}
+                            </Box>
 
                         </Box>
                     )}
