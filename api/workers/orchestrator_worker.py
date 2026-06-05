@@ -190,8 +190,12 @@ def _convert_plan_to_orchestrator_format(plan: dict, blueprints: dict) -> dict:
             elif ref.get("type") == "feature":
                 scenarios = []
                 for sname in ref.get("steps", []):
+                    # Use a deterministic ID matching the frontend's construction:
+                    # ExecutionMonitor builds feature-scenario IDs as `${setRef.refId}-${sname}`
+                    feature_ref_id = ref.get("refId", "") or ref.get("featurePath", "")
+                    det_id = f"{feature_ref_id}-{sname}"
                     scenarios.append([{
-                        "id":           str(uuid.uuid4()),
+                        "id":           det_id,
                         "type":         "scenario",
                         "featurePath":  ref.get("featurePath", ""),
                         "scenarioName": sname,
@@ -217,7 +221,9 @@ def _convert_plan_to_orchestrator_format(plan: dict, blueprints: dict) -> dict:
                 "enabled":   True,
                 "scenarios": [
                     {
-                        "id":            s.get("id", str(uuid.uuid4())),
+                        # Build the same compound ID the frontend uses:
+                        # ExecutionMonitor: `${s.id}-${idx}-${sIdx}`
+                        "id":            f"{s.get('id', str(uuid.uuid4()))}-{i}-{s_idx}",
                         "feature_path":  s.get("featurePath", ""),
                         "scenario_name": s.get("scenarioName", ""),
                         "tags":          s.get("tags", []),
@@ -227,7 +233,7 @@ def _convert_plan_to_orchestrator_format(plan: dict, blueprints: dict) -> dict:
                         "source_type":   s.get("source_type", "flow"),
                         "userdata":      s.get("userdata", {}),
                     }
-                    for s in flattened
+                    for s_idx, s in enumerate(flattened)
                 ],
             })
         return generated_flows

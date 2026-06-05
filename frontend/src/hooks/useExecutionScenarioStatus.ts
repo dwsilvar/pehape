@@ -12,6 +12,8 @@ export type ScenarioExecStatus = 'pending' | 'running' | 'passed' | 'failed' | '
  *    Only a NEW non-null taskId resets everything to 'pending'.
  *  - The orchestrator emits JSON events with scenario_id so we can match exactly.
  *    Falls back to name-matching for text-only formatters.
+ *  - An async event queue (with a small inter-event delay) ensures React renders
+ *    each status transition separately, so "running" is visible before "passed/failed".
  */
 export function useExecutionScenarioStatus(
   taskId: string | null,
@@ -49,14 +51,7 @@ export function useExecutionScenarioStatus(
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    /** Resolve scenario ID from an emitted scenario_id or by name fallback.
-     *
-     * When scenario_id is provided it matches exactly (O(1)).
-     * When only the name is available we do a sequential scan, but we skip IDs
-     * that have already been assigned a terminal status (passed/failed/skipped)
-     * so duplicate scenario names advance to the next unresolved slot rather
-     * than always colliding on the first one.
-     */
+    /** Resolve scenario ID from an emitted scenario_id or by name fallback. */
     const resolveId = (scenarioId?: string, name?: string): string | undefined => {
       // 1. Exact ID match — always preferred
       if (scenarioId && scenarioIds.includes(scenarioId)) return scenarioId;
@@ -64,7 +59,6 @@ export function useExecutionScenarioStatus(
       // 2. Name-based fallback — find the first slot with this name that is
       //    still pending or running (i.e. not yet terminated).
       if (name) {
-        // Collect all indices that match the name
         const matchingIndices: number[] = [];
         for (let i = 0; i < scenarioNames.length; i++) {
           const n = scenarioNames[i];
@@ -75,10 +69,6 @@ export function useExecutionScenarioStatus(
         if (matchingIndices.length === 0) return undefined;
         if (matchingIndices.length === 1) return scenarioIds[matchingIndices[0]];
 
-        // Multiple slots share this name — prefer the first one that is not
-        // yet in a terminal state so we don't clobber an already-resolved slot.
-        // We read the current statusMap via a ref to avoid capturing stale closure.
-        // (statusMap ref is kept up-to-date via the setter pattern below.)
         for (const idx of matchingIndices) {
           const id = scenarioIds[idx];
           const currentStatus = statusMapRef.current.get(id);
@@ -86,47 +76,86 @@ export function useExecutionScenarioStatus(
             return id;
           }
         }
-        // All slots are in terminal state → fall back to the last one
         return scenarioIds[matchingIndices[matchingIndices.length - 1]];
       }
       return undefined;
     };
 
-    const finalizeRunning = (overrideStatus?: ScenarioExecStatus) => {
-      const id = currentRunningId.current;
-      if (!id) return;
-      
-      if (statusMapRef.current.get(id) === 'running') {
-        statusMapRef.current.set(id, overrideStatus ?? 'passed');
-        setStatusMap(new Map(statusMapRef.current));
+    const applyRunning = (scenarioId?: string, name?: string) => {
+      // Finalize any previous running scenario first
+      const prevId = currentRunningId.current;
+      if (prevId && statusMapRef.current.get(prevId) === 'running') {
+        statusMapRef.current.set(prevId, 'passed');
       }
-      
-      currentRunningId.current   = null;
+      currentRunningId.current  = null;
       currentRunningName.current = null;
-    };
 
-    const markRunning = (scenarioId?: string, name?: string) => {
-      finalizeRunning(); // close previous
       const id = resolveId(scenarioId, name);
       if (!id) return;
       currentRunningId.current   = id;
       currentRunningName.current = name ?? null;
-      
       statusMapRef.current.set(id, 'running');
       setStatusMap(new Map(statusMapRef.current));
     };
 
-    const markStatus = (status: ScenarioExecStatus, scenarioId?: string, name?: string) => {
+    const applyStatus = (status: ScenarioExecStatus, scenarioId?: string, name?: string) => {
       const id = resolveId(scenarioId, name);
       if (!id) return;
-      
       statusMapRef.current.set(id, status);
       setStatusMap(new Map(statusMapRef.current));
-      
       if (currentRunningId.current === id) {
-        currentRunningId.current   = null;
+        currentRunningId.current  = null;
         currentRunningName.current = null;
       }
+    };
+
+    const applyFinalize = (overrideStatus?: ScenarioExecStatus) => {
+      const id = currentRunningId.current;
+      if (id && statusMapRef.current.get(id) === 'running') {
+        statusMapRef.current.set(id, overrideStatus ?? 'passed');
+        setStatusMap(new Map(statusMapRef.current));
+      }
+      currentRunningId.current  = null;
+      currentRunningName.current = null;
+    };
+
+    // ── Async event queue ─────────────────────────────────────────────────────
+    // Each scenario_status event from the SSE stream is queued and processed
+    // with a 120 ms gap.  This breaks React's automatic batching so that
+    // "running" always triggers its own render before "passed/failed" arrives,
+    // making the pulse animation consistently visible to the user.
+    type QueuedEvt =
+      | { kind: 'running';  sid?: string; name?: string }
+      | { kind: 'terminal'; status: ScenarioExecStatus; sid?: string; name?: string }
+      | { kind: 'finalize' };
+
+    const queue: QueuedEvt[] = [];
+    let draining = false;
+
+    const drain = () => {
+      if (draining || queue.length === 0) return;
+      draining = true;
+      const evt = queue.shift()!;
+
+      if (evt.kind === 'running') {
+        applyRunning(evt.sid, evt.name);
+      } else if (evt.kind === 'terminal') {
+        applyStatus(evt.status, evt.sid, evt.name);
+      } else {
+        applyFinalize();
+      }
+
+      if (queue.length > 0) {
+        // 120 ms gap so React flushes the previous render before we apply the next state
+        setTimeout(() => { draining = false; drain(); }, 120);
+      } else {
+        draining = false;
+      }
+    };
+
+    const enqueue = (evt: QueuedEvt) => {
+      queue.push(evt);
+      drain();
     };
 
     // ── Connect EventSource ───────────────────────────────────────────────────
@@ -139,28 +168,27 @@ export function useExecutionScenarioStatus(
 
         if (data.line) {
           const line: string = data.line;
-          console.debug('[ExecutionMonitor SSE]', line);
 
-          // ── 1. JSON event from orchestrator.py ────────────────────────────
+          // JSON event from orchestrator.py
           try {
             const ev = JSON.parse(line);
             if (ev.type === 'scenario_status') {
               const sid  = ev.scenario_id;
               const name = ev.scenario_name;
               if (ev.status === 'running') {
-                markRunning(sid, name);
+                enqueue({ kind: 'running', sid, name });
               } else if (['passed', 'failed', 'skipped'].includes(ev.status)) {
-                markStatus(ev.status as ScenarioExecStatus, sid, name);
+                enqueue({ kind: 'terminal', status: ev.status as ScenarioExecStatus, sid, name });
               }
             }
           } catch {
-            // Ignore parse errors for non-JSON lines
+            // non-JSON line — ignore
           }
         }
 
         // Execution finished signal
         if (data.done || data.status === 'finished' || data.status === 'failed') {
-          finalizeRunning();
+          enqueue({ kind: 'finalize' });
           es.close();
         }
       } catch {
@@ -169,8 +197,7 @@ export function useExecutionScenarioStatus(
     };
 
     es.onerror = () => {
-      // Connection dropped — finalize any still-running scenario
-      finalizeRunning();
+      enqueue({ kind: 'finalize' });
       es.close();
     };
 
@@ -183,3 +210,4 @@ export function useExecutionScenarioStatus(
 
   return statusMap;
 }
+

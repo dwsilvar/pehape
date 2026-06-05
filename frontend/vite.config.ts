@@ -28,6 +28,18 @@ export default defineConfig({
   server: {
     port: config.port,
     proxy: {
+      '/api/execution-status': {
+        target: 'http://localhost:5001',
+        changeOrigin: true,
+        // Disable response buffering so SSE events flow immediately through the proxy
+        configure: (proxy) => {
+          proxy.on('proxyRes', (proxyRes) => {
+            // Ensure the proxy doesn't buffer SSE streams
+            proxyRes.headers['x-accel-buffering'] = 'no';
+            proxyRes.headers['cache-control'] = 'no-cache';
+          });
+        },
+      },
       '/api': {
         target: 'http://localhost:5001',
         changeOrigin: true,

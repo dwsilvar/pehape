@@ -147,6 +147,10 @@ async def stream_execution_logs(task_id: str, request: Request):
             for line in current_logs:
                 payload = json.dumps({"line": line, "status": current_status})
                 yield f"data: {payload}\n\n"
+                # Yield control so each event is flushed as a separate SSE message.
+                # This prevents scenario_status events from being batched together
+                # (e.g. "running" + "passed" arriving in the same browser microtask).
+                await asyncio.sleep(0)
 
             sent = new_sent
 
@@ -154,7 +158,8 @@ async def stream_execution_logs(task_id: str, request: Request):
                 yield f"data: {json.dumps({'line': None, 'status': current_status, 'done': True})}\n\n"
                 break
 
-            await asyncio.sleep(0.5)
+            # Poll at 50 ms so status transitions are near-real-time
+            await asyncio.sleep(0.05)
 
     return StreamingResponse(
         event_generator(),
