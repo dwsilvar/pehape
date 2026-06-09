@@ -11,7 +11,7 @@ El puerto de desarrollo y la conexión con el backend se pueden configurar en el
 ```json
 {
   "port": 3000,
-  "api_url": "http://localhost:5000"
+  "api_url": "http://localhost:5001"
 }
 ```
 

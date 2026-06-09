@@ -7,7 +7,7 @@ import path from 'path';
 
 // Cargar configuración desde app_config.json
 const configPath = path.resolve(__dirname, 'app_config.json');
-let config = { port: 3000, api_url: 'http://localhost:5000' };
+let config = { port: 3000, api_url: 'http://localhost:5001' };
 
 if (fs.existsSync(configPath)) {
   try {

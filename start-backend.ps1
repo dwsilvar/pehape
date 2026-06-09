@@ -4,7 +4,7 @@ param (
 
 # Definir la ruta al directorio del backend
 $backendDir = Join-Path $ProjectRoot "backend"
-Set-Location -Path $backendDir # Cambia al directorio del backend para que los comandos se ejecuten en el contexto correcto
+Set-Location -Path $ProjectRoot # Cambia al directorio raíz del proyecto para que los comandos se ejecuten en el contexto correcto
 
 # --- Configuración del Entorno Virtual y Dependencias ---
 
@@ -31,5 +31,5 @@ if ($env:VIRTUAL_ENV) {
 }
 
 
-Write-Host "Iniciando servidor backend de Flask..."
-python (Join-Path $backendDir "backend_server.py")
+Write-Host "Iniciando servidor backend de FastAPI..."
+python (Join-Path $ProjectRoot "orchestrator_api.py")

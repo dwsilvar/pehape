@@ -14,8 +14,8 @@ REM Definir rutas
 set "PROJECT_ROOT=%~dp0"
 set "BACKEND_DIR=%PROJECT_ROOT%backend"
 
-REM Cambiar al directorio del backend
-cd /d "%BACKEND_DIR%"
+REM Cambiar al directorio raíz
+cd /d "%PROJECT_ROOT%"
 
 REM --- Configuración del Entorno Virtual ---
 
@@ -59,12 +59,12 @@ call "%VENV_PATH%\Scripts\activate.bat"
 
 :run_server
 echo.
-echo Iniciando servidor backend de Flask...
-echo El servidor estara disponible en http://localhost:5000
+echo Iniciando servidor backend de FastAPI...
+echo El servidor estara disponible en http://localhost:5001
 echo Presiona Ctrl+C para detener el servidor.
 echo.
 
-python "%BACKEND_DIR%\backend_server.py"
+python "%PROJECT_ROOT%\orchestrator_api.py"
 
 REM Restaurar directorio original al salir
 cd /d "%ORIGINAL_DIR%"

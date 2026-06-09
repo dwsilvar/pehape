@@ -265,7 +265,7 @@ if errorlevel 1 (
 )
 
 call .venv\Scripts\activate
-"%PYTHON_CMD%" backend\backend_server.py --network
+"%PYTHON_CMD%" orchestrator_api.py --network
 "@
 $startBackendOffline | Out-File -FilePath "$PackageDir\start-backend-offline.bat" -Encoding ascii
 
@@ -357,7 +357,7 @@ if errorlevel 1 (
 
 REM Activar entorno virtual y ejecutar backend con ventana nativa
 call .venv\Scripts\activate
-"%PYTHON_CMD%" backend\backend_server.py --window
+"%PYTHON_CMD%" orchestrator_api.py --window
 pause
 "@
 $startAppWindow | Out-File -FilePath "$PackageDir\start-app-window.bat" -Encoding ascii
@@ -448,14 +448,12 @@ if "%BACKEND_STARTED%"=="1" (
  echo Esperando que el servidor backend se inicie...
  timeout /t 3 /nobreak >nul
  REM Verificar que el backend esté corriendo
- powershell -Command "`$maxRetries = 10; `$retries = 0; while (`$retries -lt `$maxRetries) { try { `$response =
-Invoke-WebRequest -Uri 'http://localhost:5000' -TimeoutSec 2 -UseBasicParsing; if (`$response.StatusCode -eq
-200) { exit 0 } } catch {} `$retries++; Start-Sleep -Seconds 1 } exit 1"
+ powershell -Command "`$maxRetries = 10; `$retries = 0; while (`$retries -lt `$maxRetries) { try { `$response = Invoke-WebRequest -Uri 'http://localhost:5001' -TimeoutSec 2 -UseBasicParsing; if (`$response.StatusCode -eq 200) { exit 0 } } catch {} `$retries++; Start-Sleep -Seconds 1 } exit 1"
  if errorlevel 1 (
- echo ADVERTENCIA: No se pudo verificar que el backend este corriendo en http://localhost:5000
+ echo ADVERTENCIA: No se pudo verificar que el backend este corriendo en http://localhost:5001
  echo Verifique manualmente que el servidor este activo antes de ejecutar pruebas.
  ) else (
- echo Backend corriendo correctamente en http://localhost:5000
+ echo Backend corriendo correctamente en http://localhost:5001
  )
 )
 REM Iniciar frontend
@@ -465,7 +463,7 @@ if exist "%FRONTEND_DIR%\dist\index.html" (
  echo.
  echo IMPORTANTE:
  echo 1. Abra su navegador y diríjase a la siguiente URL:
- echo http://localhost:5000
+ echo http://localhost:5001
  echo (El backend sirve el frontend automaticamente)
  echo 2. Asegúrese de que el backend esté corriendo antes de ejecutar pruebas.
  echo 3. Ejecute las pruebas desde la interfaz o desde el script correspondiente.
@@ -479,8 +477,8 @@ if "%BACKEND_STARTED%"=="1" (
  echo ========================================
  echo SISTEMA INICIADO CORRECTAMENTE
  echo ========================================
- echo Backend: http://localhost:5000
- echo Frontend: Abra el navegador y vaya a http://localhost:5000
+ echo Backend: http://localhost:5001
+ echo Frontend: Abra el navegador y vaya a http://localhost:5001
  echo.
  echo NOTA: Para usar ventana nativa sin navegador, ejecute:
  echo start-app-window.bat
@@ -628,7 +626,7 @@ Write-Host "Installing Python dependencies from local files..."
 & .\.venv\Scripts\python.exe -m pip install --no-index --find-links="dependencies\python" -r requirements.txt
 if (`$LASTEXITCODE -ne 0) {
     Write-Host "Falla en instalación general. Intentando instalar componentes críticos individualmente..." -ForegroundColor Yellow
-    & .\.venv\Scripts\python.exe -m pip install --no-index --find-links="dependencies\python" behave allure-behave Flask flask-cors pywebview
+    & .\.venv\Scripts\python.exe -m pip install --no-index --find-links="dependencies\python" behave allure-behave fastapi uvicorn[standard] pywebview
 }
 
 # Verificar instalación de Allure
@@ -797,7 +795,7 @@ Ejecuta el servidor backend y accede desde el navegador:
 start-all-offline.bat
 ``````
 
-Luego abra su navegador en: ``http://localhost:5000``
+Luego abra su navegador en: ``http://localhost:5001``
 
 **Ventajas:**
 - ✅ Puede acceder desde múltiples dispositivos en la misma red
@@ -813,7 +811,7 @@ Para acceder desde otras PCs en la misma red:
 start-backend-offline.bat
 ``````
 
-Luego desde otras PCs: ``http://<IP-DEL-SERVIDOR>:5000``
+Luego desde otras PCs: ``http://<IP-DEL-SERVIDOR>:5001``
 
 ## Requisitos del Sistema
 
@@ -867,7 +865,7 @@ package_offline/
 ├── start-app-window.bat        # ⭐ RECOMENDADO: Ventana nativa
 ├── start-all-offline.bat       # Servidor + instrucciones navegador
 ├── start-backend-offline.bat   # Solo servidor (acceso red)
-├── backend/                    # Código del servidor Flask
+├── backend/                    # Configuración del servidor (FastAPI)
 ├── frontend/dist/              # Interfaz compilada
 ├── dependencies/python/        # Paquetes Python (.whl)
 ├── Tesseract-OCR/              # Motor OCR incluido
@@ -882,13 +880,13 @@ package_offline/
 ## Modos de Ejecución Detallados
 
 ### Modo Ventana Nativa (``--window``)
-- Inicia Flask en localhost (127.0.0.1)
+- Inicia FastAPI en localhost (127.0.0.1)
 - Crea ventana nativa con pywebview
 - No requiere navegador externo
 - Ideal para uso local sin internet
 
 ### Modo Servidor (``--network``)
-- Inicia Flask en todas las interfaces (0.0.0.0)
+- Inicia FastAPI en todas las interfaces (0.0.0.0)
 - Permite acceso desde red local
 - Requiere navegador moderno
 - Ideal para acceso remoto o múltiples usuarios

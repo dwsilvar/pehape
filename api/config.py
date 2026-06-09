@@ -40,6 +40,9 @@ except ImportError:
 
 try:
     from executor.tasks_core.registry import get_all_tasks
+    # Import task modules to trigger decorators and register them
+    import executor.tasks.log_tasks
+    import executor.tasks.text_verification_tasks
 except ImportError:
     get_all_tasks = lambda: {}  # noqa: E731
 

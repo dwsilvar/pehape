@@ -166,17 +166,23 @@ async def validate_feature(payload: ValidateFeatureRequest):
             is_valid = False
             execution_error = (stderr or output or "Error de validación desconocido").strip()
 
-        if "You can implement step definitions for undefined steps with these snippets:" in output:
-            snippet_part = output.split(
-                "You can implement step definitions for undefined steps with these snippets:"
-            )[1]
-            snippets = [s.strip() for s in snippet_part.split("@") if s.strip()]
+        import re
+        snippet_pattern = re.compile(
+            r"(@(?:given|when|then)\(u?'.*?'\)\s+def step_impl\(context\):.*?)(?=@|$)", re.DOTALL
+        )
+        all_output = output + "\n" + stderr
+        found_snippets = snippet_pattern.findall(all_output)
+        snippets = [s.strip() for s in found_snippets]
+
+        # Si encontramos snippets, definitivamente no es válido
+        if snippets:
+            is_valid = False
 
         return {
-            "valid": is_valid,
+            "valid":           is_valid,
             "undefined_steps": undefined_steps,
-            "snippets": snippets,
-            "error": execution_error
+            "snippets":        snippets,
+            "error":           execution_error,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

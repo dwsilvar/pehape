@@ -57,15 +57,133 @@ def health_check():
     }
 
 
-# ── Dev entrypoint ─────────────────────────────────────────────────────────────
+# ── Serve React Frontend ───────────────────────────────────────────────────────
+
+import os
+from pathlib import Path
+from fastapi.responses import FileResponse
+from fastapi import HTTPException
+
+FRONTEND_DIST = Path(__file__).parent / "frontend" / "dist"
+
+@app.get("/{path:path}", tags=["Frontend"])
+async def serve_react_app(path: str):
+    # Avoid intercepting API routes or Allure report
+    if path.startswith("api/") or path.startswith("allure-report/") or path.startswith("health"):
+        raise HTTPException(status_code=404, detail=f"Endpoint not found: /{path}")
+    
+    file_path = FRONTEND_DIST / path
+    if path and file_path.exists() and file_path.is_file():
+        return FileResponse(str(file_path))
+    
+    index_html = FRONTEND_DIST / "index.html"
+    if index_html.exists():
+        return FileResponse(str(index_html))
+    
+    raise HTTPException(status_code=404, detail="Frontend build not found. Please compile frontend.")
+
+
+# ── Dev/Prod entrypoint ────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    import argparse
+    import threading
+    import time
+    import sys
+    import json
     import uvicorn
 
-    uvicorn.run(
-        "orchestrator_api:app",
-        host="0.0.0.0",
-        port=5001,
-        reload=True,
-        log_level="info",
-    )
+    parser = argparse.ArgumentParser(description='PeHaPe FastAPI Orchestrator Server')
+    parser.add_argument('--window', action='store_true', 
+                        help='Launch in native window mode (uses pywebview with Edge WebView2)')
+    parser.add_argument('--no-window', action='store_true', 
+                        help='Launch as server only for network access (default)')
+    parser.add_argument('--network', action='store_true',
+                        help='Alias for --no-window, launch as network server')
+    parser.add_argument('--host', type=str, default=None,
+                        help='Host to bind to')
+    parser.add_argument('--port', type=int, default=None,
+                        help='Port to bind to')
+    args = parser.parse_args()
+
+    # Load configuration from JSON if exists
+    config_path = Path(__file__).parent / "backend" / "server_config.json"
+    host = "0.0.0.0"
+    port = 5001
+    
+    if config_path.exists():
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                config = json.load(f)
+                host = config.get("host", host)
+                port = config.get("port", port)
+                print(f"Loaded configuration from {config_path}")
+        except Exception as e:
+            print(f"Error loading config: {e}. Using defaults.")
+
+    # CLI arguments override config file
+    if args.host:
+        host = args.host
+    if args.port:
+        port = args.port
+
+    # If --window is set, host should be localhost for security
+    if args.window:
+        host = "127.0.0.1"
+
+    if args.window:
+        print("=" * 50)
+        print("Starting PeHaPe in NATIVE WINDOW MODE (FastAPI)")
+        print("=" * 50)
+        
+        try:
+            import webview
+        except ImportError:
+            print("\n" + "=" * 50)
+            print("ERROR: pywebview is not installed!")
+            print("=" * 50)
+            print("\nPlease install it with:")
+            print("  pip install pywebview")
+            sys.exit(1)
+            
+        # Start FastAPI in a background thread
+        def start_fastapi():
+            uvicorn.run(
+                "orchestrator_api:app",
+                host=host,
+                port=port,
+                log_level="warning",
+            )
+            
+        fastapi_thread = threading.Thread(target=start_fastapi, daemon=True)
+        fastapi_thread.start()
+        
+        print(f"Starting FastAPI server on http://{host}:{port}...")
+        time.sleep(2)
+        
+        print("Creating native window...")
+        window = webview.create_window(
+            'PeHaPe - Automation Framework',
+            f'http://{host}:{port}',
+            width=1280,
+            height=800,
+            resizable=True,
+            fullscreen=False,
+            min_size=(800, 600)
+        )
+        print("Launching application window...")
+        webview.start()
+    else:
+        print("=" * 50)
+        print("Starting PeHaPe in SERVER MODE (FastAPI)")
+        print(f"Server will be accessible at http://{host}:{port}")
+        print("=" * 50)
+        
+        # In server mode, run synchronously
+        uvicorn.run(
+            "orchestrator_api:app",
+            host=host,
+            port=port,
+            reload=True,
+            log_level="info",
+        )

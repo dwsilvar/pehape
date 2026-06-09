@@ -44,7 +44,7 @@ ocr_test_automation/
 The project is composed of three main modules that work together:
 
 1.  **Core (Automation/OCR)**: Python-based BDD framework using `behave`, `pytesseract`, and `opencv`. Handles the actual test execution and image recognition.
-2.  **Backend (API)**: A Flask server that exposes the file system and automation capabilities to the frontend.
+2.  **Backend (API)**: A FastAPI server that exposes the file system and automation capabilities to the frontend.
 3.  **Frontend (Web UI)**: A React/Vite application for easy management of feature files, execution plans, and test runs.
 
 ## Prerequisites ⚙️
@@ -116,8 +116,8 @@ npm install
 ### Backend (API)
 | Package | Version | Purpose |
 | :--- | :--- | :--- |
-| `Flask` | `3.1.2` | Micro-web framework for the API server. |
-| `Flask-CORS` | `6.0.1` | Handling Cross-Origin requests from the Frontend. |
+| `FastAPI` | `0.136.1` | Modern web framework for the API server. |
+| `Uvicorn` | `0.46.0` | ASGI server implementation. |
 
 ### Frontend (UI)
 | Package | Version | Purpose |
@@ -141,7 +141,7 @@ This will launch both servers. You can then access the Web UI at `http://localho
 
 ### Port Configuration 🔌
 
-If the default ports (**5000** for Backend, **3000** for Frontend) are in use, you can change them by editing the JSON configuration files in each module:
+If the default ports (**5001** for Backend, **3000** for Frontend) are in use, you can change them by editing the JSON configuration files in each module:
 
 - **Backend**: `backend/server_config.json`
     - Change `"port"` to your desired port (e.g., `5005`).
