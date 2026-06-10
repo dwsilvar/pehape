@@ -90,7 +90,8 @@ class TaskExecutor:
             result = None
             try:
                 task_instance = task_class()
-                if task_instance.should_run(hook_type, step):
+                # UI-configured tasks bypass custom should_run timing guards since they are explicitly scheduled by the UI
+                if ui_index is not None or task_instance.should_run(hook_type, step):
                     logger.info(f"TaskExecutor: Executing task '{task_name}' (hook: {hook_type})")
                     
                     # Extract args and config id from task_config if available (from UI config)

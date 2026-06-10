@@ -200,7 +200,8 @@ def _convert_plan_to_orchestrator_format(plan: dict, blueprints: dict) -> dict:
                         if matches_instance or matches_name or is_global:
                             if t.get("name") == "__none__":
                                 continue
-                            merged.append({**t, "scenario_id": scenario_id})
+                            task_id = t.get("id") or f"{scenario_id}-{t.get('name')}"
+                            merged.append({**t, "id": task_id, "scenario_id": scenario_id})
 
         # 3. Process scenario-level tasks if there is no instance override
         if not has_instance_override and s_tasks and isinstance(s_tasks, list):
@@ -210,7 +211,8 @@ def _convert_plan_to_orchestrator_format(plan: dict, blueprints: dict) -> dict:
                     if not target_s or target_s == "all" or target_s == scenario_name or target_s == scenario_id:
                         if t.get("name") == "__none__":
                             continue
-                        merged.append({**t, "scenario_id": scenario_id})
+                        task_id = t.get("id") or f"{scenario_id}-{t.get('name')}"
+                        merged.append({**t, "id": task_id, "scenario_id": scenario_id})
 
         return merged
 

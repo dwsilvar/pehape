@@ -244,7 +244,7 @@ const ExecutionPage: React.FC = () => {
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', bgcolor: 'background.default' }}>
-      <AppToolbar title={t('common.sidebar.execution', 'Matriz de Ejecución')} icon={<PlayCircleOutlineIcon sx={{ fontSize: 28 }} />} showControls={true}>
+      <AppToolbar title={t('common.sidebar.execution', 'Matriz de Ejecución')} icon={<PlayCircleOutlineIcon sx={{ fontSize: 28 }} />} showControls={false}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flex: 1, justifyContent: 'flex-start' }}>
           {/* Plan Selector */}
           <FormControl size="small" sx={{ minWidth: 200, mr: 1 }}>

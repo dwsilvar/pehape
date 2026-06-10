@@ -5,11 +5,11 @@ import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   CircularProgress, IconButton,
 } from '@mui/material';
-import CheckCircleRoundedIcon   from '@mui/icons-material/CheckCircleRounded';
-import CancelRoundedIcon        from '@mui/icons-material/CancelRounded';
-import RemoveCircleRoundedIcon  from '@mui/icons-material/RemoveCircleRounded';
+import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
+import CancelRoundedIcon from '@mui/icons-material/CancelRounded';
+import RemoveCircleRoundedIcon from '@mui/icons-material/RemoveCircleRounded';
 import RadioButtonUncheckedRoundedIcon from '@mui/icons-material/RadioButtonUncheckedRounded';
-import LibraryBooksRoundedIcon  from '@mui/icons-material/LibraryBooksRounded';
+import LibraryBooksRoundedIcon from '@mui/icons-material/LibraryBooksRounded';
 import ViewListRoundedIcon from '@mui/icons-material/ViewListRounded';
 import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded';
 import KeyboardArrowRightRoundedIcon from '@mui/icons-material/KeyboardArrowRightRounded';
@@ -79,7 +79,7 @@ const StatusBadge: React.FC<{ status: ScenarioExecStatus }> = ({ status }) => {
           animation: 'executionPulse 1s ease-in-out infinite',
           '@keyframes executionPulse': {
             '0%, 100%': { opacity: 1, transform: 'scale(1)' },
-            '50%':       { opacity: 0.4, transform: 'scale(0.75)' },
+            '50%': { opacity: 0.4, transform: 'scale(0.75)' },
           },
         }}
       />
@@ -106,15 +106,15 @@ const SummaryChip: React.FC<{ count: number; status: ScenarioExecStatus }> = ({ 
 
   const colors: Record<string, string> = {
     running: theme.palette.warning.main,
-    passed:  theme.palette.success.main,
-    failed:  theme.palette.error.main,
+    passed: theme.palette.success.main,
+    failed: theme.palette.error.main,
     skipped: theme.palette.text.disabled,
     pending: theme.palette.text.disabled,
   };
   const labels: Record<string, string> = {
     running: '▶',
-    passed:  '✓',
-    failed:  '✗',
+    passed: '✓',
+    failed: '✗',
     skipped: '—',
     pending: '○',
   };
@@ -139,7 +139,7 @@ const SummaryChip: React.FC<{ count: number; status: ScenarioExecStatus }> = ({ 
 
 const getTaskChipStyles = (status: 'pending' | 'running' | 'passed' | 'failed', theme: any) => {
   const isDark = theme.palette.mode === 'dark';
-  
+
   if (status === 'running') {
     return {
       bgcolor: alpha(theme.palette.warning.main, 0.12),
@@ -174,6 +174,8 @@ const getTaskChipStyles = (status: 'pending' | 'running' | 'passed' | 'failed', 
   };
 };
 
+const toSentenceCase = (str: string) => str ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : '';
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
@@ -182,6 +184,41 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
   const { t } = useTranslation();
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
+  const headerBg = theme.palette.custom?.tableHeaderBg || theme.palette.custom?.bgCanvas || (isDark ? '#0b1120' : '#f1f5f9');
+
+  // State to store resizable column widths
+  const [colWidths, setColWidths] = useState<{ [key: string]: number }>({
+    cycle: 130,
+    set: 130,
+    flow: 130,
+    scenario: 320,
+    feature: 180,
+    tareas: 220,
+    resultado: 120,
+  });
+
+  // Handler for mouse column resizing
+  const startResize = (colKey: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.pageX;
+    const startWidth = colWidths[colKey] || 100;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const deltaX = moveEvent.pageX - startX;
+      setColWidths((prev) => ({
+        ...prev,
+        [colKey]: Math.max(70, startWidth + deltaX), // minimum width of 70px
+      }));
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
 
   // ── Derive flat scenario list from the selected plan ───────────────────────
   const { flatScenarios, plan } = useMemo(() => {
@@ -297,9 +334,9 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
               if (setRef.type === 'flow') {
                 const flow = blueprints.flows.find(f => f.id === setRef.refId);
                 if (flow && flow.items.length > 0) {
-                  const enhancedItems = flow.items.map(i => ({ 
-                    ...i, 
-                    sourceName: flow.name, 
+                  const enhancedItems = flow.items.map(i => ({
+                    ...i,
+                    sourceName: flow.name,
                     sourceType: 'flow',
                     flow_tasks: flow.tasks ?? [],
                     flowId: flow.id,
@@ -341,7 +378,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                   const pTasks = plan.tasks ?? [];
                   const cTasks = cycle.tasks ?? [];
                   const setTasks = set.tasks ?? [];
-                  
+
                   let fTasks = [...setTasks];
                   let sTasks: PlanTask[] = [];
                   if (s.sourceType === 'flow') {
@@ -606,54 +643,294 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
           {plan ? `${plan.name} • ` : ''}{totalScenarios} total
         </Typography>
         <SummaryChip count={counts.running} status="running" />
-        <SummaryChip count={counts.passed}  status="passed" />
-        <SummaryChip count={counts.failed}  status="failed" />
+        <SummaryChip count={counts.passed} status="passed" />
+        <SummaryChip count={counts.failed} status="failed" />
         <SummaryChip count={counts.skipped} status="skipped" />
         <SummaryChip count={counts.pending} status="pending" />
       </Box>
 
       {/* ── Scenario rows (Table) ────────────────────────────────────────────────────── */}
-      <TableContainer component={Box} sx={{ flex: 1, overflowY: 'auto', mb: '5px' }}>
-        <Table stickyHeader size="small" sx={{ '& .MuiTableCell-root': { fontSize: '0.75rem', fontFamily: 'inherit', borderColor: 'divider', py: 0.8 } }}>
+      <TableContainer component={Box} sx={{ flex: 1, overflow: 'auto', mb: '5px' }}>
+        <Table 
+          stickyHeader 
+          size="small" 
+          sx={{ 
+            tableLayout: 'fixed', 
+            width: '100%', 
+            '& .MuiTableCell-root': { fontSize: '0.75rem', fontFamily: 'inherit', borderColor: 'divider', py: 0.8 },
+            '& .MuiTableBody-root .MuiTableCell-root': { backgroundColor: 'inherit' }
+          }}
+        >
           <TableHead>
             <TableRow>
-              <TableCell sx={{ fontWeight: 600, bgcolor: 'background.paper', whiteSpace: 'nowrap' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+              {/* Test Cycle */}
+              <TableCell
+                sx={{
+                  fontWeight: 600,
+                  bgcolor: headerBg,
+                  position: 'relative',
+                  width: colWidths.cycle,
+                  minWidth: colWidths.cycle,
+                  maxWidth: colWidths.cycle,
+                  overflow: 'hidden',
+                  whiteSpace: 'nowrap',
+                  textOverflow: 'ellipsis',
+                  pr: 1.5,
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, overflow: 'hidden' }}>
                   <CycleIcon size={14} color={theme.palette.text.secondary} />
-                  Test Cycle
+                  <Tooltip title="Test Cycle" placement="top" arrow enterDelay={200}>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Test Cycle</span>
+                  </Tooltip>
                 </Box>
+                <Box
+                  onMouseDown={(e) => startResize('cycle', e)}
+                  sx={{
+                    position: 'absolute',
+                    top: 0,
+                    right: 0,
+                    bottom: 0,
+                    width: '6px',
+                    cursor: 'col-resize',
+                    zIndex: 10,
+                    borderRight: '1px solid',
+                    borderColor: 'divider',
+                    '&:hover': { borderColor: 'primary.main', borderRightWidth: '2px' },
+                    '&:active': { borderColor: 'primary.main', borderRightWidth: '2px' }
+                  }}
+                />
               </TableCell>
-              <TableCell sx={{ fontWeight: 600, bgcolor: 'background.paper', whiteSpace: 'nowrap' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+
+              {/* Test Set */}
+              <TableCell
+                sx={{
+                  fontWeight: 600,
+                  bgcolor: headerBg,
+                  position: 'relative',
+                  width: colWidths.set,
+                  minWidth: colWidths.set,
+                  maxWidth: colWidths.set,
+                  overflow: 'hidden',
+                  whiteSpace: 'nowrap',
+                  textOverflow: 'ellipsis',
+                  pr: 1.5,
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, overflow: 'hidden' }}>
                   <LibraryBooksRoundedIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
-                  Test Set
+                  <Tooltip title="Test Set" placement="top" arrow enterDelay={200}>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Test Set</span>
+                  </Tooltip>
                 </Box>
+                <Box
+                  onMouseDown={(e) => startResize('set', e)}
+                  sx={{
+                    position: 'absolute',
+                    top: 0,
+                    right: 0,
+                    bottom: 0,
+                    width: '6px',
+                    cursor: 'col-resize',
+                    zIndex: 10,
+                    borderRight: '1px solid',
+                    borderColor: 'divider',
+                    '&:hover': { borderColor: 'primary.main', borderRightWidth: '2px' },
+                    '&:active': { borderColor: 'primary.main', borderRightWidth: '2px' }
+                  }}
+                />
               </TableCell>
-              <TableCell sx={{ fontWeight: 600, bgcolor: 'background.paper', whiteSpace: 'nowrap' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+
+              {/* Test Flow */}
+              <TableCell
+                sx={{
+                  fontWeight: 600,
+                  bgcolor: headerBg,
+                  position: 'relative',
+                  width: colWidths.flow,
+                  minWidth: colWidths.flow,
+                  maxWidth: colWidths.flow,
+                  overflow: 'hidden',
+                  whiteSpace: 'nowrap',
+                  textOverflow: 'ellipsis',
+                  pr: 1.5,
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, overflow: 'hidden' }}>
                   <FlowIcon size={14} color={theme.palette.text.secondary} />
-                  Test Flow
+                  <Tooltip title="Test Flow" placement="top" arrow enterDelay={200}>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Test Flow</span>
+                  </Tooltip>
                 </Box>
+                <Box
+                  onMouseDown={(e) => startResize('flow', e)}
+                  sx={{
+                    position: 'absolute',
+                    top: 0,
+                    right: 0,
+                    bottom: 0,
+                    width: '6px',
+                    cursor: 'col-resize',
+                    zIndex: 10,
+                    borderRight: '1px solid',
+                    borderColor: 'divider',
+                    '&:hover': { borderColor: 'primary.main', borderRightWidth: '2px' },
+                    '&:active': { borderColor: 'primary.main', borderRightWidth: '2px' }
+                  }}
+                />
               </TableCell>
-              <TableCell sx={{ fontWeight: 600, bgcolor: 'background.paper', width: '35%' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+
+              {/* Scenario */}
+              <TableCell
+                sx={{
+                  fontWeight: 600,
+                  bgcolor: isDark ? alpha(theme.palette.primary.main, 0.16) : alpha(theme.palette.primary.main, 0.08), // Highlight column header
+                  position: 'relative',
+                  width: colWidths.scenario,
+                  minWidth: colWidths.scenario,
+                  maxWidth: colWidths.scenario,
+                  overflow: 'hidden',
+                  whiteSpace: 'nowrap',
+                  textOverflow: 'ellipsis',
+                  pr: 1.5,
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, overflow: 'hidden' }}>
                   <ScenarioIcon size={14} color={theme.palette.text.secondary} />
-                  Scenario
+                  <Tooltip title="Scenario" placement="top" arrow enterDelay={200}>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 700 }}>Scenario</span>
+                  </Tooltip>
                 </Box>
+                <Box
+                  onMouseDown={(e) => startResize('scenario', e)}
+                  sx={{
+                    position: 'absolute',
+                    top: 0,
+                    right: 0,
+                    bottom: 0,
+                    width: '6px',
+                    cursor: 'col-resize',
+                    zIndex: 10,
+                    borderRight: '1px solid',
+                    borderColor: 'divider',
+                    '&:hover': { borderColor: 'primary.main', borderRightWidth: '2px' },
+                    '&:active': { borderColor: 'primary.main', borderRightWidth: '2px' }
+                  }}
+                />
               </TableCell>
-              <TableCell sx={{ fontWeight: 600, bgcolor: 'background.paper', width: '20%' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+
+              {/* Feature */}
+              <TableCell
+                sx={{
+                  fontWeight: 600,
+                  bgcolor: headerBg,
+                  position: 'relative',
+                  width: colWidths.feature,
+                  minWidth: colWidths.feature,
+                  maxWidth: colWidths.feature,
+                  overflow: 'hidden',
+                  whiteSpace: 'nowrap',
+                  textOverflow: 'ellipsis',
+                  pr: 1.5,
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, overflow: 'hidden' }}>
                   <FeatureIcon size={14} color={theme.palette.text.secondary} />
-                  Feature
+                  <Tooltip title="Feature" placement="top" arrow enterDelay={200}>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Feature</span>
+                  </Tooltip>
                 </Box>
+                <Box
+                  onMouseDown={(e) => startResize('feature', e)}
+                  sx={{
+                    position: 'absolute',
+                    top: 0,
+                    right: 0,
+                    bottom: 0,
+                    width: '6px',
+                    cursor: 'col-resize',
+                    zIndex: 10,
+                    borderRight: '1px solid',
+                    borderColor: 'divider',
+                    '&:hover': { borderColor: 'primary.main', borderRightWidth: '2px' },
+                    '&:active': { borderColor: 'primary.main', borderRightWidth: '2px' }
+                  }}
+                />
               </TableCell>
-              <TableCell sx={{ fontWeight: 600, bgcolor: 'background.paper', width: '25%' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+
+              {/* Tareas */}
+              <TableCell
+                sx={{
+                  fontWeight: 600,
+                  bgcolor: headerBg,
+                  position: 'relative',
+                  width: colWidths.tareas,
+                  minWidth: colWidths.tareas,
+                  maxWidth: colWidths.tareas,
+                  overflow: 'hidden',
+                  whiteSpace: 'nowrap',
+                  textOverflow: 'ellipsis',
+                  pr: 1.5,
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, overflow: 'hidden' }}>
                   <SettingsIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
-                  Tareas
+                  <Tooltip title="Tareas" placement="top" arrow enterDelay={200}>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Tareas</span>
+                  </Tooltip>
                 </Box>
+                <Box
+                  onMouseDown={(e) => startResize('tareas', e)}
+                  sx={{
+                    position: 'absolute',
+                    top: 0,
+                    right: 0,
+                    bottom: 0,
+                    width: '6px',
+                    cursor: 'col-resize',
+                    zIndex: 10,
+                    borderRight: '1px solid',
+                    borderColor: 'divider',
+                    '&:hover': { borderColor: 'primary.main', borderRightWidth: '2px' },
+                    '&:active': { borderColor: 'primary.main', borderRightWidth: '2px' }
+                  }}
+                />
               </TableCell>
-              <TableCell sx={{ fontWeight: 600, bgcolor: 'background.paper', whiteSpace: 'nowrap' }}>Resultado</TableCell>
+
+              {/* Resultado */}
+              <TableCell
+                sx={{
+                  fontWeight: 600,
+                  bgcolor: headerBg,
+                  position: 'relative',
+                  width: colWidths.resultado,
+                  minWidth: colWidths.resultado,
+                  maxWidth: colWidths.resultado,
+                  overflow: 'hidden',
+                  whiteSpace: 'nowrap',
+                  textOverflow: 'ellipsis',
+                }}
+              >
+                <Tooltip title="Resultado" placement="top" arrow enterDelay={200}>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Resultado</span>
+                </Tooltip>
+                <Box
+                  onMouseDown={(e) => startResize('resultado', e)}
+                  sx={{
+                    position: 'absolute',
+                    top: 0,
+                    right: 0,
+                    bottom: 0,
+                    width: '6px',
+                    cursor: 'col-resize',
+                    zIndex: 10,
+                    borderRight: '1px solid',
+                    borderColor: 'divider',
+                    '&:hover': { borderColor: 'primary.main', borderRightWidth: '2px' },
+                    '&:active': { borderColor: 'primary.main', borderRightWidth: '2px' }
+                  }}
+                />
+              </TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -661,16 +938,16 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
               let currentSetId: string | null = null;
               let currentGroupId: string | null = null;
               const rows: React.ReactNode[] = [];
-              
+
               flatScenarios.forEach((fs, idx) => {
                 const statusColors: Record<string, string> = {
                   running: theme.palette.warning.main,
-                  passed:  theme.palette.success.main,
-                  failed:  theme.palette.error.main,
+                  passed: theme.palette.success.main,
+                  failed: theme.palette.error.main,
                   skipped: theme.palette.text.disabled,
                   pending: theme.palette.text.disabled,
                 };
-                
+
                 const isFirstOfSet = fs.parentGroupId && fs.parentGroupId !== currentSetId;
                 if (isFirstOfSet) {
                   currentSetId = fs.parentGroupId ?? null;
@@ -679,7 +956,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                 }
 
                 const isSetCollapsed = fs.parentGroupId ? collapsedGroups.has(fs.parentGroupId) : false;
-                
+
                 // If set is collapsed, and this is NOT the first matrix, SKIP it completely
                 if (isSetCollapsed && !isFirstOfSet) {
                   currentGroupId = fs.groupId; // keep it in sync
@@ -690,7 +967,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                 if (fs.groupId !== currentGroupId) {
                   currentGroupId = fs.groupId;
                   const isCollapsed = collapsedGroups.has(fs.groupId);
-                  
+
                   const groupScenarios = (isSetCollapsed && fs.parentGroupId)
                     ? flatScenarios.filter(s => s.parentGroupId === fs.parentGroupId)
                     : flatScenarios.filter(s => s.groupId === fs.groupId);
@@ -700,22 +977,48 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                   else if (groupStatuses.some(s => s === 'failed')) groupStatus = 'failed';
                   else if (groupStatuses.every(s => s === 'skipped')) groupStatus = 'skipped';
                   else if (groupStatuses.every(s => s === 'passed' || s === 'skipped')) groupStatus = 'passed';
-                  
+
                   const statusColor = statusColors[groupStatus];
-                  const totalGroupTasks = groupScenarios.reduce((sum, s) => sum + (s.tasks?.length || 0), 0);
-                  
+                  const totalGroupTasks = groupScenarios.reduce((sum: number, s: FlatScenario) => sum + (s.tasks?.length || 0), 0);
+
+                  // Define beautiful hierarchial backgrounds based on grouping type
+                  const isSetGroup = !!fs.parentGroupId;
+                  const groupBgColor = isSetGroup
+                    ? (isDark ? '#311f54' : '#eedcff')
+                    : (isDark ? '#183152' : '#dbebff');
+
+                  // Left border bar to visually anchor the group header row
+                  const groupBorderLeft = isSetGroup
+                    ? `4px solid ${theme.palette.secondary.main}`
+                    : `4px solid ${theme.palette.primary.main}`;
+
                   rows.push(
-                    <TableRow key={`group-${fs.groupId}`} sx={{ bgcolor: isDark ? alpha('#000', 0.15) : alpha(theme.palette.primary.main, 0.04) }}>
+                    <TableRow key={`group-${fs.groupId}`} sx={{ bgcolor: groupBgColor }}>
                       {/* Test Cycle */}
-                      <TableCell sx={{ py: 0, fontWeight: 600, color: 'text.secondary' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          {fs.parentGroupId ? (isFirstOfSet ? fs.cycleName : '') : fs.cycleName}
+                      <TableCell
+                        sx={{
+                          width: colWidths.cycle,
+                          minWidth: colWidths.cycle,
+                          maxWidth: colWidths.cycle,
+                          py: 0,
+                          fontWeight: 600,
+                          color: 'text.secondary',
+                          overflow: 'hidden',
+                          borderLeft: groupBorderLeft,
+                        }}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, width: '100%', overflow: 'hidden' }}>
+                          <Tooltip title={fs.parentGroupId ? (isFirstOfSet ? fs.cycleName : '') : fs.cycleName} placement="top-start" arrow enterDelay={200}>
+                            <Typography variant="body2" sx={{ fontSize: '0.75rem', fontWeight: 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>
+                              {fs.parentGroupId ? (isFirstOfSet ? fs.cycleName : '') : fs.cycleName}
+                            </Typography>
+                          </Tooltip>
                           {((fs.parentGroupId && isFirstOfSet) || !fs.parentGroupId) && fs.cycleId && (
                             <Tooltip title="Configurar Tareas de Ciclo">
-                              <IconButton 
-                                size="small" 
+                              <IconButton
+                                size="small"
                                 onClick={() => handleOpenTaskDialog('cycle', fs.cycleId!, fs.cycleName, 'cycle')}
-                                sx={{ p: 0.25, opacity: 0.6, '&:hover': { opacity: 1 } }}
+                                sx={{ p: 0.25, opacity: 0.7, '&:hover': { opacity: 1 }, flexShrink: 0 }}
                               >
                                 <SettingsIcon sx={{ fontSize: 13 }} />
                               </IconButton>
@@ -724,25 +1027,37 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                         </Box>
                       </TableCell>
                       {/* Test Set */}
-                      <TableCell sx={{ py: 0, fontWeight: 600, color: 'text.secondary' }}>
+                      <TableCell
+                        sx={{
+                          width: colWidths.set,
+                          minWidth: colWidths.set,
+                          maxWidth: colWidths.set,
+                          py: 0,
+                          fontWeight: 600,
+                          color: 'text.secondary',
+                          overflow: 'hidden'
+                        }}
+                      >
                         {isFirstOfSet ? (
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <Box 
-                              onClick={() => toggleGroup(fs.parentGroupId!)} 
-                              sx={{ display: 'flex', alignItems: 'center', py: 0.8, cursor: 'pointer', userSelect: 'none', gap: 0.5 }}
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, width: '100%', overflow: 'hidden' }}>
+                            <Box
+                              onClick={() => toggleGroup(fs.parentGroupId!)}
+                              sx={{ display: 'flex', alignItems: 'center', py: 0.8, cursor: 'pointer', userSelect: 'none', gap: 0.5, overflow: 'hidden', flex: 1 }}
                             >
-                              {isSetCollapsed ? <KeyboardArrowRightRoundedIcon sx={{ fontSize: 16, color: 'text.secondary' }} /> : <KeyboardArrowDownRoundedIcon sx={{ fontSize: 16, color: 'text.secondary' }} />}
-                              <LibraryBooksRoundedIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
-                              <Typography sx={{ fontWeight: 600, fontSize: '0.75rem', color: 'text.primary' }}>
-                                {fs.parentGroupName}
-                              </Typography>
+                              {isSetCollapsed ? <KeyboardArrowRightRoundedIcon sx={{ fontSize: 16, color: 'text.secondary', flexShrink: 0 }} /> : <KeyboardArrowDownRoundedIcon sx={{ fontSize: 16, color: 'text.secondary', flexShrink: 0 }} />}
+                              <LibraryBooksRoundedIcon sx={{ fontSize: 14, color: 'text.secondary', flexShrink: 0 }} />
+                              <Tooltip title={fs.parentGroupName} placement="top-start" arrow enterDelay={200}>
+                                <Typography sx={{ fontWeight: 400, fontSize: '0.75rem', color: 'text.secondary', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {fs.parentGroupName}
+                                </Typography>
+                              </Tooltip>
                             </Box>
                             {fs.setId && (
                               <Tooltip title="Configurar Tareas de Suite (Set)">
-                                <IconButton 
-                                  size="small" 
+                                <IconButton
+                                  size="small"
                                   onClick={() => handleOpenTaskDialog('set', fs.setId!, fs.parentGroupName!, 'set')}
-                                  sx={{ p: 0.25, opacity: 0.6, '&:hover': { opacity: 1 } }}
+                                  sx={{ p: 0.25, opacity: 0.7, '&:hover': { opacity: 1 }, flexShrink: 0 }}
                                 >
                                   <SettingsIcon sx={{ fontSize: 13 }} />
                                 </IconButton>
@@ -752,24 +1067,34 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                         ) : (fs.parentGroupId ? '' : '—')}
                       </TableCell>
                       {/* Test Flow / Combo Group */}
-                      <TableCell sx={{ py: 0 }}>
+                      <TableCell
+                        sx={{
+                          width: colWidths.flow,
+                          minWidth: colWidths.flow,
+                          maxWidth: colWidths.flow,
+                          py: 0,
+                          overflow: 'hidden'
+                        }}
+                      >
                         {!isSetCollapsed && (
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <Box 
-                              onClick={() => toggleGroup(fs.groupId)} 
-                              sx={{ display: 'flex', alignItems: 'center', py: 0.8, cursor: 'pointer', userSelect: 'none', gap: 0.5 }}
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, width: '100%', overflow: 'hidden' }}>
+                            <Box
+                              onClick={() => toggleGroup(fs.groupId)}
+                              sx={{ display: 'flex', alignItems: 'center', py: 0.8, cursor: 'pointer', userSelect: 'none', gap: 0.5, overflow: 'hidden', flex: 1 }}
                             >
-                              {isCollapsed ? <KeyboardArrowRightRoundedIcon sx={{ fontSize: 16, color: 'text.secondary' }} /> : <KeyboardArrowDownRoundedIcon sx={{ fontSize: 16, color: 'text.secondary' }} />}
-                              <Typography sx={{ fontWeight: 600, fontSize: '0.75rem', color: 'text.primary' }}>
-                                {fs.groupName}
-                              </Typography>
+                              {isCollapsed ? <KeyboardArrowRightRoundedIcon sx={{ fontSize: 16, color: 'text.secondary', flexShrink: 0 }} /> : <KeyboardArrowDownRoundedIcon sx={{ fontSize: 16, color: 'text.secondary', flexShrink: 0 }} />}
+                              <Tooltip title={fs.groupName} placement="top-start" arrow enterDelay={200}>
+                                <Typography sx={{ fontWeight: fs.isSetCombo ? 600 : 400, fontSize: '0.75rem', color: fs.isSetCombo ? theme.palette.primary.main : 'text.secondary', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {fs.groupName}
+                                </Typography>
+                              </Tooltip>
                             </Box>
                             {fs.flowId && (
                               <Tooltip title="Configurar Tareas de Flujo">
-                                <IconButton 
-                                  size="small" 
+                                <IconButton
+                                  size="small"
                                   onClick={() => handleOpenTaskDialog('flow', fs.flowId!, fs.groupName, 'flow')}
-                                  sx={{ p: 0.25, opacity: 0.6, '&:hover': { opacity: 1 } }}
+                                  sx={{ p: 0.25, opacity: 0.7, '&:hover': { opacity: 1 }, flexShrink: 0 }}
                                 >
                                   <SettingsIcon sx={{ fontSize: 13 }} />
                                 </IconButton>
@@ -779,203 +1104,319 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                         )}
                       </TableCell>
                       {/* Scenario Summary */}
-                      <TableCell sx={{ py: 0 }}>
+                      <TableCell
+                        sx={{
+                          width: colWidths.scenario,
+                          minWidth: colWidths.scenario,
+                          maxWidth: colWidths.scenario,
+                          py: 0,
+                          overflow: 'hidden'
+                        }}
+                      >
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <Chip 
-                            label={`${groupScenarios.length} ${groupScenarios.length === 1 ? 'scenario' : 'scenarios'}`} 
-                            size="small" 
-                            sx={{ height: 16, fontSize: '0.6rem', bgcolor: alpha(theme.palette.text.secondary, 0.1) }} 
+                          <Chip
+                            label={`${groupScenarios.length} ${groupScenarios.length === 1 ? 'scenario' : 'scenarios'}`}
+                            size="small"
+                            sx={{ height: 16, fontSize: '0.6rem', bgcolor: alpha(theme.palette.text.secondary, 0.1) }}
                           />
-                          {totalGroupTasks > 0 && (
-                            <Chip 
-                              label={`${totalGroupTasks} ${totalGroupTasks === 1 ? 'tarea' : 'tareas'}`} 
-                              size="small" 
-                              sx={{ 
-                                height: 16, 
-                                fontSize: '0.6rem', 
-                                bgcolor: alpha(theme.palette.primary.main, 0.1),
-                                color: theme.palette.primary.main,
-                                fontWeight: 600,
-                              }} 
-                            />
-                          )}
                         </Box>
                       </TableCell>
                       {/* Feature column (empty for group) */}
-                      <TableCell sx={{ py: 0 }}></TableCell>
-                      {/* Tareas column (empty for group) */}
-                      <TableCell sx={{ py: 0 }}></TableCell>
+                      <TableCell
+                        sx={{
+                          width: colWidths.feature,
+                          minWidth: colWidths.feature,
+                          maxWidth: colWidths.feature,
+                          py: 0,
+                        }}
+                      ></TableCell>
+                      {/* Tareas column */}
+                      <TableCell
+                        sx={{
+                          width: colWidths.tareas,
+                          minWidth: colWidths.tareas,
+                          maxWidth: colWidths.tareas,
+                          py: 0,
+                          overflow: 'hidden'
+                        }}
+                      >
+                        {totalGroupTasks > 0 && (
+                          <Chip
+                            label={`${totalGroupTasks} ${totalGroupTasks === 1 ? 'tarea' : 'tareas'}`}
+                            size="small"
+                            sx={{
+                              height: 16,
+                              fontSize: '0.65rem',
+                              bgcolor: alpha(theme.palette.primary.main, 0.1),
+                              color: theme.palette.primary.main,
+                              fontWeight: 500,
+                            }}
+                          />
+                        )}
+                      </TableCell>
                       {/* Status Summary */}
-                      <TableCell sx={{ py: 0 }}>
-                        {groupStatus !== 'pending' && <Chip label={groupStatus} size="small" sx={{ height: 16, fontSize: '0.6rem', color: statusColor, bgcolor: alpha(statusColor, 0.1), border: `1px solid ${alpha(statusColor, 0.3)}` }} />}
+                      <TableCell
+                        sx={{
+                          width: colWidths.resultado,
+                          minWidth: colWidths.resultado,
+                          maxWidth: colWidths.resultado,
+                          py: 0,
+                          overflow: 'hidden'
+                        }}
+                      >
+                        {groupStatus !== 'pending' && <Chip label={toSentenceCase(groupStatus)} size="small" sx={{ height: 18, fontSize: '0.75rem', color: statusColor, bgcolor: alpha(statusColor, 0.1), border: `1px solid ${alpha(statusColor, 0.3)}` }} />}
                       </TableCell>
                     </TableRow>
                   );
                 }
-                
+
                 // If Matrix / Flow is collapsed OR Set is collapsed, skip rendering scenarios
                 if (collapsedGroups.has(fs.groupId) || isSetCollapsed) {
                   return;
                 }
-                  const status: ScenarioExecStatus = statusMap.get(fs.id) ?? 'pending';
-                  const isRunning = status === 'running';
-                  const isFailed  = status === 'failed';
-                  const bg = isRunning
-                    ? alpha(theme.palette.warning.main, isDark ? 0.08 : 0.05)
-                    : isFailed
-                      ? alpha(theme.palette.error.main, isDark ? 0.07 : 0.04)
-                      : 'transparent';
+                const status: ScenarioExecStatus = statusMap.get(fs.id) ?? 'pending';
+                const isRunning = status === 'running';
+                const isFailed = status === 'failed';
+                const bg = isRunning
+                  ? alpha(theme.palette.warning.main, isDark ? 0.08 : 0.05)
+                  : isFailed
+                    ? alpha(theme.palette.error.main, isDark ? 0.07 : 0.04)
+                    : 'transparent';
 
-                  rows.push(
-                    <TableRow
-                      key={`${fs.id}-${idx}`}
+                // Establish the row background and hover colors based on the hierarchical level of the scenario
+                const isSetGroup = !!fs.parentGroupId;
+                const rowBg = bg !== 'transparent'
+                  ? bg
+                  : (isSetGroup
+                    ? (isDark ? '#22163b' : '#f7edff')
+                    : (isDark ? '#112239' : '#eef6ff')
+                  );
+
+                const rowHoverBg = bg !== 'transparent'
+                  ? bg
+                  : (isSetGroup
+                    ? (isDark ? '#311f54' : '#eedcff')
+                    : (isDark ? '#183152' : '#dbebff')
+                  );
+
+                // Highlighting the scenario column by giving it a sutil primary (blue) or secondary (purple) background tint based on grouping
+                const scenarioColBg = bg !== 'transparent'
+                  ? bg
+                  : (isSetGroup
+                    ? (isDark ? '#3d2569' : '#e5cbff')
+                    : (isDark ? '#1f3e6a' : '#cce3ff')
+                  );
+
+                rows.push(
+                  <TableRow
+                    key={`${fs.id}-${idx}`}
+                    sx={{
+                      bgcolor: rowBg,
+                      transition: 'all 0.2s ease',
+                      '&:hover': { bgcolor: rowHoverBg },
+                    }}
+                  >
+                    {/* Tree guides: Cycle, Set and Flow to create a gorgeous visual hierarchy */}
+                    <TableCell
                       sx={{
-                        bgcolor: bg,
-                        transition: 'all 0.2s ease',
-                        '&:hover': { bgcolor: isRunning || isFailed ? bg : alpha(theme.palette.action.hover, 0.5) },
+                        width: colWidths.cycle,
+                        minWidth: colWidths.cycle,
+                        maxWidth: colWidths.cycle,
+                        borderLeft: `3px solid ${isRunning ? theme.palette.warning.main : isFailed ? theme.palette.error.main : alpha(theme.palette.text.disabled, 0.15)}`,
+                        overflow: 'hidden'
+                      }}
+                    ></TableCell>
+                    <TableCell
+                      sx={{
+                        width: colWidths.set,
+                        minWidth: colWidths.set,
+                        maxWidth: colWidths.set,
+                        borderLeft: fs.parentGroupId ? (isDark ? '2px solid #5d3f8c' : '2px solid #b388ff') : 'none',
+                        overflow: 'hidden'
+                      }}
+                    ></TableCell>
+                    <TableCell
+                      sx={{
+                        width: colWidths.flow,
+                        minWidth: colWidths.flow,
+                        maxWidth: colWidths.flow,
+                        fontSize: '0.75rem',
+                        color: 'text.secondary',
+                        overflow: 'hidden',
+                        whiteSpace: 'nowrap',
+                        textOverflow: 'ellipsis',
+                        borderLeft: isDark ? '2px solid #1f3e6a' : '2px solid #90caf9',
+                        pl: 1.5,
                       }}
                     >
-                      {/* Empty cells for Cycle, Set and Flow in children to create a tree-like look */}
-                      <TableCell sx={{ borderLeft: `2px solid ${isRunning ? theme.palette.warning.main : isFailed ? theme.palette.error.main : 'transparent'}` }}></TableCell>
-                      <TableCell></TableCell>
-                      <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
-                        {fs.sourceName}
-                      </TableCell>
-                      <TableCell sx={{ width: '35%' }}>
-                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <StatusBadge status={status} />
-                            <Typography
-                              sx={{
-                                fontSize: '0.75rem',
-                                fontWeight: isRunning ? 700 : 500,
-                                color: isRunning ? 'warning.main' : isFailed ? 'error.main' : status === 'passed' ? 'success.main' : 'text.primary',
-                                whiteSpace: 'normal',
-                                wordBreak: 'break-word',
-                              }}
-                            >
-                              {fs.scenarioName}
-                            </Typography>
-                            <Tooltip title={fs.sourceType === 'feature' ? "Configurar Tareas de Feature (Suite)" : "Configurar Tareas de Escenario"}>
-                              <IconButton
-                                size="small"
-                                onClick={() => handleOpenTaskDialog(
-                                  'scenario',
-                                  fs.id,
-                                  fs.sourceType === 'feature' ? fs.sourceName : fs.scenarioName,
-                                  fs.sourceType === 'feature' ? 'feature' : 'scenario',
-                                  fs.featureScenarios,
-                                  fs.cycleId,
-                                  fs.sourceType === 'feature' ? fs.featureRefId! : fs.scenarioRefId || fs.id
-                                )}
-                                sx={{ p: 0.25, opacity: 0.6, '&:hover': { opacity: 1 } }}
-                              >
-                                <SettingsIcon sx={{ fontSize: 13 }} />
-                              </IconButton>
-                            </Tooltip>
-                            {/* Instance badge — only shown when this name appears > 1 time */}
-                            {duplicateNames.has(fs.scenarioName) && (
-                              <Box
-                                component="span"
-                                sx={{
-                                  flexShrink: 0,
-                                  fontSize: '0.6rem',
-                                  fontWeight: 700,
-                                  letterSpacing: 0.3,
-                                  px: 0.6,
-                                  py: 0.15,
-                                  borderRadius: '4px',
-                                  bgcolor: alpha(theme.palette.primary.main, 0.12),
-                                  color: 'primary.main',
-                                  border: `1px solid ${alpha(theme.palette.primary.main, 0.3)}`,
-                                  lineHeight: 1.5,
-                                  userSelect: 'none',
-                                }}
-                              >
-                                #{instanceIndexMap.get(fs.id) ?? 1}
-                              </Box>
-                            )}
-                          </Box>
+                      <Tooltip title={fs.sourceName} placement="top-start" arrow enterDelay={200}>
+                        <Box component="span" sx={{ display: 'block', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+                          {fs.sourceName}
                         </Box>
-                      </TableCell>
-                      <TableCell sx={{ color: 'text.secondary', width: '20%', whiteSpace: 'normal', wordBreak: 'break-word' }}>
-                        <Tooltip title={fs.featurePath} placement="top-start" arrow enterDelay={400}>
-                          <Box component="span" sx={{ cursor: 'help', lineHeight: 1.2 }}>
-                            {fs.featureName}
-                          </Box>
+                      </Tooltip>
+                    </TableCell>
+                    <TableCell
+                      sx={{
+                        width: colWidths.scenario,
+                        minWidth: colWidths.scenario,
+                        maxWidth: colWidths.scenario,
+                        overflow: 'hidden',
+                        bgcolor: scenarioColBg, // Resaltar columna
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, width: '100%', overflow: 'hidden' }}>
+                        <StatusBadge status={status} />
+                        <Tooltip title={fs.scenarioName} placement="top-start" arrow enterDelay={200}>
+                          <Typography
+                            sx={{
+                              fontSize: '0.75rem', // Same size as others (0.75rem)
+                              fontWeight: isRunning ? 700 : 600, // Bolder font weight to stand out
+                              color: isRunning ? 'warning.main' : isFailed ? 'error.main' : status === 'passed' ? 'success.main' : 'text.primary',
+                              whiteSpace: 'nowrap', // No word wrap
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              flex: 1,
+                            }}
+                          >
+                            {fs.scenarioName}
+                          </Typography>
                         </Tooltip>
-                      </TableCell>
-                      <TableCell sx={{ width: '25%' }}>
-                        {/* Rendering of associated tasks */}
-                        {fs.tasks && fs.tasks.length > 0 ? (
-                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                        <Tooltip title={fs.sourceType === 'feature' ? "Configurar Tareas de Feature (Suite)" : "Configurar Tareas de Escenario"}>
+                          <IconButton
+                            size="small"
+                            onClick={() => handleOpenTaskDialog(
+                              'scenario',
+                              fs.id,
+                              fs.sourceType === 'feature' ? fs.sourceName : fs.scenarioName,
+                              fs.sourceType === 'feature' ? 'feature' : 'scenario',
+                              fs.featureScenarios,
+                              fs.cycleId,
+                              fs.sourceType === 'feature' ? fs.featureRefId! : fs.scenarioRefId || fs.id
+                            )}
+                            sx={{ p: 0.25, opacity: 0.6, '&:hover': { opacity: 1 }, flexShrink: 0 }}
+                          >
+                            <SettingsIcon sx={{ fontSize: 13 }} />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
+                    </TableCell>
+                    <TableCell
+                      sx={{
+                        width: colWidths.feature,
+                        minWidth: colWidths.feature,
+                        maxWidth: colWidths.feature,
+                        color: 'text.secondary',
+                        overflow: 'hidden',
+                        whiteSpace: 'nowrap',
+                        textOverflow: 'ellipsis',
+                        fontSize: '0.65rem', // Smaller by 1 (0.65rem)
+                      }}
+                    >
+                      <Tooltip title={fs.featurePath} placement="top-start" arrow enterDelay={200}>
+                        <Box
+                          component="span"
+                          sx={{
+                            cursor: 'help',
+                            lineHeight: 1.2,
+                            display: 'block',
+                            overflow: 'hidden',
+                            whiteSpace: 'nowrap',
+                            textOverflow: 'ellipsis',
+                            fontSize: '0.65rem',
+                          }}
+                        >
+                          {fs.featureName}
+                        </Box>
+                      </Tooltip>
+                    </TableCell>
+                    <TableCell
+                      sx={{
+                        width: colWidths.tareas,
+                        minWidth: colWidths.tareas,
+                        maxWidth: colWidths.tareas,
+                        overflow: 'hidden'
+                      }}
+                    >
+                      {/* Rendering of associated tasks */}
+                      {fs.tasks && fs.tasks.length > 0 ? (
+                        <Tooltip
+                          title={
+                            <Box sx={{ p: 0.5 }}>
+                              <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 0.5 }}>Tareas asociadas:</Typography>
+                              {fs.tasks.map(t => (
+                                <Box key={t.id} sx={{ mb: 0.5, borderBottom: '1px solid rgba(255,255,255,0.1)', pb: 0.5 }}>
+                                  <Typography variant="caption" display="block" sx={{ fontWeight: 'bold' }}>
+                                    @{t.name} ({t.hook.toUpperCase()})
+                                  </Typography>
+                                  {t.args && Object.keys(t.args).length > 0 && (
+                                    <Typography variant="caption" display="block">
+                                      Parámetros: {JSON.stringify(t.args)}
+                                    </Typography>
+                                  )}
+                                </Box>
+                              ))}
+                            </Box>
+                          }
+                          arrow
+                          placement="top"
+                          enterDelay={300}
+                        >
+                          <Box sx={{ display: 'flex', flexWrap: 'nowrap', gap: 0.5, overflow: 'hidden' }}>
                             {fs.tasks.map((task) => {
                               const taskKey = `${fs.id}::${task.id}`;
                               const taskStatus = taskStatusMap.get(taskKey) || 'pending';
                               return (
-                                <Tooltip
+                                <Chip
                                   key={task.id}
-                                  title={
-                                    <Box sx={{ p: 0.5 }}>
-                                      <Typography variant="caption" display="block" sx={{ fontWeight: 'bold' }}>
-                                        Tarea: @{task.name}
-                                      </Typography>
-                                      <Typography variant="caption" display="block">
-                                        Momento: {task.hook.toUpperCase()}
-                                      </Typography>
-                                      <Typography variant="caption" display="block">
-                                        Alcance: {task.scope.toUpperCase()}
-                                      </Typography>
-                                      {task.args && Object.keys(task.args).length > 0 && (
-                                        <Typography variant="caption" display="block">
-                                          Parámetros: {JSON.stringify(task.args)}
-                                        </Typography>
-                                      )}
-                                    </Box>
-                                  }
-                                  arrow
-                                  placement="top"
-                                >
-                                  <Chip
-                                    size="small"
-                                    icon={<SettingsIcon sx={{ fontSize: '10px !important' }} />}
-                                    label={`@${task.name}`}
-                                    sx={{
-                                      height: 18,
-                                      fontSize: '0.62rem',
-                                      fontWeight: 600,
-                                      borderRadius: '4px',
-                                      cursor: 'help',
-                                      ...getTaskChipStyles(taskStatus, theme)
-                                    }}
-                                  />
-                                </Tooltip>
+                                  size="small"
+                                  icon={<SettingsIcon sx={{ fontSize: '10px !important' }} />}
+                                  label={`@${task.name}`}
+                                  sx={{
+                                    height: 18,
+                                    fontSize: '0.65rem', // Smaller by 1 (0.65rem)
+                                    fontWeight: 400,
+                                    borderRadius: '4px',
+                                    flexShrink: 0,
+                                    ...getTaskChipStyles(taskStatus, theme)
+                                  }}
+                                />
                               );
                             })}
                           </Box>
-                        ) : (
-                          <Typography sx={{ fontSize: '0.7rem', color: 'text.disabled', fontStyle: 'italic' }}>
-                            Sin tareas
-                          </Typography>
-                        )}
-                      </TableCell>
-                      <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                        <Typography
-                          sx={{
-                            fontSize: '0.68rem',
-                            fontWeight: 700,
-                            letterSpacing: '0.05em',
-                            textTransform: 'uppercase',
-                            color: isRunning ? 'warning.main' : isFailed ? 'error.main' : status === 'passed' ? 'success.main' : status === 'skipped' ? 'text.disabled' : 'text.disabled',
-                          }}
-                        >
-                          {status}
+                        </Tooltip>
+                      ) : (
+                        <Typography sx={{ fontSize: '0.65rem', color: 'text.disabled', fontStyle: 'italic' }}>
+                          Sin tareas
                         </Typography>
-                      </TableCell>
-                    </TableRow>
-                  );
+                      )}
+                    </TableCell>
+                    <TableCell
+                      sx={{
+                        width: colWidths.resultado,
+                        minWidth: colWidths.resultado,
+                        maxWidth: colWidths.resultado,
+                        overflow: 'hidden',
+                        whiteSpace: 'nowrap',
+                        textOverflow: 'ellipsis'
+                      }}
+                    >
+                      <Typography
+                        sx={{
+                          fontSize: '0.75rem', // Same size as others (0.75rem)
+                          fontWeight: 700,
+                          color: isRunning ? 'warning.main' : isFailed ? 'error.main' : status === 'passed' ? 'success.main' : status === 'skipped' ? 'text.disabled' : 'text.disabled',
+                          overflow: 'hidden',
+                          whiteSpace: 'nowrap',
+                          textOverflow: 'ellipsis'
+                        }}
+                      >
+                        {toSentenceCase(status)}
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                );
               });
-              
+
               return rows;
             })()}
 
@@ -1028,12 +1469,10 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                     sx={{
                       fontSize: '0.68rem',
                       fontWeight: 700,
-                      letterSpacing: '0.05em',
-                      textTransform: 'uppercase',
                       color: '#818cf8',
                     }}
                   >
-                    building
+                    Building
                   </Typography>
                 </TableCell>
               </TableRow>

@@ -287,7 +287,11 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
                             </Typography>
                             {task.targetScenario && (
                               <Typography variant="caption" color="primary.main" display="block" sx={{ fontWeight: 'bold', mt: 0.5 }}>
-                                Filtro: Solo en "{task.targetScenario}"
+                                Filtro: Solo en "{
+                                  task.targetScenario.startsWith('flow-') || task.targetScenario.startsWith('set-')
+                                    ? (task.targetScenario.length > 10 ? task.targetScenario.substring(0, 10) + '...' : task.targetScenario)
+                                    : task.targetScenario
+                                }"
                               </Typography>
                             )}
                           </>
