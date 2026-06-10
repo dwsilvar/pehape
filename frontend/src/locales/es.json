@@ -23,6 +23,9 @@
         "view_options": "Opciones de vista",
         "file_explorer": "Explorador de Archivos",
         "review_modules": "Revisar Módulos",
+        "cases": "Casos",
+        "case": "Caso",
+        "matrix": "Matriz",
         "execution_order": "Orden de Ejecución",
         "search": "Buscar...",
         "rename_success": "¡Renombrado exitosamente!",
@@ -272,6 +275,8 @@
             "hierarchy": "Jerarquía del Plan",
             "noPlans": "No hay planes creados aún. Crea tu primer plan de prueba.",
             "noCycles": "Este plan no tiene ciclos. Agrega uno con el botón +.",
+            "tabDesigner": "Diseñador",
+            "tabMonitor": "Matriz de Ejecución",
             "canvas": {
                 "title": "Diseñador de Flujo",
                 "placeholder": "Arrastra escenarios aquí para construir un flujo de prueba",

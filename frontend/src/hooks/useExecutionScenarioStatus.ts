@@ -19,10 +19,12 @@ export function useExecutionScenarioStatus(
   taskId: string | null,
   scenarioIds: string[],           // unique IDs matching FlatScenario.id
   scenarioNames: string[],         // parallel array for text-based name matching
-): Map<string, ScenarioExecStatus> {
+) {
 
   const [statusMap, setStatusMap] = useState<Map<string, ScenarioExecStatus>>(new Map());
   const statusMapRef      = useRef<Map<string, ScenarioExecStatus>>(new Map()); // sync ref for resolveId
+  const [taskStatusMap, setTaskStatusMap] = useState<Map<string, 'pending' | 'running' | 'passed' | 'failed'>>(new Map());
+  const taskStatusMapRef  = useRef<Map<string, 'pending' | 'running' | 'passed' | 'failed'>>(new Map());
   const currentRunningId  = useRef<string | null>(null);  // ID of the running scenario
   const currentRunningName = useRef<string | null>(null); // name, for text-based matching
   const esRef             = useRef<EventSource | null>(null);
@@ -40,6 +42,10 @@ export function useExecutionScenarioStatus(
     scenarioIds.forEach(id => initial.set(id, 'pending'));
     statusMapRef.current = initial;
     setStatusMap(new Map(initial));
+
+    taskStatusMapRef.current = new Map();
+    setTaskStatusMap(new Map());
+
     currentRunningId.current  = null;
     currentRunningName.current = null;
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -127,6 +133,7 @@ export function useExecutionScenarioStatus(
     type QueuedEvt =
       | { kind: 'running';  sid?: string; name?: string }
       | { kind: 'terminal'; status: ScenarioExecStatus; sid?: string; name?: string }
+      | { kind: 'task_status'; key: string; status: 'running' | 'passed' | 'failed' }
       | { kind: 'finalize' };
 
     const queue: QueuedEvt[] = [];
@@ -141,6 +148,9 @@ export function useExecutionScenarioStatus(
         applyRunning(evt.sid, evt.name);
       } else if (evt.kind === 'terminal') {
         applyStatus(evt.status, evt.sid, evt.name);
+      } else if (evt.kind === 'task_status') {
+        taskStatusMapRef.current.set(evt.key, evt.status);
+        setTaskStatusMap(new Map(taskStatusMapRef.current));
       } else {
         applyFinalize();
       }
@@ -171,7 +181,12 @@ export function useExecutionScenarioStatus(
 
           // JSON event from orchestrator.py
           try {
-            const ev = JSON.parse(line);
+            // Remove the "    │ " prefix if present from Behave output
+            let cleanLine = line.trim();
+            if (cleanLine.startsWith('│')) {
+              cleanLine = cleanLine.substring(1).trim();
+            }
+            const ev = JSON.parse(cleanLine);
             if (ev.type === 'scenario_status') {
               const sid  = ev.scenario_id;
               const name = ev.scenario_name;
@@ -180,6 +195,10 @@ export function useExecutionScenarioStatus(
               } else if (['passed', 'failed', 'skipped'].includes(ev.status)) {
                 enqueue({ kind: 'terminal', status: ev.status as ScenarioExecStatus, sid, name });
               }
+            } else if (ev.type === 'task_status' && ev.scenario_id && ev.task?.id) {
+              const compositeKey = `${ev.scenario_id}::${ev.task.id}`;
+              const taskStatus = ev.task.status as 'running' | 'passed' | 'failed';
+              enqueue({ kind: 'task_status', key: compositeKey, status: taskStatus });
             }
           } catch {
             // non-JSON line — ignore
@@ -208,6 +227,6 @@ export function useExecutionScenarioStatus(
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId]);
 
-  return statusMap;
+  return { statusMap, taskStatusMap };
 }
 

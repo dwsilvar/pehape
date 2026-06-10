@@ -1,9 +1,11 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Chip, useTheme, alpha, Button, Select, MenuItem, FormControl, Typography } from '@mui/material';
+import { useTranslation } from 'react-i18next';
+import { Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Chip, useTheme, alpha, Button, Select, MenuItem, FormControl, Typography, Tooltip } from '@mui/material';
 import ListAltRoundedIcon from '@mui/icons-material/ListAltRounded';
 import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded';
 import KeyboardArrowRightRoundedIcon from '@mui/icons-material/KeyboardArrowRightRounded';
 import LibraryBooksRoundedIcon from '@mui/icons-material/LibraryBooksRounded';
+import SettingsIcon from '@mui/icons-material/Settings';
 import StepInspectorDrawer from './StepInspectorDrawer';
 import { ScenarioIcon, CycleIcon, FlowIcon } from '../PehapeIcons';
 
@@ -18,6 +20,43 @@ const getStatusColor = (status: string, theme: any) => {
         case 'skip': return '#94A3B8';
         default: return theme.palette.text.secondary;
     }
+};
+
+const getTaskChipStyles = (status: 'pending' | 'running' | 'passed' | 'failed', theme: any) => {
+  const isDark = theme.palette.mode === 'dark';
+  
+  if (status === 'running') {
+    return {
+      bgcolor: alpha(theme.palette.warning.main, 0.12),
+      color: theme.palette.warning.main,
+      border: `1px solid ${alpha(theme.palette.warning.main, 0.3)}`,
+      animation: 'taskPulse 1.5s ease-in-out infinite',
+      '@keyframes taskPulse': {
+        '0%, 100%': { opacity: 1 },
+        '50%': { opacity: 0.6 },
+      },
+    };
+  }
+  if (status === 'passed') {
+    return {
+      bgcolor: alpha(theme.palette.success.main, 0.12),
+      color: theme.palette.success.main,
+      border: `1px solid ${alpha(theme.palette.success.main, 0.3)}`,
+    };
+  }
+  if (status === 'failed') {
+    return {
+      bgcolor: alpha(theme.palette.error.main, 0.12),
+      color: theme.palette.error.main,
+      border: `1px solid ${alpha(theme.palette.error.main, 0.3)}`,
+    };
+  }
+  // pending
+  return {
+    bgcolor: isDark ? alpha(theme.palette.text.disabled, 0.05) : alpha(theme.palette.text.disabled, 0.1),
+    color: theme.palette.text.secondary,
+    border: `1px solid ${alpha(theme.palette.text.disabled, 0.2)}`,
+  };
 };
 
 /**
@@ -42,6 +81,7 @@ const formatDuration = (ms: number): string => {
 };
 
 const ReportMatrixView: React.FC<ReportMatrixViewProps> = ({ data }) => {
+    const { t } = useTranslation();
     const theme = useTheme();
     const [gherkinData, setGherkinData] = useState<any[]>([]);
     const [selectedScenario, setSelectedScenario] = useState<any | null>(null);
@@ -165,39 +205,76 @@ const ReportMatrixView: React.FC<ReportMatrixViewProps> = ({ data }) => {
         data.test_cycles.forEach((cycle: any) => {
             cycle.test_flows?.forEach((flow: any) => {
                 flow.scenarios?.forEach((sc: any, idx: number) => {
-                    // Extract gifExecutionId and its seconds-timestamp from logs
+                    // Extract gifExecutionId and its seconds-timestamp from logs, and parse task statuses
                     let gifExecutionId: string | null = null;
                     let gifStartSec: number | null = null;
+                    const taskStatuses = new Map<string, 'pending' | 'running' | 'passed' | 'failed'>();
 
                     if (sc.logs) {
                         for (const line of sc.logs.split('\n')) {
                             try {
-                                const ev = JSON.parse(line);
+                                let cleanLine = line.trim();
+                                if (cleanLine.startsWith('│')) {
+                                    cleanLine = cleanLine.substring(1).trim();
+                                }
+                                const ev = JSON.parse(cleanLine);
                                 if (ev.type === 'scenario_status' && ev.gifExecutionId) {
                                     gifExecutionId = String(ev.gifExecutionId);
                                     const tsSec = parseInt(gifExecutionId.split('_')[0], 10);
                                     if (!isNaN(tsSec)) gifStartSec = tsSec;
-                                    break;
+                                } else if (ev.type === 'task_status' && ev.task?.id) {
+                                    taskStatuses.set(ev.task.id, ev.task.status);
                                 }
                             } catch { /* not JSON */ }
                         }
                     }
+
+                    const resolvedTasks = (sc.tasks || []).map((t: any) => {
+                        const status = taskStatuses.get(t.id) || 'pending';
+                        return {
+                            ...t,
+                            status
+                        };
+                    });
+
                     const gherkinMatch = findBestMatch(sc.scenario_name, gifStartSec, sc.result_status || 'skip');
                     const isFlow = sc.source_type === 'flow';
                     const hasDetail = sc.set_detail && sc.set_detail !== '—';
-                    const matrixMatch = flow.flow_name?.match(/\((Matriz \d+)\)/);
-                    const matrixSuffix = matrixMatch ? ` ${matrixMatch[0]}` : '';
+                    const matrixMatch = flow.flow_name?.match(/\(((?:Matriz|Caso|Case) \d+)\)/);
                     
-                    let finalFlowName = flow.flow_name;
+                    let matrixSuffix = '';
+                    let groupTitle = flow.flow_name;
+                    
+                    if (matrixMatch) {
+                        const matchText = matrixMatch[1];
+                        const numberPart = matchText.split(' ').pop();
+                        const translatedCase = t('common.case') || 'case';
+                        const capitalizedCase = translatedCase.charAt(0).toUpperCase() + translatedCase.slice(1);
+                        const translatedText = `${capitalizedCase} ${numberPart}`;
+                        matrixSuffix = ` (${translatedText})`;
+                        groupTitle = translatedText;
+                    }
+                    
+                    let translatedFlowName = flow.flow_name;
+                    if (translatedFlowName) {
+                        translatedFlowName = translatedFlowName.replace(/\(((?:Matriz|Caso|Case) \d+)\)/g, (match: string, p1: string) => {
+                            const numberPart = p1.split(' ').pop();
+                            const translatedCase = t('common.case') || 'case';
+                            const capitalizedCase = translatedCase.charAt(0).toUpperCase() + translatedCase.slice(1);
+                            return `(${capitalizedCase} ${numberPart})`;
+                        });
+                    }
+
+                    let finalFlowName = translatedFlowName;
                     if (isFlow) {
-                        finalFlowName = hasDetail ? sc.set_detail : flow.flow_name;
+                        finalFlowName = hasDetail ? sc.set_detail : translatedFlowName;
                     } else if (sc.source_type === 'feature') {
                         finalFlowName = `${sc.set_detail}${matrixSuffix}`;
                     }
 
-                    const groupTitle = (sc.set_name && sc.set_name !== '—' && matrixMatch) 
-                        ? matrixMatch[1] 
-                        : flow.flow_name;
+                    const groupTitleVal = (sc.set_name && sc.set_name !== '—' && matrixMatch) 
+                        ? groupTitle 
+                        : translatedFlowName;
 
                     result.push({
                         id: sc.id || `${cycle.cycle_id}-${sc.scenario_name}-${idx}`,
@@ -210,12 +287,13 @@ const ReportMatrixView: React.FC<ReportMatrixViewProps> = ({ data }) => {
                         status: sc.result_status || 'skip',
                         steps: gherkinMatch?.steps || [],
                         gifExecutionId,
+                        tasks: resolvedTasks,
                         
                         parentGroupId: sc.set_name && sc.set_name !== '—' ? `set-${cycle.cycle_id}-${sc.set_name}` : undefined,
                         parentGroupName: sc.set_name && sc.set_name !== '—' ? sc.set_name : undefined,
                         groupId: `flow-${cycle.cycle_id}-${sc.set_name}-${flow.flow_name}`,
-                        groupName: groupTitle,
-                        sourceName: (sc.set_detail && sc.set_detail !== '—') ? sc.set_detail : flow.flow_name,
+                        groupName: groupTitleVal,
+                        sourceName: (sc.set_detail && sc.set_detail !== '—') ? sc.set_detail : translatedFlowName,
                     });
                 });
             });
@@ -223,7 +301,7 @@ const ReportMatrixView: React.FC<ReportMatrixViewProps> = ({ data }) => {
 
         return result;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [data, gherkinData]);
+    }, [data, gherkinData, t]);
 
     const handleEvidenceChange = (event: any, executionId: string) => {
         const url = event.target.value;
@@ -378,7 +456,54 @@ const ReportMatrixView: React.FC<ReportMatrixViewProps> = ({ data }) => {
                                         <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
                                             {row.sourceName}
                                         </TableCell>
-                                        <TableCell sx={{ fontSize: '0.85rem', fontWeight: row.status === 'fail' ? 600 : 400 }}>{row.scenarioName}</TableCell>
+                                        <TableCell sx={{ fontSize: '0.85rem' }}>
+                                            <Box sx={{ fontWeight: row.status === 'fail' ? 600 : 400 }}>
+                                                {row.scenarioName}
+                                            </Box>
+                                            {row.tasks && row.tasks.length > 0 && (
+                                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.75 }}>
+                                                    {row.tasks.map((task: any) => (
+                                                        <Tooltip
+                                                            key={task.id}
+                                                            title={
+                                                                <Box sx={{ p: 0.5 }}>
+                                                                    <Typography variant="caption" display="block" sx={{ fontWeight: 'bold' }}>
+                                                                        Tarea: @{task.name}
+                                                                    </Typography>
+                                                                    <Typography variant="caption" display="block">
+                                                                        Momento: {task.hook.toUpperCase()}
+                                                                    </Typography>
+                                                                    <Typography variant="caption" display="block">
+                                                                        Alcance: {task.scope.toUpperCase()}
+                                                                    </Typography>
+                                                                    {task.args && Object.keys(task.args).length > 0 && (
+                                                                        <Typography variant="caption" display="block">
+                                                                            Parámetros: {JSON.stringify(task.args)}
+                                                                        </Typography>
+                                                                    )}
+                                                                </Box>
+                                                            }
+                                                            arrow
+                                                            placement="top"
+                                                        >
+                                                            <Chip
+                                                                size="small"
+                                                                icon={<SettingsIcon sx={{ fontSize: '10px !important' }} />}
+                                                                label={`@${task.name}`}
+                                                                sx={{
+                                                                    height: 18,
+                                                                    fontSize: '0.62rem',
+                                                                    fontWeight: 600,
+                                                                    borderRadius: '4px',
+                                                                    cursor: 'help',
+                                                                    ...getTaskChipStyles(task.status, theme)
+                                                                }}
+                                                            />
+                                                        </Tooltip>
+                                                    ))}
+                                                </Box>
+                                            )}
+                                        </TableCell>
                                         <TableCell>
                                             <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
                                                 {row.tags.map((t: string) => (

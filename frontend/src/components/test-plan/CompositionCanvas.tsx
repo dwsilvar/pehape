@@ -8,9 +8,11 @@ import AccountTreeRoundedIcon from '@mui/icons-material/AccountTreeRounded';
 import DragIndicatorRoundedIcon from '@mui/icons-material/DragIndicatorRounded';
 import ViewAgendaRoundedIcon from '@mui/icons-material/ViewAgendaRounded';
 import ViewListRoundedIcon from '@mui/icons-material/ViewListRounded';
-import { BlueprintRef, BlueprintsData } from '../../types';
+import SettingsIcon from '@mui/icons-material/Settings';
+import { BlueprintRef, BlueprintsData, PlanTask } from '../../types';
 import CompositionNode from './CompositionNode';
 import FlowConnector from './FlowConnector';
+import TaskAssociationDialog from './TaskAssociationDialog';
 
 interface CompositionCanvasProps {
   category: 'plans' | 'cycles' | 'sets' | 'flows';
@@ -22,16 +24,31 @@ interface CompositionCanvasProps {
   onMoveUp: (id: string) => void;
   onMoveDown: (id: string) => void;
   blueprints?: BlueprintsData;
+  onUpdateItemTasks: (id: string, tasks: PlanTask[]) => void;
+  tasks?: PlanTask[];
+  onUpdateTasks?: (tasks: PlanTask[]) => void;
 }
 
 const DROPPABLE_ID = 'composition-canvas-drop';
 
 const CompositionCanvas: React.FC<CompositionCanvasProps> = ({
-  category, blueprintId, name, items, onNameChange, onRemoveItem, onMoveUp, onMoveDown, blueprints
+  category,
+  blueprintId,
+  name,
+  items,
+  onNameChange,
+  onRemoveItem,
+  onMoveUp,
+  onMoveDown,
+  blueprints,
+  onUpdateItemTasks,
+  tasks = [],
+  onUpdateTasks,
 }) => {
   const theme = useTheme();
 
   const [compact, setCompact] = useState<boolean>(false);
+  const [blueprintTaskDialogOpen, setBlueprintTaskDialogOpen] = useState<boolean>(false);
   const toggleCompact = () => setCompact(prev => !prev);
 
   const { setNodeRef, isOver } = useDroppable({ id: DROPPABLE_ID, data: { type: 'composition-canvas' } });
@@ -64,6 +81,16 @@ const CompositionCanvas: React.FC<CompositionCanvasProps> = ({
           <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
             {items.length} items
           </Typography>
+        )}
+        {onUpdateTasks && (
+          <Tooltip title={`Configurar tareas del ${category.slice(0, -1)}`}>
+            <IconButton size="small" onClick={() => setBlueprintTaskDialogOpen(true)} sx={{ p: 0.5, position: 'relative' }}>
+              <SettingsIcon sx={{ fontSize: 16 }} />
+              {tasks.length > 0 && (
+                <Box sx={{ position: 'absolute', top: 2, right: 2, bgcolor: 'primary.main', width: 6, height: 6, borderRadius: '50%' }} />
+              )}
+            </IconButton>
+          </Tooltip>
         )}
         <Tooltip title={compact ? 'Vista expandida' : 'Vista compacta'}>
           <IconButton size="small" onClick={toggleCompact} sx={{ p: 0.5, color: compact ? 'primary.main' : 'text.secondary' }}>
@@ -100,6 +127,7 @@ const CompositionCanvas: React.FC<CompositionCanvasProps> = ({
                   onRemove={onRemoveItem}
                   onMoveUp={onMoveUp}
                   onMoveDown={onMoveDown}
+                  onUpdateTasks={onUpdateItemTasks}
                   compact={compact}
                   isSetContext={category === 'sets'}
                   blueprints={blueprints}
@@ -119,8 +147,17 @@ const CompositionCanvas: React.FC<CompositionCanvasProps> = ({
           </SortableContext>
         )}
       </Box>
+      {onUpdateTasks && (
+        <TaskAssociationDialog
+          open={blueprintTaskDialogOpen}
+          onClose={() => setBlueprintTaskDialogOpen(false)}
+          nodeName={name || category.slice(0, -1)}
+          initialTasks={tasks}
+          onSave={onUpdateTasks}
+          nodeType={category.slice(0, -1)}
+        />
+      )}
     </Box>
   );
 };
-
 export default CompositionCanvas;

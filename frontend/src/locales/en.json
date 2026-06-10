@@ -23,6 +23,9 @@
         "view_options": "View options",
         "file_explorer": "File Explorer",
         "review_modules": "Review Modules",
+        "cases": "Cases",
+        "case": "Case",
+        "matrix": "Matrix",
         "execution_order": "Execution Order",
         "rename_success": "Renamed successfully!",
         "rename_success_with_images": "Renamed successfully!\\n\\n{{count}} OCR image(s) were migrated to the new location.",
@@ -266,6 +269,8 @@
             "hierarchy": "Plan Hierarchy",
             "noPlans": "No plans created yet. Create your first test plan.",
             "noCycles": "This plan has no cycles. Add one with the + button.",
+            "tabDesigner": "Designer",
+            "tabMonitor": "Execution Matrix",
             "canvas": {
                 "title": "Flow Designer",
                 "placeholder": "Drag scenarios here to build a test flow",

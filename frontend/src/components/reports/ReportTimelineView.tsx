@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Box, Typography, Paper, alpha, useTheme, Chip } from '@mui/material';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import CancelRoundedIcon from '@mui/icons-material/CancelRounded';
@@ -28,6 +29,7 @@ const getStatusIcon = (status: string) => {
 };
 
 const ReportTimelineView: React.FC<ReportTimelineViewProps> = ({ data }) => {
+    const { t } = useTranslation();
     const theme = useTheme();
     const [selectedError, setSelectedError] = useState<any | null>(null);
 
@@ -51,7 +53,18 @@ const ReportTimelineView: React.FC<ReportTimelineViewProps> = ({ data }) => {
                                 backgroundColor: theme.palette.divider
                             }} />
                             <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
-                                Flujo: {flow.flow_name ? flow.flow_name.replace(' — Default', '').replace(' - Default', '') : 'Sin Grupo'}
+                                Flujo: {(() => {
+                                    let displayFlowName = flow.flow_name ? flow.flow_name.replace(' — Default', '').replace(' - Default', '') : 'Sin Grupo';
+                                    if (displayFlowName) {
+                                        displayFlowName = displayFlowName.replace(/\(((?:Matriz|Caso|Case) \d+)\)/g, (match: string, p1: string) => {
+                                            const numberPart = p1.split(' ').pop();
+                                            const translatedCase = t('common.case') || 'case';
+                                            const capitalizedCase = translatedCase.charAt(0).toUpperCase() + translatedCase.slice(1);
+                                            return `(${capitalizedCase} ${numberPart})`;
+                                        });
+                                    }
+                                    return displayFlowName;
+                                })()}
                             </Typography>
 
                             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>

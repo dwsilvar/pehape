@@ -1,7 +1,7 @@
 import { FC, useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import i18n from '../i18n';
-import { Box, Typography, Button, List, ListItem, ListItemText, IconButton, Chip, Paper, CircularProgress, Snackbar, Alert } from '@mui/material';
+import { Box, Typography, Button, List, ListItem, ListItemText, IconButton, Chip, Paper, CircularProgress, Snackbar, Alert, Menu, MenuItem } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import DeleteIcon from '@mui/icons-material/Delete';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -47,6 +47,10 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
   const [selectedStepText, setSelectedStepText] = useState(''); // New state for full line text
   const [detectedTag, setDetectedTag] = useState<string | null>(null);
   const [localValidationTexts, setLocalValidationTexts] = useState<string[]>(validationTexts);
+
+  // States for Keyword Association Menu
+  const [associationAnchorEl, setAssociationAnchorEl] = useState<null | HTMLElement>(null);
+  const [selectedStepForAssociation, setSelectedStepForAssociation] = useState<{ pattern: string; location: string } | null>(null);
 
   // States for Gherkin Validation and Suggestions
   const [stepCatalog, setStepCatalog] = useState<{ type: string; pattern: string; location: string }[]>([]);
@@ -716,6 +720,44 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
     }
   };
 
+  const handleAssociateKeyword = async (targetKeyword: string) => {
+    if (!selectedStepForAssociation) return;
+    try {
+      const response = await fetch('/api/steps/associate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pattern: selectedStepForAssociation.pattern,
+          location: selectedStepForAssociation.location,
+          keyword: targetKeyword
+        })
+      });
+      if (response.ok) {
+        // Refresh catalog
+        const catRes = await fetch('/api/steps/catalog');
+        if (catRes.ok) {
+          const freshCatalog = await catRes.json();
+          setStepCatalog(freshCatalog);
+        }
+        setSnackbarSeverity('success');
+        setSnackbarMessage(`Paso asociado correctamente como ${targetKeyword.toUpperCase()}`);
+        setSnackbarOpen(true);
+      } else {
+        const errData = await response.json();
+        setSnackbarSeverity('error');
+        setSnackbarMessage(`Error al asociar: ${errData.detail || 'Fallo desconocido'}`);
+        setSnackbarOpen(true);
+      }
+    } catch (err: any) {
+      setSnackbarSeverity('error');
+      setSnackbarMessage(`Error de conexión: ${err.message}`);
+      setSnackbarOpen(true);
+    } finally {
+      setAssociationAnchorEl(null);
+      setSelectedStepForAssociation(null);
+    }
+  };
+
   const handleValidate = async () => {
     if (!selectedFile || !monacoInstance || !editorInstance) return;
 
@@ -1252,6 +1294,12 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
                         }}>
                           <ContentCopyIcon fontSize="small" />
                         </IconButton>
+                        <IconButton size="small" title="Asociar a otro keyword" onClick={(e) => {
+                          setAssociationAnchorEl(e.currentTarget);
+                          setSelectedStepForAssociation(step);
+                        }}>
+                          <LinkIcon fontSize="small" />
+                        </IconButton>
                       </ListItem>
                     );
                   })}
@@ -1260,6 +1308,19 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
           </Box>
         </Paper>
       )}
+
+      <Menu
+        anchorEl={associationAnchorEl}
+        open={Boolean(associationAnchorEl)}
+        onClose={() => {
+          setAssociationAnchorEl(null);
+          setSelectedStepForAssociation(null);
+        }}
+      >
+        <MenuItem onClick={() => handleAssociateKeyword('given')}>Asociar como GIVEN (Dado)</MenuItem>
+        <MenuItem onClick={() => handleAssociateKeyword('when')}>Asociar como WHEN (Cuando)</MenuItem>
+        <MenuItem onClick={() => handleAssociateKeyword('then')}>Asociar como THEN (Entonces)</MenuItem>
+      </Menu>
 
       <ImageUploadDialog
         open={uploadDialogOpen}

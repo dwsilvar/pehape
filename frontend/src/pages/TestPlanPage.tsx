@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Box, useTheme, Tabs, Tab, Tooltip, IconButton, CircularProgress } from '@mui/material';
 import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
@@ -9,7 +10,7 @@ import {
 import { arrayMove } from '@dnd-kit/sortable';
 import { v4 as uuidv4 } from 'uuid';
 
-import { FeatureWithScenarios, BlueprintsData, BlueprintRef, PlanBlueprint, CycleBlueprint, SetBlueprint, FlowBlueprint } from '../types';
+import { FeatureWithScenarios, BlueprintsData, BlueprintRef, PlanBlueprint, CycleBlueprint, SetBlueprint, FlowBlueprint, PlanTask } from '../types';
 import PlanHeader from '../components/test-plan/PlanHeader';
 import BlueprintCatalogPanel from '../components/test-plan/BlueprintCatalogPanel';
 import CompositionCanvas from '../components/test-plan/CompositionCanvas';
@@ -22,6 +23,7 @@ const RIGHT_WIDTH_DEFAULT = 320;
 const MIN_PANEL_WIDTH = 180;
 
 const TestPlanPage: React.FC = () => {
+  const { t } = useTranslation();
   // ── State ─────────────────────────────────────────────────────────────
   const [blueprints, setBlueprints] = useState<BlueprintsData>({ plans: [], cycles: [], sets: [], flows: [] });
   const [activeCategory, setActiveCategory] = useState<'plans' | 'cycles' | 'sets' | 'flows'>('flows');
@@ -228,6 +230,55 @@ const TestPlanPage: React.FC = () => {
     });
   };
 
+  const handleUpdateItemTasks = useCallback((itemId: string, tasks: PlanTask[]) => {
+    updateActiveBlueprint(b => ({
+      ...b,
+      items: b.items.map((i: BlueprintRef) => i.id === itemId ? { ...i, tasks } : i)
+    }));
+  }, [updateActiveBlueprint]);
+
+  const handleUpdateBlueprintTasks = useCallback((tasks: PlanTask[]) => {
+    updateActiveBlueprint(b => ({ ...b, tasks }));
+  }, [updateActiveBlueprint]);
+
+  const handleUpdateTasksAtLevel = useCallback((
+    level: 'scenario' | 'flow' | 'set' | 'cycle',
+    targetId: string,
+    tasks: PlanTask[]
+  ) => {
+    setBlueprints(prev => {
+      const next = { ...prev };
+      
+      if (level === 'cycle') {
+        next.cycles = next.cycles.map(c => c.id === targetId ? { ...c, tasks } : c);
+      } else if (level === 'set') {
+        next.sets = next.sets.map(s => s.id === targetId ? { ...s, tasks } : s);
+      } else if (level === 'flow') {
+        next.flows = next.flows.map(f => f.id === targetId ? { ...f, tasks } : f);
+      } else if (level === 'scenario') {
+        next.flows = next.flows.map(f => ({
+          ...f,
+          items: f.items.map(i => i.id === targetId ? { ...i, tasks } : i)
+        }));
+        next.sets = next.sets.map(s => ({
+          ...s,
+          items: s.items.map(i => i.id === targetId ? { ...i, tasks } : i)
+        }));
+        next.cycles = next.cycles.map(c => ({
+          ...c,
+          items: c.items.map(i => i.id === targetId ? { ...i, tasks } : i)
+        }));
+        next.plans = next.plans.map(p => ({
+          ...p,
+          items: p.items.map(i => i.id === targetId ? { ...i, tasks } : i)
+        }));
+      }
+      
+      return next as BlueprintsData;
+    });
+    markDirty();
+  }, [markDirty]);
+
   // ── DnD ───────────────────────────────────────────────────────────────────────
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -375,8 +426,8 @@ const TestPlanPage: React.FC = () => {
           <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
             <Box sx={{ borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper', px: 2 }}>
               <Tabs value={centerTab} onChange={(e, v) => setCenterTab(v)} sx={{ minHeight: 40 }} TabIndicatorProps={{ sx: { height: 3, borderTopLeftRadius: 3, borderTopRightRadius: 3 } }}>
-                <Tab label="Diseñador" value="canvas" sx={{ minHeight: 40, py: 0, fontSize: '0.75rem', fontWeight: 600, textTransform: 'none' }} />
-                <Tab label="Monitor" value="monitor" sx={{ minHeight: 40, py: 0, fontSize: '0.75rem', fontWeight: 600, textTransform: 'none' }} />
+                <Tab label={t('pages.testPlan.tabDesigner', 'Diseñador')} value="canvas" sx={{ minHeight: 40, py: 0, fontSize: '0.75rem', fontWeight: 600, textTransform: 'none' }} />
+                <Tab label={t('pages.testPlan.tabMonitor', 'Matriz de Ejecución')} value="monitor" sx={{ minHeight: 40, py: 0, fontSize: '0.75rem', fontWeight: 600, textTransform: 'none' }} />
               </Tabs>
             </Box>
 
@@ -392,10 +443,21 @@ const TestPlanPage: React.FC = () => {
                   onMoveUp={handleMoveUp}
                   onMoveDown={handleMoveDown}
                   blueprints={blueprints}
+                  onUpdateItemTasks={handleUpdateItemTasks}
+                  tasks={activeBlueprint?.tasks || []}
+                  onUpdateTasks={handleUpdateBlueprintTasks}
                 />
               </Box>
               <Box sx={{ display: centerTab === 'monitor' ? 'flex' : 'none', flex: 1, flexDirection: 'column', overflow: 'hidden' }}>
-                <ExecutionMonitor key={targetPlanId ?? 'no-plan'} blueprints={blueprints} selectedPlanId={targetPlanId || null} taskId={currentTaskId} isExecuting={isExecuting} isGeneratingReport={isGeneratingReport} />
+                <ExecutionMonitor
+                  key={targetPlanId ?? 'no-plan'}
+                  blueprints={blueprints}
+                  selectedPlanId={targetPlanId || null}
+                  taskId={currentTaskId}
+                  isExecuting={isExecuting}
+                  isGeneratingReport={isGeneratingReport}
+                  onUpdateTasksAtLevel={handleUpdateTasksAtLevel}
+                />
               </Box>
             </Box>
           </Box>

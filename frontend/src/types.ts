@@ -119,6 +119,15 @@ export interface FeatureWithScenarios {
 
 // ── Blueprint Designer Types ──────────────────────────────────────────────────
 
+export interface PlanTask {
+  id: string;        // Unique configuration UUID
+  name: string;      // Task name (e.g. "limpiar_log")
+  hook: 'before' | 'after';
+  scope: 'scenario' | 'step';
+  args: Record<string, any>;
+  targetScenario?: string;
+}
+
 export interface BlueprintRef {
   id: string; // instance id within the canvas
   refId: string; // the ID of the referenced blueprint or feature path
@@ -129,30 +138,35 @@ export interface BlueprintRef {
   scenarioName?: string;
   tags?: string[];
   steps?: string[];
+  tasks?: PlanTask[]; // Tasks associated directly to this instance
 }
 
 export interface FlowBlueprint {
   id: string;
   name: string;
   items: BlueprintRef[]; // Should be only 'scenario'
+  tasks?: PlanTask[];
 }
 
 export interface SetBlueprint {
   id: string;
   name: string;
   items: BlueprintRef[]; // Can be 'flow' or 'feature'
+  tasks?: PlanTask[];
 }
 
 export interface CycleBlueprint {
   id: string;
   name: string;
   items: BlueprintRef[]; // Can be 'flow' or 'set'
+  tasks?: PlanTask[];
 }
 
 export interface PlanBlueprint {
   id: string;
   name: string;
   items: BlueprintRef[]; // Can be 'cycle'
+  tasks?: PlanTask[];
 }
 
 export interface BlueprintsData {

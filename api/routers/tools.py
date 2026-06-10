@@ -102,11 +102,28 @@ def list_tasks():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+from pydantic import BaseModel
+
+class AssociateStepRequest(BaseModel):
+    pattern:  str
+    location: str
+    keyword:  str
+
+
 @router.get("/api/steps/catalog", tags=["Tasks"])
 def get_steps_catalog():
     """Obtiene todos los pasos (Given, When, Then) registrados en el proyecto."""
     if not registry:
         raise HTTPException(status_code=500, detail="behave.step_registry not available")
+
+    # Clear behave registry and force re-importing steps modules to load fresh changes
+    try:
+        registry.clear()
+        keys_to_del = [k for k in sys.modules if k.startswith("steps.")]
+        for k in keys_to_del:
+            del sys.modules[k]
+    except Exception:
+        pass
 
     steps_dir = FEATURES_DIR / "steps"
     if not steps_dir.exists():
@@ -145,6 +162,105 @@ def get_steps_catalog():
             })
 
     return steps_data
+
+
+@router.post("/api/steps/associate", tags=["Tasks"])
+def associate_step_keyword(payload: AssociateStepRequest):
+    """
+    Asocia un paso existente a un nuevo keyword en el archivo de pasos correspondiente.
+    """
+    if not registry:
+        raise HTTPException(status_code=500, detail="behave.step_registry not available")
+
+    # Parsear location (esperado: relative_path:line_number)
+    parts = payload.location.split(":")
+    if len(parts) != 2:
+        raise HTTPException(status_code=400, detail="Formato de ubicación inválido. Se esperaba 'archivo:linea'")
+
+    rel_path = parts[0]
+    try:
+        line_number = int(parts[1])
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Número de línea inválido")
+
+    file_path = FEATURES_DIR / rel_path
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail=f"Archivo no encontrado: {rel_path}")
+
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al leer el archivo: {str(e)}")
+
+    def_idx = line_number - 1
+    if def_idx < 0 or def_idx >= len(lines):
+        raise HTTPException(status_code=400, detail=f"La línea {line_number} está fuera del rango del archivo")
+
+    # Localizar la declaración de la función 'def '
+    target_idx = def_idx
+    while target_idx < len(lines) and not lines[target_idx].strip().startswith("def "):
+        target_idx += 1
+
+    if target_idx >= len(lines):
+        # Retroceder para buscar
+        target_idx = def_idx
+        while target_idx >= 0 and not lines[target_idx].strip().startswith("def "):
+            target_idx -= 1
+        if target_idx < 0:
+            raise HTTPException(status_code=400, detail="No se pudo encontrar la definición de función ('def') asociada")
+
+    # Obtener sangrado
+    def_line = lines[target_idx]
+    indentation = def_line[:len(def_line) - len(def_line.lstrip())]
+
+    # Encontrar el primer decorador contiguo por encima para insertar
+    insert_idx = target_idx
+    while insert_idx > 0:
+        prev_line = lines[insert_idx - 1].strip()
+        if prev_line.startswith("@"):
+            insert_idx -= 1
+        elif prev_line == "" or prev_line.startswith("#"):
+            insert_idx -= 1
+        else:
+            break
+
+    # Dar formato al nuevo decorador
+    keyword = payload.keyword.lower().strip()
+    if keyword not in ("given", "when", "then", "step"):
+        raise HTTPException(status_code=400, detail=f"Keyword '{keyword}' inválido")
+
+    pattern = payload.pattern
+    if "'" in pattern:
+        new_decorator = f"{indentation}@{keyword}(\"{pattern}\")\n"
+    else:
+        new_decorator = f"{indentation}@{keyword}('{pattern}')\n"
+
+    # Evitar decorador duplicado
+    already_exists = False
+    for i in range(insert_idx, target_idx):
+        if new_decorator.strip() == lines[i].strip():
+            already_exists = True
+            break
+
+    if not already_exists:
+        try:
+            lines.insert(insert_idx, new_decorator)
+            with open(file_path, "w", encoding="utf-8", newline="") as f:
+                f.writelines(lines)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error al escribir en el archivo: {str(e)}")
+
+    # Forzar recarga del catálogo para registrar los cambios
+    try:
+        registry.clear()
+        keys_to_del = [k for k in sys.modules if k.startswith("steps.")]
+        for k in keys_to_del:
+            del sys.modules[k]
+    except Exception:
+        pass
+
+    return {"status": "ok", "message": f"Keyword '{keyword}' asociado correctamente a '{pattern}'"}
 
 
 @router.get("/api/validate-files", tags=["Maintenance"])

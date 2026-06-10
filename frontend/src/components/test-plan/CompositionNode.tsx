@@ -10,9 +10,11 @@ import KeyboardArrowUpRoundedIcon from '@mui/icons-material/KeyboardArrowUpRound
 import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded';
 import AccountTreeRoundedIcon from '@mui/icons-material/AccountTreeRounded';
 import CallSplitRoundedIcon from '@mui/icons-material/CallSplitRounded';
-import { BlueprintRef, BlueprintsData } from '../../types';
+import SettingsIcon from '@mui/icons-material/Settings';
+import { BlueprintRef, BlueprintsData, PlanTask } from '../../types';
 import { CycleIcon, FlowIcon, ScenarioIcon, FeatureIcon } from '../PehapeIcons';
 import LibraryBooksRoundedIcon from '@mui/icons-material/LibraryBooksRounded';
+import TaskAssociationDialog from './TaskAssociationDialog';
 
 const TAG_COLORS = [
   '#6366f1', '#8b5cf6', '#ec4899', '#f43f5e',
@@ -32,13 +34,14 @@ interface CompositionNodeProps {
   onRemove: (id: string) => void;
   onMoveUp: (id: string) => void;
   onMoveDown: (id: string) => void;
+  onUpdateTasks: (id: string, tasks: PlanTask[]) => void;
   compact: boolean;
   isSetContext?: boolean;
   blueprints?: BlueprintsData;
 }
 
 const CompositionNode: React.FC<CompositionNodeProps> = ({
-  item, index, total, onRemove, onMoveUp, onMoveDown, compact, isSetContext, blueprints
+  item, index, total, onRemove, onMoveUp, onMoveDown, onUpdateTasks, compact, isSetContext, blueprints
 }) => {
   const theme = useTheme();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -47,6 +50,7 @@ const CompositionNode: React.FC<CompositionNodeProps> = ({
   });
 
   const [showBranches, setShowBranches] = useState(false);
+  const [taskDialogOpen, setTaskDialogOpen] = useState(false);
 
   const style = {
     transform: CSS.Translate.toString(transform),
@@ -121,6 +125,13 @@ const CompositionNode: React.FC<CompositionNodeProps> = ({
             <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary', fontSize: compact ? '0.75rem' : '0.8rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {item.type === 'scenario' && item.scenarioName ? item.scenarioName : item.name}
             </Typography>
+            {item.tasks && item.tasks.length > 0 && (
+              <Tooltip title={`${item.tasks.length} tarea(s) configurada(s)`}>
+                <Typography variant="caption" sx={{ fontSize: '0.62rem', bgcolor: 'primary.main', color: 'primary.contrastText', px: 0.5, py: 0.1, borderRadius: 0.5, fontWeight: 'bold' }}>
+                  {item.tasks.length}T
+                </Typography>
+              </Tooltip>
+            )}
             <Typography variant="caption" sx={{ color: entityColor, fontWeight: 700, fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 0.5, bgcolor: alpha(entityColor, 0.1), border: `1px solid ${alpha(entityColor, 0.2)}`, px: 0.75, py: 0.25, borderRadius: 1 }}>
               {item.type}
             </Typography>
@@ -171,9 +182,14 @@ const CompositionNode: React.FC<CompositionNodeProps> = ({
             <IconButton size="small" disabled={index === 0} onClick={() => onMoveUp(item.id)} sx={{ p: 0.25 }}><KeyboardArrowUpRoundedIcon sx={{ fontSize: 14 }} /></IconButton>
             <IconButton size="small" disabled={index === total - 1} onClick={() => onMoveDown(item.id)} sx={{ p: 0.25 }}><KeyboardArrowDownRoundedIcon sx={{ fontSize: 14 }} /></IconButton>
           </Box>
-          <Tooltip title="Remover">
-            <IconButton size="small" color="error" onClick={() => onRemove(item.id)} sx={{ p: compact ? 0.25 : 0.5 }}><DeleteOutlineRoundedIcon sx={{ fontSize: compact ? 14 : 16 }} /></IconButton>
-          </Tooltip>
+          <Box sx={{ display: 'flex', gap: 0.25 }}>
+            <Tooltip title="Configurar Tareas">
+              <IconButton size="small" onClick={() => setTaskDialogOpen(true)} sx={{ p: compact ? 0.25 : 0.5 }}><SettingsIcon sx={{ fontSize: compact ? 14 : 16 }} /></IconButton>
+            </Tooltip>
+            <Tooltip title="Remover">
+              <IconButton size="small" color="error" onClick={() => onRemove(item.id)} sx={{ p: compact ? 0.25 : 0.5 }}><DeleteOutlineRoundedIcon sx={{ fontSize: compact ? 14 : 16 }} /></IconButton>
+            </Tooltip>
+          </Box>
         </Box>
       </Box>
 
@@ -195,8 +211,17 @@ const CompositionNode: React.FC<CompositionNodeProps> = ({
           )}
         </Box>
       </Collapse>
+
+      <TaskAssociationDialog
+        open={taskDialogOpen}
+        onClose={() => setTaskDialogOpen(false)}
+        nodeName={item.type === 'scenario' && item.scenarioName ? item.scenarioName : item.name}
+        initialTasks={item.tasks || []}
+        onSave={(updatedTasks) => onUpdateTasks(item.id, updatedTasks)}
+        nodeType={item.type}
+        scenarios={item.steps}
+      />
     </Box>
   );
 };
-
 export default CompositionNode;

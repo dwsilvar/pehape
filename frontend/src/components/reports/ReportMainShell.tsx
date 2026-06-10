@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Box, Typography, ToggleButton, ToggleButtonGroup, CircularProgress, alpha, useTheme, Button, Menu, MenuItem } from '@mui/material';
 import DashboardRoundedIcon from '@mui/icons-material/DashboardRounded';
 import TimelineRoundedIcon from '@mui/icons-material/TimelineRounded';
@@ -15,6 +16,7 @@ import ReportExecutiveView from './ReportExecutiveView';
 import ReportMatrixView from './ReportMatrixView';
 
 const ReportMainShell: React.FC = () => {
+    const { t } = useTranslation();
     const theme = useTheme();
     const [view, setView] = useState<'V_DASH' | 'V_TIME' | 'V_MATR'>('V_TIME');
     const [data, setData] = useState<any>(null);
@@ -219,7 +221,7 @@ const ReportMainShell: React.FC = () => {
                             <DashboardRoundedIcon sx={{ mr: 1, fontSize: 18 }} /> Ejecutivo
                         </ToggleButton>
                         <ToggleButton value="V_MATR" sx={{ px: 2, textTransform: 'none', fontWeight: 600 }}>
-                            <TableViewRoundedIcon sx={{ mr: 1, fontSize: 18 }} /> Matriz
+                            <TableViewRoundedIcon sx={{ mr: 1, fontSize: 18 }} /> {t('common.matrix', 'Matrix')}
                         </ToggleButton>
                     </ToggleButtonGroup>
                 </Box>

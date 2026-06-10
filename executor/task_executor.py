@@ -29,10 +29,13 @@ class TaskExecutor:
 
         # 2. Execute tasks from UI Configuration (Stored in context.ui_tasks)
         ui_tasks = getattr(context, 'ui_tasks', [])
+        current_scenario_id = context.config.userdata.get("orch_scenario_id")
+
         for index, task_config in enumerate(ui_tasks):
-            # task_config: { "name": "...", "scope": "...", "hook": "...", "scenario_name": "..." }
+            # task_config: { "name": "...", "scope": "...", "hook": "...", "scenario_name": "...", "scenario_id": "..." }
             config_hook = task_config.get('hook', '').lower()
             config_scope = task_config.get('scope', '').lower()
+            task_scenario_id = task_config.get('scenario_id')
             
             should_run_ui = False
             
@@ -51,14 +54,19 @@ class TaskExecutor:
             if not should_run_ui:
                 continue
                 
-            # Check Scope Match (Existing logic filters by name/step presence)
-            if config_scope == 'feature':
-                pass 
-            elif config_scope == 'scenario':
-                scenario_name = task_config.get('scenario_name')
-                if scenario_name and scenario_name != context.scenario.name:
+            # Check Scope Match / Instance Match
+            if task_scenario_id:
+                # Isolate to this specific scenario instance UUID
+                if task_scenario_id != current_scenario_id:
                     continue
-            elif config_scope == 'step':
+            else:
+                # Fallback to name-based matching (legacy)
+                if config_scope == 'scenario':
+                    scenario_name = task_config.get('scenario_name')
+                    if scenario_name and scenario_name != context.scenario.name:
+                        continue
+            
+            if config_scope == 'step':
                 if step is None: 
                     continue
             
@@ -75,6 +83,8 @@ class TaskExecutor:
         if feature_id:
             feature_id = feature_id.replace('\\', '/')
 
+        current_scenario_id = context.config.userdata.get("orch_scenario_id")
+
         task_class = get_task(task_name)
         if task_class:
             result = None
@@ -83,12 +93,23 @@ class TaskExecutor:
                 if task_instance.should_run(hook_type, step):
                     logger.info(f"TaskExecutor: Executing task '{task_name}' (hook: {hook_type})")
                     
+                    # Extract args and config id from task_config if available (from UI config)
+                    args = {}
+                    task_id = None
+                    if ui_index is not None:
+                        ui_tasks = getattr(context, 'ui_tasks', [])
+                        if ui_index < len(ui_tasks):
+                            args = ui_tasks[ui_index].get('args', {})
+                            task_id = ui_tasks[ui_index].get('id')
+
                     # Report "running" status to UI
                     if ui_index is not None:
                         status_report = {
                             "type": "task_status",
                             "feature_id": feature_id,
+                            "scenario_id": current_scenario_id,
                             "task": {
+                                "id": task_id,
                                 "name": task_name,
                                 "status": "running",
                                 "hook": hook_type,
@@ -97,16 +118,11 @@ class TaskExecutor:
                         }
                         logger.info(f"[TASK_EXECUTOR] Emitting task_status (running): {status_report}")
                         print(json.dumps(status_report), flush=True)
-
-                    # Extract args from task_config if available (from UI config)
-                    args = {}
-                    if ui_index is not None:
-                        ui_tasks = getattr(context, 'ui_tasks', [])
-                        if ui_index < len(ui_tasks):
-                            args = ui_tasks[ui_index].get('args', {})
                     
                     task_instance.execute(context, step, **args)
                     result = {
+                        "id": task_id,
+                        "scenario_id": current_scenario_id,
                         "name": task_name,
                         "status": "passed",
                         "hook": hook_type,
@@ -128,7 +144,16 @@ class TaskExecutor:
                 except Exception as allure_e:
                     logger.error(f"TaskExecutor: Failed to attach error to Allure: {allure_e}")
 
+                # Extract config id again in case exception happened before extraction
+                task_id = None
+                if ui_index is not None:
+                    ui_tasks = getattr(context, 'ui_tasks', [])
+                    if ui_index < len(ui_tasks):
+                        task_id = ui_tasks[ui_index].get('id')
+
                 result = {
+                    "id": task_id,
+                    "scenario_id": current_scenario_id,
                     "name": task_name,
                     "status": "failed",
                     "hook": hook_type,
@@ -142,6 +167,7 @@ class TaskExecutor:
                 status_report = {
                     "type": "task_status",
                     "feature_id": feature_id,
+                    "scenario_id": current_scenario_id,
                     "task": result
                 }
                 logger.info(f"[TASK_EXECUTOR] Emitting task_status (final): {status_report}")

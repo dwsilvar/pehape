@@ -319,32 +319,39 @@ def _build_behave_command(
 def _run_scenario(
     cmd: list[str],
     scenario_name: str,
-) -> int:
+) -> tuple[int, str]:
     """
-    Execute a single Behave scenario using subprocess.run().
+    Execute a single Behave scenario using subprocess.Popen().
     Streams stdout/stderr to console in real-time.
-    Returns the exit code (0 = pass, non-zero = fail).
+    Returns the exit code (0 = pass, non-zero = fail) and logs.
     """
     logger.debug(f"CMD: {' '.join(cmd)}")
+    logs = []
     try:
-        proc = subprocess.run(
+        proc = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,   # Merge stderr into stdout for unified streaming
             text=True,
-            timeout=600,                # 10-minute timeout per scenario
+            bufsize=1,
+            encoding="utf-8",
         )
-        logs = []
-        # Stream captured output line-by-line to console
-        if proc.stdout:
-            for line in proc.stdout.splitlines():
-                print(f"    │ {line}")
-                logs.append(line)
-        return proc.returncode, "\n".join(logs)
-
-    except subprocess.TimeoutExpired:
-        logger.error(f"  TIMEOUT: scenario '{scenario_name}' exceeded 600s. Treating as FAIL.")
-        return 1, "TIMEOUT: Execution exceeded 600 seconds."
+        
+        for line in iter(proc.stdout.readline, ""):
+            print(f"    │ {line.rstrip()}", flush=True)
+            logs.append(line)
+            
+        proc.stdout.close()
+        
+        try:
+            exit_code = proc.wait(timeout=600)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+            logger.error(f"  TIMEOUT: scenario '{scenario_name}' exceeded 600s. Treating as FAIL.")
+            return 1, "TIMEOUT: Execution exceeded 600 seconds."
+            
+        return exit_code, "".join(logs)
     except FileNotFoundError as exc:
         logger.error(f"  Cannot find Python/Behave executable: {exc}")
         return 1, f"Executable not found: {exc}"
@@ -546,8 +553,23 @@ class Orchestrator:
             exit_code=-1,
         )
 
+        # Write scenario-specific tasks (if any) to a temp JSON file
+        tasks = scenario.get("tasks", [])
+        temp_tasks_path = None
+        if tasks:
+            import tempfile
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False, encoding='utf-8') as tf:
+                json.dump(tasks, tf, ensure_ascii=False)
+                temp_tasks_path = tf.name
+            userdata["ui_tasks_file"] = temp_tasks_path
+
         # Disabled node
         if not scenario_enabled:
+            if temp_tasks_path and os.path.exists(temp_tasks_path):
+                try:
+                    os.remove(temp_tasks_path)
+                except Exception:
+                    pass
             logger.warning(f"      [SKIP] Scenario '{scenario_name}' is disabled.")
             print(json.dumps({"type": "scenario_status", "status": "skipped", "scenario_id": scenario_id, "scenario_name": scenario_name}), flush=True)
             scenario["result_status"] = "skip"
@@ -556,6 +578,11 @@ class Orchestrator:
 
         # Fail-Fast: skip remaining after a flow failure
         if flow_failed:
+            if temp_tasks_path and os.path.exists(temp_tasks_path):
+                try:
+                    os.remove(temp_tasks_path)
+                except Exception:
+                    pass
             logger.warning(
                 f"      [SKIP] Scenario '{scenario_name}' — skipped due to Flow fail-fast."
             )
@@ -586,6 +613,13 @@ class Orchestrator:
         start_time = time.time()
         exit_code, logs = _run_scenario(cmd, scenario_name)
         duration_ms = int((time.time() - start_time) * 1000)
+        
+        # Cleanup temporary file
+        if temp_tasks_path and os.path.exists(temp_tasks_path):
+            try:
+                os.remove(temp_tasks_path)
+            except Exception as e:
+                logger.warning(f"Could not remove temporary tasks file: {e}")
         
         status = "pass" if exit_code == 0 else "fail"
         symbol = PASS_SYM if exit_code == 0 else FAIL_SYM

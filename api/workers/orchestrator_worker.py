@@ -173,6 +173,18 @@ def _convert_plan_to_orchestrator_format(plan: dict, blueprints: dict) -> dict:
     Includes Cartesian Product matrix expansion for Test Sets containing Features.
     """
 
+    def merge_and_stamp_tasks(scenario_id: str, scenario_name: str, p_tasks: list | None, c_tasks: list | None, f_tasks: list | None, s_tasks: list | None) -> list:
+        merged = []
+        for tasks_list in (p_tasks, c_tasks, f_tasks, s_tasks):
+            if tasks_list and isinstance(tasks_list, list):
+                for t in tasks_list:
+                    if isinstance(t, dict):
+                        target_s = t.get("targetScenario")
+                        if target_s and target_s != "all" and target_s != scenario_name:
+                            continue
+                        merged.append({**t, "scenario_id": scenario_id})
+        return merged
+
     def expand_set(set_bp: dict) -> list:
         choices_per_item = []
         for ref in set_bp.get("items", []):
@@ -183,7 +195,7 @@ def _convert_plan_to_orchestrator_format(plan: dict, blueprints: dict) -> dict:
                 )
                 if flow_bp:
                     enhanced_items = [
-                        {**i, "source_name": flow_bp.get("name"), "source_type": "flow"}
+                        {**i, "source_name": flow_bp.get("name"), "source_type": "flow", "flow_tasks": flow_bp.get("tasks", [])}
                         for i in flow_bp.get("items", [])
                     ]
                     choices_per_item.append([enhanced_items])
@@ -203,6 +215,7 @@ def _convert_plan_to_orchestrator_format(plan: dict, blueprints: dict) -> dict:
                         "source_type":  "feature",
                         "tags":         [],
                         "enabled":      True,
+                        "feature_tasks": ref.get("tasks", []),
                     }])
                 if scenarios:
                     choices_per_item.append(scenarios)
@@ -215,26 +228,40 @@ def _convert_plan_to_orchestrator_format(plan: dict, blueprints: dict) -> dict:
             flattened: list = []
             for block in combo:
                 flattened.extend(block)
+            
+            scenarios_list = []
+            for s_idx, s in enumerate(flattened):
+                scenario_instance_id = f"{s.get('id', str(uuid.uuid4()))}-{i}-{s_idx}"
+                p_tasks = plan.get("tasks", [])
+                c_tasks = cycle_bp.get("tasks", [])
+                set_tasks = set_bp.get("tasks", [])
+                
+                f_tasks = set_tasks
+                s_tasks = []
+                if s.get("source_type") == "flow":
+                    f_tasks = f_tasks + s.get("flow_tasks", [])
+                    s_tasks = s.get("tasks", [])
+                else:
+                    f_tasks = f_tasks + s.get("feature_tasks", [])
+
+                scenarios_list.append({
+                    "id":            scenario_instance_id,
+                    "feature_path":  s.get("featurePath", ""),
+                    "scenario_name": s.get("scenarioName", ""),
+                    "tags":          s.get("tags", []),
+                    "enabled":       s.get("enabled", True),
+                    "set_name":      set_bp.get("name", "—"),
+                    "set_detail":    s.get("source_name", "—"),
+                    "source_type":   s.get("source_type", "flow"),
+                    "userdata":      s.get("userdata", {}),
+                    "tasks":         merge_and_stamp_tasks(scenario_instance_id, s.get("scenarioName", ""), p_tasks, c_tasks, f_tasks, s_tasks),
+                })
+
             generated_flows.append({
                 "flow_id":   f"{set_bp.get('id')}-exp-{i}",
-                "flow_name": f"{set_bp.get('name')} (Matriz {i + 1})",
+                "flow_name": f"{set_bp.get('name')} (Caso {i + 1})",
                 "enabled":   True,
-                "scenarios": [
-                    {
-                        # Build the same compound ID the frontend uses:
-                        # ExecutionMonitor: `${s.id}-${idx}-${sIdx}`
-                        "id":            f"{s.get('id', str(uuid.uuid4()))}-{i}-{s_idx}",
-                        "feature_path":  s.get("featurePath", ""),
-                        "scenario_name": s.get("scenarioName", ""),
-                        "tags":          s.get("tags", []),
-                        "enabled":       s.get("enabled", True),
-                        "set_name":      set_bp.get("name", "—"),
-                        "set_detail":    s.get("source_name", "—"),
-                        "source_type":   s.get("source_type", "flow"),
-                        "userdata":      s.get("userdata", {}),
-                    }
-                    for s_idx, s in enumerate(flattened)
-                ],
+                "scenarios": scenarios_list,
             })
         return generated_flows
 
@@ -257,24 +284,32 @@ def _convert_plan_to_orchestrator_format(plan: dict, blueprints: dict) -> dict:
                     None,
                 )
                 if flow_bp:
+                    scenarios_list = []
+                    for s in flow_bp.get("items", []):
+                        scenario_instance_id = s.get("id", str(uuid.uuid4()))
+                        p_tasks = plan.get("tasks", [])
+                        c_tasks = cycle_bp.get("tasks", [])
+                        f_tasks = flow_bp.get("tasks", [])
+                        s_tasks = s.get("tasks", [])
+
+                        scenarios_list.append({
+                            "id":            scenario_instance_id,
+                            "feature_path":  s.get("featurePath", ""),
+                            "scenario_name": s.get("scenarioName", ""),
+                            "tags":          s.get("tags", []),
+                            "enabled":       s.get("enabled", True),
+                            "set_name":      "—",
+                            "set_detail":    "—",
+                            "source_type":   "flow",
+                            "userdata":      s.get("userdata", {}),
+                            "tasks":         merge_and_stamp_tasks(scenario_instance_id, s.get("scenarioName", ""), p_tasks, c_tasks, f_tasks, s_tasks),
+                        })
+
                     test_flows.append({
                         "flow_id":   flow_bp.get("id"),
                         "flow_name": flow_bp.get("name"),
                         "enabled":   True,
-                        "scenarios": [
-                            {
-                                "id":            s.get("id", str(uuid.uuid4())),
-                                "feature_path":  s.get("featurePath", ""),
-                                "scenario_name": s.get("scenarioName", ""),
-                                "tags":          s.get("tags", []),
-                                "enabled":       s.get("enabled", True),
-                                "set_name":      "—",
-                                "set_detail":    "—",
-                                "source_type":   "flow",
-                                "userdata":      s.get("userdata", {}),
-                            }
-                            for s in flow_bp.get("items", [])
-                        ],
+                        "scenarios": scenarios_list,
                     })
             elif ref.get("type") == "set":
                 set_bp = next(
