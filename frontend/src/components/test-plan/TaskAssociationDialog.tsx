@@ -3,7 +3,7 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions, Button, Select, MenuItem,
   TextField, FormControl, InputLabel, List, ListItem, ListItemText, IconButton,
   Box, Typography, Divider, Paper, Stack, Grid, Tooltip, FormHelperText, Alert,
-  useTheme, alpha
+  useTheme, alpha, Radio, RadioGroup, FormControlLabel
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
@@ -31,9 +31,10 @@ interface TaskAssociationDialogProps {
   onClose: () => void;
   nodeName: string;
   initialTasks: PlanTask[];
-  onSave: (updatedTasks: PlanTask[]) => void;
+  onSave: (updatedTasks: PlanTask[], applyToAll?: boolean) => void;
   nodeType?: string;
   scenarios?: string[];
+  initialScope?: 'instance' | 'all';
 }
 
 export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
@@ -43,7 +44,8 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
   initialTasks,
   onSave,
   nodeType,
-  scenarios = []
+  scenarios = [],
+  initialScope
 }) => {
   const theme = useTheme();
   const [availableTasks, setAvailableTasks] = useState<TaskDef[]>([]);
@@ -56,6 +58,7 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
   const [currentArgs, setCurrentArgs] = useState<Record<string, any>>({});
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [currentTargetScenario, setCurrentTargetScenario] = useState<string>('all');
+  const [applyScope, setApplyScope] = useState<'instance' | 'all'>('instance');
 
   // Fetch available tasks on mount
   useEffect(() => {
@@ -69,8 +72,9 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
       
       setAssociatedTasks(initialTasks ? [...initialTasks] : []);
       resetForm();
+      setApplyScope(initialScope || 'instance');
     }
-  }, [open, initialTasks]);
+  }, [open, initialTasks, initialScope]);
 
   const resetForm = () => {
     setSelectedTaskName('');
@@ -146,7 +150,7 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
   };
 
   const handleSaveClick = () => {
-    onSave(associatedTasks);
+    onSave(associatedTasks, applyScope === 'all');
     onClose();
   };
 
@@ -483,42 +487,80 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
           px: 3,
           py: 2.5,
           borderTop: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
-          justifyContent: 'flex-end',
+          display: 'flex',
+          justifyContent: (nodeType === 'scenario' || nodeType === 'feature') ? 'space-between' : 'flex-end',
+          alignItems: 'center',
           gap: 1.5,
           bgcolor: alpha(theme.palette.background.default, 0.4)
         }}
       >
-        <Button
-          onClick={onClose}
-          variant="outlined"
-          sx={{
-            textTransform: 'none',
-            fontWeight: 600,
-            color: 'text.secondary',
-            borderColor: alpha(theme.palette.divider, 0.8),
-            borderRadius: '8px',
-            '&:hover': { backgroundColor: alpha(theme.palette.action.hover, 0.8), borderColor: 'text.secondary' },
-          }}
-        >
-          Cancelar
-        </Button>
-        <Button
-          onClick={handleSaveClick}
-          variant="contained"
-          sx={{
-            textTransform: 'none',
-            fontWeight: 600,
-            borderRadius: '8px',
-            backgroundColor: theme.palette.primary.main,
-            color: '#fff',
-            px: 3,
-            boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.3)}`,
-            '&:hover': { backgroundColor: alpha(theme.palette.primary.main, 0.85) },
-          }}
-          startIcon={<PlayArrowIcon />}
-        >
-          Guardar Configuración
-        </Button>
+        {(nodeType === 'scenario' || nodeType === 'feature') && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.75rem', mr: 1 }}>
+              Asociar tareas a:
+            </Typography>
+            <RadioGroup
+              row
+              value={applyScope}
+              onChange={(e) => setApplyScope(e.target.value as 'instance' | 'all')}
+              sx={{ gap: 1 }}
+            >
+              <FormControlLabel
+                value="instance"
+                control={<Radio size="small" sx={{ p: 0.5 }} />}
+                label={
+                  <Typography variant="caption" sx={{ fontSize: '0.72rem', color: 'text.primary', fontWeight: applyScope === 'instance' ? 600 : 400 }}>
+                    Solo esta instancia
+                  </Typography>
+                }
+                sx={{ m: 0 }}
+              />
+              <FormControlLabel
+                value="all"
+                control={<Radio size="small" sx={{ p: 0.5 }} />}
+                label={
+                  <Typography variant="caption" sx={{ fontSize: '0.72rem', color: 'text.primary', fontWeight: applyScope === 'all' ? 600 : 400 }}>
+                    Todas las instancias
+                  </Typography>
+                }
+                sx={{ m: 0 }}
+              />
+            </RadioGroup>
+          </Box>
+        )}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <Button
+            onClick={onClose}
+            variant="outlined"
+            sx={{
+              textTransform: 'none',
+              fontWeight: 600,
+              color: 'text.secondary',
+              borderColor: alpha(theme.palette.divider, 0.8),
+              borderRadius: '8px',
+              '&:hover': { backgroundColor: alpha(theme.palette.action.hover, 0.8), borderColor: 'text.secondary' },
+            }}
+          >
+            Cancelar
+          </Button>
+          <Button
+            onClick={handleSaveClick}
+            variant="contained"
+            sx={{
+              textTransform: 'none',
+              fontWeight: 600,
+              borderRadius: '8px',
+              backgroundColor: theme.palette.primary.main,
+              color: '#fff',
+              px: 3,
+              boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.3)}`,
+              '&:hover': { backgroundColor: alpha(theme.palette.primary.main, 0.85) },
+            }}
+            startIcon={<PlayArrowIcon />}
+          >
+            Guardar Configuración
+          </Button>
+        </Box>
       </DialogActions>
     </Dialog>
   );

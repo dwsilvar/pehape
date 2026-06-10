@@ -174,18 +174,47 @@ def _convert_plan_to_orchestrator_format(plan: dict, blueprints: dict) -> dict:
     """
 
     def merge_and_stamp_tasks(scenario_id: str, scenario_name: str, p_tasks: list | None, c_tasks: list | None, f_tasks: list | None, s_tasks: list | None) -> list:
+        # 1. Check if there are any instance-specific tasks targeting this scenario_id
+        has_instance_override = False
+        for tasks_list in (p_tasks, c_tasks, f_tasks):
+            if tasks_list and isinstance(tasks_list, list):
+                for t in tasks_list:
+                    if isinstance(t, dict) and t.get("targetScenario") == scenario_id:
+                        has_instance_override = True
+                        break
+            if has_instance_override:
+                break
+
         merged = []
-        for tasks_list in (p_tasks, c_tasks, f_tasks, s_tasks):
+
+        # 2. Process container tasks (plan, cycle, flow)
+        for tasks_list in (p_tasks, c_tasks, f_tasks):
             if tasks_list and isinstance(tasks_list, list):
                 for t in tasks_list:
                     if isinstance(t, dict):
                         target_s = t.get("targetScenario")
-                        if target_s and target_s != "all" and target_s != scenario_name:
+                        matches_instance = (target_s == scenario_id)
+                        matches_name = (target_s == scenario_name)
+                        is_global = (not target_s or target_s == "all")
+
+                        if matches_instance or matches_name or is_global:
+                            if t.get("name") == "__none__":
+                                continue
+                            merged.append({**t, "scenario_id": scenario_id})
+
+        # 3. Process scenario-level tasks if there is no instance override
+        if not has_instance_override and s_tasks and isinstance(s_tasks, list):
+            for t in s_tasks:
+                if isinstance(t, dict):
+                    target_s = t.get("targetScenario")
+                    if not target_s or target_s == "all" or target_s == scenario_name or target_s == scenario_id:
+                        if t.get("name") == "__none__":
                             continue
                         merged.append({**t, "scenario_id": scenario_id})
+
         return merged
 
-    def expand_set(set_bp: dict) -> list:
+    def expand_set(set_bp: dict, c_ref_id: str, ref_id: str) -> list:
         choices_per_item = []
         for ref in set_bp.get("items", []):
             if ref.get("type") == "flow":
@@ -219,7 +248,7 @@ def _convert_plan_to_orchestrator_format(plan: dict, blueprints: dict) -> dict:
                     }])
                 if scenarios:
                     choices_per_item.append(scenarios)
-
+ 
         if not choices_per_item:
             return []
 
@@ -231,7 +260,7 @@ def _convert_plan_to_orchestrator_format(plan: dict, blueprints: dict) -> dict:
             
             scenarios_list = []
             for s_idx, s in enumerate(flattened):
-                scenario_instance_id = f"{s.get('id', str(uuid.uuid4()))}-{i}-{s_idx}"
+                scenario_instance_id = f"set-{c_ref_id}-{ref_id}-{i}-{s_idx}-{s.get('id', str(uuid.uuid4()))}"
                 p_tasks = plan.get("tasks", [])
                 c_tasks = cycle_bp.get("tasks", [])
                 set_tasks = set_bp.get("tasks", [])
@@ -286,7 +315,7 @@ def _convert_plan_to_orchestrator_format(plan: dict, blueprints: dict) -> dict:
                 if flow_bp:
                     scenarios_list = []
                     for s in flow_bp.get("items", []):
-                        scenario_instance_id = s.get("id", str(uuid.uuid4()))
+                        scenario_instance_id = f"flow-{c_ref.get('id')}-{ref.get('id')}-{s.get('id', str(uuid.uuid4()))}"
                         p_tasks = plan.get("tasks", [])
                         c_tasks = cycle_bp.get("tasks", [])
                         f_tasks = flow_bp.get("tasks", [])
@@ -317,7 +346,7 @@ def _convert_plan_to_orchestrator_format(plan: dict, blueprints: dict) -> dict:
                     None,
                 )
                 if set_bp:
-                    test_flows.extend(expand_set(set_bp))
+                    test_flows.extend(expand_set(set_bp, c_ref.get("id"), ref.get("id")))
 
         test_cycles.append({
             "cycle_id":   cycle_bp.get("id"),

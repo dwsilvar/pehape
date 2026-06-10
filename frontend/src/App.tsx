@@ -13,6 +13,7 @@ import RunningAppsPage from './pages/RunningAppsPage';
 import ReportsPage from './pages/ReportsPage';
 import FeatureEditorPage from './pages/FeatureEditorPage';
 import TestPlanPage from './pages/TestPlanPage';
+import ExecutionPage from './pages/ExecutionPage';
 import ConceptsGuidePage from './pages/ConceptsGuidePage';
 import SettingsPage from './pages/SettingsPage';
 import { useExecutionOrder } from './hooks/useExecutionOrder';
@@ -207,6 +208,7 @@ const AppLayout: React.FC = () => {
                 onSaveModules={onSaveModules}
               />
             } />
+            <Route path="/execution" element={<ExecutionPage />} />
             <Route path="/maintenance" element={<MaintenancePage />} />
             <Route path="/tasks" element={<TasksPage />} />
             <Route path="/ocr-resources" element={<OCRResourcesPage />} />

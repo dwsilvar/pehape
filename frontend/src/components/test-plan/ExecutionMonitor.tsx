@@ -43,6 +43,7 @@ interface FlatScenario {
   tasks: PlanTask[];
   featureRefId?: string;
   featureScenarios?: string[];
+  scenarioRefId?: string;
 }
 
 interface ExecutionMonitorProps {
@@ -51,7 +52,14 @@ interface ExecutionMonitorProps {
   taskId: string | null;
   isExecuting: boolean;
   isGeneratingReport?: boolean;
-  onUpdateTasksAtLevel?: (level: 'scenario' | 'flow' | 'set' | 'cycle', targetId: string, tasks: PlanTask[]) => void;
+  onUpdateTasksAtLevel?: (
+    level: 'scenario' | 'flow' | 'set' | 'cycle',
+    targetId: string,
+    tasks: PlanTask[],
+    applyToAll?: boolean,
+    cycleId?: string,
+    blueprintId?: string
+  ) => void;
 }
 
 // ── Status badge ──────────────────────────────────────────────────────────────
@@ -190,18 +198,43 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
       fTasks: PlanTask[] = [],
       sTasks: PlanTask[] = []
     ) => {
+      // 1. Check if there are any instance-specific tasks in the containers
+      const hasInstanceOverride = [pTasks, cTasks, fTasks].some(tasksList =>
+        Array.isArray(tasksList) && tasksList.some(t => t.targetScenario === scenarioId)
+      );
+
       const merged: PlanTask[] = [];
-      [pTasks, cTasks, fTasks, sTasks].forEach(tasksList => {
+
+      // 2. Process container tasks (plan, cycle, flow)
+      [pTasks, cTasks, fTasks].forEach(tasksList => {
         if (Array.isArray(tasksList)) {
           tasksList.forEach(t => {
             const targetS = t.targetScenario;
-            if (targetS && targetS !== 'all' && targetS !== scenarioName) {
-              return;
+            const matchesInstance = targetS === scenarioId;
+            const matchesName = targetS === scenarioName;
+            const isGlobal = !targetS || targetS === 'all';
+
+            if (matchesInstance || matchesName || isGlobal) {
+              if (t.name === '__none__') {
+                return;
+              }
+              merged.push({ ...t, id: t.id || `${scenarioId}-${t.name}` });
             }
-            merged.push({ ...t, id: t.id || `${scenarioId}-${t.name}` });
           });
         }
       });
+
+      // 3. Process scenario-level blueprint tasks only if there is no instance override
+      if (!hasInstanceOverride && Array.isArray(sTasks)) {
+        sTasks.forEach(t => {
+          const targetS = t.targetScenario;
+          if (!targetS || targetS === 'all' || targetS === scenarioName || targetS === scenarioId) {
+            if (t.name === '__none__') return;
+            merged.push({ ...t, id: t.id || `${scenarioId}-${t.name}` });
+          }
+        });
+      }
+
       return merged;
     };
 
@@ -232,10 +265,11 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
               const cTasks = cycle.tasks ?? [];
               const fTasks = flow.tasks ?? [];
               const sTasks = s.tasks ?? [];
-              const scenarioTasks = mergeAndStampTasks(s.id, s.scenarioName || s.name, pTasks, cTasks, fTasks, sTasks);
+              const scenarioInstanceId = `flow-${cRef.id}-${ref.id}-${s.id}`;
+              const scenarioTasks = mergeAndStampTasks(scenarioInstanceId, s.scenarioName || s.name, pTasks, cTasks, fTasks, sTasks);
 
               flat.push({
-                id: s.id,
+                id: scenarioInstanceId,
                 scenarioName: s.scenarioName || s.name,
                 featureName: s.featurePath ? s.featurePath.split('/').pop()! : '',
                 featurePath: s.featurePath || '',
@@ -251,6 +285,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                 sourceType: 'flow',
                 sourceName: flow.name,
                 tasks: scenarioTasks,
+                scenarioRefId: s.id,
               });
             }
           }
@@ -302,7 +337,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                 const capitalizedCase = translatedCase.charAt(0).toUpperCase() + translatedCase.slice(1);
                 const groupName = `${capitalizedCase} ${idx + 1}`;
                 combo.forEach((s, sIdx) => {
-                  const scenarioId = `${s.id}-${idx}-${sIdx}`;
+                  const scenarioId = `set-${cRef.id}-${ref.id}-${idx}-${sIdx}-${s.id}`;
                   const pTasks = plan.tasks ?? [];
                   const cTasks = cycle.tasks ?? [];
                   const setTasks = set.tasks ?? [];
@@ -340,6 +375,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                     tasks: scenarioTasks,
                     featureRefId: s.sourceType === 'feature' ? s.featureRefId : undefined,
                     featureScenarios: s.sourceType === 'feature' ? s.featureScenarios : undefined,
+                    scenarioRefId: s.id,
                   });
                 });
               });
@@ -373,15 +409,22 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
   const [dialogScenarios, setDialogScenarios] = useState<string[]>([]);
   const [dialogTargetId, setDialogTargetId] = useState('');
   const [dialogLevel, setDialogLevel] = useState<'scenario' | 'flow' | 'set' | 'cycle'>('scenario');
+  const [dialogCycleId, setDialogCycleId] = useState<string | undefined>(undefined);
+  const [dialogBlueprintId, setDialogBlueprintId] = useState<string | undefined>(undefined);
+  const [dialogInitialScope, setDialogInitialScope] = useState<'instance' | 'all'>('instance');
 
   const handleOpenTaskDialog = (
     level: 'scenario' | 'flow' | 'set' | 'cycle',
     targetId: string,
     nodeName: string,
     nodeType: string,
-    scenarios?: string[]
+    scenarios?: string[],
+    cycleId?: string,
+    blueprintId?: string
   ) => {
     let initialTasks: PlanTask[] = [];
+    let initialScope: 'instance' | 'all' = 'instance';
+
     if (level === 'cycle') {
       initialTasks = blueprints.cycles.find(c => c.id === targetId)?.tasks || [];
     } else if (level === 'set') {
@@ -389,44 +432,58 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
     } else if (level === 'flow') {
       initialTasks = blueprints.flows.find(f => f.id === targetId)?.tasks || [];
     } else if (level === 'scenario') {
-      let found = false;
-      for (const flow of blueprints.flows) {
-        const item = flow.items.find(i => i.id === targetId);
-        if (item) {
-          initialTasks = item.tasks || [];
-          found = true;
-          break;
-        }
-      }
-      if (!found) {
-        for (const set of blueprints.sets) {
-          const item = set.items.find(i => i.id === targetId);
-          if (item) {
-            initialTasks = item.tasks || [];
-            found = true;
-            break;
+      // 1. Check if there are cycle-level tasks targeting this unique instance ID
+      const cycle = blueprints.cycles.find(c => c.id === cycleId);
+      const cycleTasks = cycle?.tasks || [];
+      const instanceTasks = cycleTasks.filter(t => t.targetScenario === targetId);
+
+      if (instanceTasks.length > 0) {
+        initialTasks = instanceTasks.filter(t => t.name !== '__none__');
+        initialScope = 'instance';
+      } else {
+        // 2. Fallback to scenario blueprint level tasks
+        let found = false;
+        if (blueprintId) {
+          for (const flow of blueprints.flows) {
+            const item = flow.items.find(i => i.id === blueprintId);
+            if (item) {
+              initialTasks = item.tasks || [];
+              found = true;
+              break;
+            }
+          }
+          if (!found) {
+            for (const set of blueprints.sets) {
+              const item = set.items.find(i => i.id === blueprintId);
+              if (item) {
+                initialTasks = item.tasks || [];
+                found = true;
+                break;
+              }
+            }
+          }
+          if (!found) {
+            for (const cycleBp of blueprints.cycles) {
+              const item = cycleBp.items.find(i => i.id === blueprintId);
+              if (item) {
+                initialTasks = item.tasks || [];
+                found = true;
+                break;
+              }
+            }
+          }
+          if (!found) {
+            for (const p of blueprints.plans) {
+              const item = p.items.find(i => i.id === blueprintId);
+              if (item) {
+                initialTasks = item.tasks || [];
+                found = true;
+                break;
+              }
+            }
           }
         }
-      }
-      if (!found) {
-        for (const cycle of blueprints.cycles) {
-          const item = cycle.items.find(i => i.id === targetId);
-          if (item) {
-            initialTasks = item.tasks || [];
-            found = true;
-            break;
-          }
-        }
-      }
-      if (!found) {
-        for (const plan of blueprints.plans) {
-          const item = plan.items.find(i => i.id === targetId);
-          if (item) {
-            initialTasks = item.tasks || [];
-            found = true;
-            break;
-          }
-        }
+        initialScope = 'all';
       }
     }
 
@@ -436,12 +493,22 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
     setDialogNodeType(nodeType);
     setDialogInitialTasks(initialTasks);
     setDialogScenarios(scenarios || []);
+    setDialogCycleId(cycleId);
+    setDialogBlueprintId(blueprintId);
+    setDialogInitialScope(initialScope);
     setTaskDialogOpen(true);
   };
 
-  const handleSaveTasks = (updatedTasks: PlanTask[]) => {
+  const handleSaveTasks = (updatedTasks: PlanTask[], applyToAll?: boolean) => {
     if (onUpdateTasksAtLevel) {
-      onUpdateTasksAtLevel(dialogLevel, dialogTargetId, updatedTasks);
+      onUpdateTasksAtLevel(
+        dialogLevel,
+        dialogTargetId,
+        updatedTasks,
+        applyToAll,
+        dialogCycleId,
+        dialogBlueprintId
+      );
     }
   };
 
@@ -568,16 +635,22 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                   Test Flow
                 </Box>
               </TableCell>
-              <TableCell sx={{ fontWeight: 600, bgcolor: 'background.paper', width: '50%' }}>
+              <TableCell sx={{ fontWeight: 600, bgcolor: 'background.paper', width: '35%' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                   <ScenarioIcon size={14} color={theme.palette.text.secondary} />
                   Scenario
                 </Box>
               </TableCell>
-              <TableCell sx={{ fontWeight: 600, bgcolor: 'background.paper', width: '30%' }}>
+              <TableCell sx={{ fontWeight: 600, bgcolor: 'background.paper', width: '20%' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                   <FeatureIcon size={14} color={theme.palette.text.secondary} />
                   Feature
+                </Box>
+              </TableCell>
+              <TableCell sx={{ fontWeight: 600, bgcolor: 'background.paper', width: '25%' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                  <SettingsIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                  Tareas
                 </Box>
               </TableCell>
               <TableCell sx={{ fontWeight: 600, bgcolor: 'background.paper', whiteSpace: 'nowrap' }}>Resultado</TableCell>
@@ -629,6 +702,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                   else if (groupStatuses.every(s => s === 'passed' || s === 'skipped')) groupStatus = 'passed';
                   
                   const statusColor = statusColors[groupStatus];
+                  const totalGroupTasks = groupScenarios.reduce((sum, s) => sum + (s.tasks?.length || 0), 0);
                   
                   rows.push(
                     <TableRow key={`group-${fs.groupId}`} sx={{ bgcolor: isDark ? alpha('#000', 0.15) : alpha(theme.palette.primary.main, 0.04) }}>
@@ -706,9 +780,30 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                       </TableCell>
                       {/* Scenario Summary */}
                       <TableCell sx={{ py: 0 }}>
-                        <Chip label={`${groupScenarios.length} scenarios`} size="small" sx={{ height: 16, fontSize: '0.6rem', bgcolor: alpha(theme.palette.text.secondary, 0.1) }} />
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <Chip 
+                            label={`${groupScenarios.length} ${groupScenarios.length === 1 ? 'scenario' : 'scenarios'}`} 
+                            size="small" 
+                            sx={{ height: 16, fontSize: '0.6rem', bgcolor: alpha(theme.palette.text.secondary, 0.1) }} 
+                          />
+                          {totalGroupTasks > 0 && (
+                            <Chip 
+                              label={`${totalGroupTasks} ${totalGroupTasks === 1 ? 'tarea' : 'tareas'}`} 
+                              size="small" 
+                              sx={{ 
+                                height: 16, 
+                                fontSize: '0.6rem', 
+                                bgcolor: alpha(theme.palette.primary.main, 0.1),
+                                color: theme.palette.primary.main,
+                                fontWeight: 600,
+                              }} 
+                            />
+                          )}
+                        </Box>
                       </TableCell>
                       {/* Feature column (empty for group) */}
+                      <TableCell sx={{ py: 0 }}></TableCell>
+                      {/* Tareas column (empty for group) */}
                       <TableCell sx={{ py: 0 }}></TableCell>
                       {/* Status Summary */}
                       <TableCell sx={{ py: 0 }}>
@@ -746,7 +841,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                       <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
                         {fs.sourceName}
                       </TableCell>
-                      <TableCell sx={{ width: '50%' }}>
+                      <TableCell sx={{ width: '35%' }}>
                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <StatusBadge status={status} />
@@ -766,10 +861,12 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                                 size="small"
                                 onClick={() => handleOpenTaskDialog(
                                   'scenario',
-                                  fs.sourceType === 'feature' ? fs.featureRefId! : fs.id,
+                                  fs.id,
                                   fs.sourceType === 'feature' ? fs.sourceName : fs.scenarioName,
                                   fs.sourceType === 'feature' ? 'feature' : 'scenario',
-                                  fs.featureScenarios
+                                  fs.featureScenarios,
+                                  fs.cycleId,
+                                  fs.sourceType === 'feature' ? fs.featureRefId! : fs.scenarioRefId || fs.id
                                 )}
                                 sx={{ p: 0.25, opacity: 0.6, '&:hover': { opacity: 1 } }}
                               >
@@ -799,62 +896,68 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                               </Box>
                             )}
                           </Box>
-                          {/* Rendering of associated tasks */}
-                          {fs.tasks && fs.tasks.length > 0 && (
-                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5, pl: 2.25 }}>
-                              {fs.tasks.map((task) => {
-                                const taskKey = `${fs.id}::${task.id}`;
-                                const taskStatus = taskStatusMap.get(taskKey) || 'pending';
-                                return (
-                                  <Tooltip
-                                    key={task.id}
-                                    title={
-                                      <Box sx={{ p: 0.5 }}>
-                                        <Typography variant="caption" display="block" sx={{ fontWeight: 'bold' }}>
-                                          Tarea: @{task.name}
-                                        </Typography>
-                                        <Typography variant="caption" display="block">
-                                          Momento: {task.hook.toUpperCase()}
-                                        </Typography>
-                                        <Typography variant="caption" display="block">
-                                          Alcance: {task.scope.toUpperCase()}
-                                        </Typography>
-                                        {task.args && Object.keys(task.args).length > 0 && (
-                                          <Typography variant="caption" display="block">
-                                            Parámetros: {JSON.stringify(task.args)}
-                                          </Typography>
-                                        )}
-                                      </Box>
-                                    }
-                                    arrow
-                                    placement="top"
-                                  >
-                                    <Chip
-                                      size="small"
-                                      icon={<SettingsIcon sx={{ fontSize: '10px !important' }} />}
-                                      label={`@${task.name}`}
-                                      sx={{
-                                        height: 18,
-                                        fontSize: '0.62rem',
-                                        fontWeight: 600,
-                                        borderRadius: '4px',
-                                        cursor: 'help',
-                                        ...getTaskChipStyles(taskStatus, theme)
-                                      }}
-                                    />
-                                  </Tooltip>
-                                );
-                              })}
-                            </Box>
-                          )}
                         </Box>
                       </TableCell>
-                      <TableCell sx={{ color: 'text.secondary', width: '30%', whiteSpace: 'normal', wordBreak: 'break-word' }}>
+                      <TableCell sx={{ color: 'text.secondary', width: '20%', whiteSpace: 'normal', wordBreak: 'break-word' }}>
                         <Tooltip title={fs.featurePath} placement="top-start" arrow enterDelay={400}>
                           <Box component="span" sx={{ cursor: 'help', lineHeight: 1.2 }}>
                             {fs.featureName}
                           </Box>
                         </Tooltip>
+                      </TableCell>
+                      <TableCell sx={{ width: '25%' }}>
+                        {/* Rendering of associated tasks */}
+                        {fs.tasks && fs.tasks.length > 0 ? (
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                            {fs.tasks.map((task) => {
+                              const taskKey = `${fs.id}::${task.id}`;
+                              const taskStatus = taskStatusMap.get(taskKey) || 'pending';
+                              return (
+                                <Tooltip
+                                  key={task.id}
+                                  title={
+                                    <Box sx={{ p: 0.5 }}>
+                                      <Typography variant="caption" display="block" sx={{ fontWeight: 'bold' }}>
+                                        Tarea: @{task.name}
+                                      </Typography>
+                                      <Typography variant="caption" display="block">
+                                        Momento: {task.hook.toUpperCase()}
+                                      </Typography>
+                                      <Typography variant="caption" display="block">
+                                        Alcance: {task.scope.toUpperCase()}
+                                      </Typography>
+                                      {task.args && Object.keys(task.args).length > 0 && (
+                                        <Typography variant="caption" display="block">
+                                          Parámetros: {JSON.stringify(task.args)}
+                                        </Typography>
+                                      )}
+                                    </Box>
+                                  }
+                                  arrow
+                                  placement="top"
+                                >
+                                  <Chip
+                                    size="small"
+                                    icon={<SettingsIcon sx={{ fontSize: '10px !important' }} />}
+                                    label={`@${task.name}`}
+                                    sx={{
+                                      height: 18,
+                                      fontSize: '0.62rem',
+                                      fontWeight: 600,
+                                      borderRadius: '4px',
+                                      cursor: 'help',
+                                      ...getTaskChipStyles(taskStatus, theme)
+                                    }}
+                                  />
+                                </Tooltip>
+                              );
+                            })}
+                          </Box>
+                        ) : (
+                          <Typography sx={{ fontSize: '0.7rem', color: 'text.disabled', fontStyle: 'italic' }}>
+                            Sin tareas
+                          </Typography>
+                        )}
                       </TableCell>
                       <TableCell sx={{ whiteSpace: 'nowrap' }}>
                         <Typography
@@ -901,7 +1004,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                 >
                   — Sistema —
                 </TableCell>
-                <TableCell colSpan={2}>
+                <TableCell colSpan={4}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                     <CircularProgress
                       size={11}
@@ -947,6 +1050,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
           onSave={handleSaveTasks}
           nodeType={dialogNodeType}
           scenarios={dialogScenarios}
+          initialScope={dialogInitialScope}
         />
       )}
     </Box>

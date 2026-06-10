@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Box, useTheme, Tabs, Tab, Tooltip, IconButton, CircularProgress } from '@mui/material';
+import { Box, useTheme, Tooltip, IconButton } from '@mui/material';
 import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import LibraryBooksRoundedIcon from '@mui/icons-material/LibraryBooksRounded';
@@ -10,13 +10,11 @@ import {
 import { arrayMove } from '@dnd-kit/sortable';
 import { v4 as uuidv4 } from 'uuid';
 
-import { FeatureWithScenarios, BlueprintsData, BlueprintRef, PlanBlueprint, CycleBlueprint, SetBlueprint, FlowBlueprint, PlanTask } from '../types';
+import { FeatureWithScenarios, BlueprintsData, BlueprintRef, PlanTask } from '../types';
 import PlanHeader from '../components/test-plan/PlanHeader';
 import BlueprintCatalogPanel from '../components/test-plan/BlueprintCatalogPanel';
 import CompositionCanvas from '../components/test-plan/CompositionCanvas';
 import CompositionAssetLibraryPanel from '../components/test-plan/CompositionAssetLibraryPanel';
-import ExecutionMonitor from '../components/test-plan/ExecutionMonitor';
-import ExecutionDrawer from '../components/test-plan/ExecutionDrawer';
 
 const LEFT_WIDTH_DEFAULT = 260;
 const RIGHT_WIDTH_DEFAULT = 320;
@@ -24,6 +22,7 @@ const MIN_PANEL_WIDTH = 180;
 
 const TestPlanPage: React.FC = () => {
   const { t } = useTranslation();
+  
   // ── State ─────────────────────────────────────────────────────────────
   const [blueprints, setBlueprints] = useState<BlueprintsData>({ plans: [], cycles: [], sets: [], flows: [] });
   const [activeCategory, setActiveCategory] = useState<'plans' | 'cycles' | 'sets' | 'flows'>('flows');
@@ -34,12 +33,6 @@ const TestPlanPage: React.FC = () => {
   const [isBlueprintsLoading, setIsBlueprintsLoading] = useState(true);
 
   const [isSaved, setIsSaved] = useState(true);
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [isExecuting, setIsExecuting] = useState(false);
-  const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
-  const [executionStatus, setExecutionStatus] = useState<string>('idle');
-  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
-  const [monitorVersion, setMonitorVersion] = useState(0);
 
   // ── Layout State ────────────────────────────────────────────────────────────
   const [leftWidth, setLeftWidth] = useState(LEFT_WIDTH_DEFAULT);
@@ -47,9 +40,6 @@ const TestPlanPage: React.FC = () => {
   const [libraryVisible, setLibraryVisible] = useState(true);
   const theme = useTheme();
   const layoutRef = useRef<HTMLDivElement>(null);
-  const [centerTab, setCenterTab] = useState<'canvas' | 'monitor'>('canvas');
-
-  useEffect(() => { if (isExecuting) setCenterTab('monitor'); }, [isExecuting]);
 
   const fetchBlueprints = useCallback(() => {
     setIsBlueprintsLoading(true);
@@ -78,13 +68,11 @@ const TestPlanPage: React.FC = () => {
       .then(data => setFeatures(Array.isArray(data) ? data : []))
       .catch(() => setFeatures([]))
       .finally(() => setIsLibraryLoading(false));
-  }, []); // Run only once, fetchBlueprints is dependency-free for initial load, but we'll use a ref or just ignore warning since we only want on mount and manual trigger.
+  }, []);
 
   // ── Persistence ───────────────────────────────────────────────────────────────
   const markDirty = useCallback(() => {
     setIsSaved(false);
-    setCurrentTaskId(null);
-    setExecutionStatus('idle');
   }, []);
 
   const handleSave = useCallback(async () => {
@@ -241,44 +229,6 @@ const TestPlanPage: React.FC = () => {
     updateActiveBlueprint(b => ({ ...b, tasks }));
   }, [updateActiveBlueprint]);
 
-  const handleUpdateTasksAtLevel = useCallback((
-    level: 'scenario' | 'flow' | 'set' | 'cycle',
-    targetId: string,
-    tasks: PlanTask[]
-  ) => {
-    setBlueprints(prev => {
-      const next = { ...prev };
-      
-      if (level === 'cycle') {
-        next.cycles = next.cycles.map(c => c.id === targetId ? { ...c, tasks } : c);
-      } else if (level === 'set') {
-        next.sets = next.sets.map(s => s.id === targetId ? { ...s, tasks } : s);
-      } else if (level === 'flow') {
-        next.flows = next.flows.map(f => f.id === targetId ? { ...f, tasks } : f);
-      } else if (level === 'scenario') {
-        next.flows = next.flows.map(f => ({
-          ...f,
-          items: f.items.map(i => i.id === targetId ? { ...i, tasks } : i)
-        }));
-        next.sets = next.sets.map(s => ({
-          ...s,
-          items: s.items.map(i => i.id === targetId ? { ...i, tasks } : i)
-        }));
-        next.cycles = next.cycles.map(c => ({
-          ...c,
-          items: c.items.map(i => i.id === targetId ? { ...i, tasks } : i)
-        }));
-        next.plans = next.plans.map(p => ({
-          ...p,
-          items: p.items.map(i => i.id === targetId ? { ...i, tasks } : i)
-        }));
-      }
-      
-      return next as BlueprintsData;
-    });
-    markDirty();
-  }, [markDirty]);
-
   // ── DnD ───────────────────────────────────────────────────────────────────────
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -289,7 +239,6 @@ const TestPlanPage: React.FC = () => {
     const { active, over } = event;
     if (!over || !selectedBlueprintId) return;
 
-    // Case 1: Drop from library into canvas
     if (active.data.current?.type === 'library-item' || active.data.current?.type === 'library-scenario') {
       let newItem: BlueprintRef;
 
@@ -322,7 +271,6 @@ const TestPlanPage: React.FC = () => {
       return;
     }
 
-    // Case 2: Reorder within canvas
     if (active.data.current?.type === 'composition-item' && over.data.current?.type === 'composition-item' && active.id !== over.id) {
       updateActiveBlueprint(b => {
         const prevItems = b.items;
@@ -333,43 +281,6 @@ const TestPlanPage: React.FC = () => {
       });
     }
   }, [selectedBlueprintId, updateActiveBlueprint]);
-
-  // ── Execution ───────────────────────────────────────────────────────────────
-  const targetPlan = blueprints.plans?.[0];
-  const targetPlanId = targetPlan?.id;
-
-  useEffect(() => {
-    setCurrentTaskId(null);
-    setExecutionStatus('idle');
-  }, [targetPlanId]);
-
-  const handleExecute = useCallback(async (scheduledAt?: string) => {
-    // Always execute the target test plan regardless of the active category
-    if (!targetPlanId) return;
-    setIsExecuting(true);
-    setIsDrawerOpen(true);
-    setCurrentTaskId(null);
-    
-    try {
-      const url = scheduledAt
-        ? `/api/execute-plan/${targetPlanId}?scheduled_at=${encodeURIComponent(scheduledAt)}`
-        : `/api/execute-plan/${targetPlanId}`;
-
-      const res = await fetch(url, { method: 'POST' });
-      if (res.ok) {
-        const data = await res.json();
-        setCurrentTaskId(data.task_id);
-        setExecutionStatus(data.status || (scheduledAt ? 'scheduled' : 'pending'));
-      } else {
-        setIsExecuting(false);
-      }
-    } catch (e) {
-      setIsExecuting(false);
-    }
-  }, [targetPlanId]);
-
-  const handleToggleDrawer = useCallback(() => setIsDrawerOpen(v => !v), []);
-  const handleExecutionFinished = useCallback(() => setIsExecuting(false), []);
 
   const makeResizeHandler = useCallback((side: 'left' | 'right') => {
     return (e: React.MouseEvent) => {
@@ -392,6 +303,8 @@ const TestPlanPage: React.FC = () => {
     };
   }, [leftWidth, rightWidth]);
 
+  const targetPlan = blueprints.plans?.[0];
+
   return (
     <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
       <Box ref={layoutRef} sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', bgcolor: theme.palette.custom.bgMain }}>
@@ -399,9 +312,9 @@ const TestPlanPage: React.FC = () => {
           plan={null} cycle={null} flow={null} 
           activeBlueprintName={activeBlueprint?.name}
           targetPlanName={targetPlan?.name}
-          targetPlanId={targetPlanId}
-          isSaved={isSaved} onSave={handleSave} onExecute={handleExecute} isExecuting={isExecuting} executionStatus={executionStatus}
-          canExecute={!!targetPlanId && (targetPlan?.items?.length ?? 0) > 0}
+          targetPlanId={targetPlan?.id}
+          isSaved={isSaved}
+          onSave={handleSave}
           onImport={handleImport}
         />
 
@@ -422,44 +335,22 @@ const TestPlanPage: React.FC = () => {
 
           <Box onMouseDown={makeResizeHandler('left')} sx={{ width: 4, cursor: 'col-resize', bgcolor: theme.palette.custom.border, flexShrink: 0, '&:hover': { bgcolor: 'primary.main' } }} />
 
-          {/* Center: Canvas / Monitor */}
+          {/* Center: Canvas */}
           <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
-            <Box sx={{ borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper', px: 2 }}>
-              <Tabs value={centerTab} onChange={(e, v) => setCenterTab(v)} sx={{ minHeight: 40 }} TabIndicatorProps={{ sx: { height: 3, borderTopLeftRadius: 3, borderTopRightRadius: 3 } }}>
-                <Tab label={t('pages.testPlan.tabDesigner', 'Diseñador')} value="canvas" sx={{ minHeight: 40, py: 0, fontSize: '0.75rem', fontWeight: 600, textTransform: 'none' }} />
-                <Tab label={t('pages.testPlan.tabMonitor', 'Matriz de Ejecución')} value="monitor" sx={{ minHeight: 40, py: 0, fontSize: '0.75rem', fontWeight: 600, textTransform: 'none' }} />
-              </Tabs>
-            </Box>
-
-            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-              <Box sx={{ display: centerTab === 'canvas' ? 'flex' : 'none', flex: 1, flexDirection: 'column', overflow: 'hidden' }}>
-                <CompositionCanvas
-                  category={activeCategory}
-                  blueprintId={selectedBlueprintId}
-                  name={activeBlueprint?.name || ''}
-                  items={activeBlueprint?.items || []}
-                  onNameChange={handleNameChange}
-                  onRemoveItem={handleRemoveItem}
-                  onMoveUp={handleMoveUp}
-                  onMoveDown={handleMoveDown}
-                  blueprints={blueprints}
-                  onUpdateItemTasks={handleUpdateItemTasks}
-                  tasks={activeBlueprint?.tasks || []}
-                  onUpdateTasks={handleUpdateBlueprintTasks}
-                />
-              </Box>
-              <Box sx={{ display: centerTab === 'monitor' ? 'flex' : 'none', flex: 1, flexDirection: 'column', overflow: 'hidden' }}>
-                <ExecutionMonitor
-                  key={targetPlanId ?? 'no-plan'}
-                  blueprints={blueprints}
-                  selectedPlanId={targetPlanId || null}
-                  taskId={currentTaskId}
-                  isExecuting={isExecuting}
-                  isGeneratingReport={isGeneratingReport}
-                  onUpdateTasksAtLevel={handleUpdateTasksAtLevel}
-                />
-              </Box>
-            </Box>
+            <CompositionCanvas
+              category={activeCategory}
+              blueprintId={selectedBlueprintId}
+              name={activeBlueprint?.name || ''}
+              items={activeBlueprint?.items || []}
+              onNameChange={handleNameChange}
+              onRemoveItem={handleRemoveItem}
+              onMoveUp={handleMoveUp}
+              onMoveDown={handleMoveDown}
+              blueprints={blueprints}
+              onUpdateItemTasks={handleUpdateItemTasks}
+              tasks={activeBlueprint?.tasks || []}
+              onUpdateTasks={handleUpdateBlueprintTasks}
+            />
           </Box>
 
           <Box
@@ -484,8 +375,6 @@ const TestPlanPage: React.FC = () => {
             />
           </Box>
         </Box>
-
-        <ExecutionDrawer isOpen={isDrawerOpen} onToggle={handleToggleDrawer} taskId={currentTaskId} onExecutionFinished={handleExecutionFinished} onStatusChange={setExecutionStatus} onReportGenerating={setIsGeneratingReport} />
       </Box>
     </DndContext>
   );

@@ -50,6 +50,7 @@
             "apps": "Apps en Ejecución",
             "reports": "Reportes",
             "test_plan": "Diseñador de Planes",
+            "execution": "Matriz de Ejecución",
             "guide": "Guía de Conceptos",
             "feedback": "Reportar Error / Mejora"
         }

@@ -12,6 +12,7 @@ import {
     BugReport as BugReportIcon,
     MenuBookRounded as MenuBookIcon,
     Settings as SettingsIcon,
+    PlayCircleOutline as PlayIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useLayout } from '../context/LayoutContext';
@@ -70,6 +71,15 @@ const Sidebar: React.FC = () => {
                             onClick={() => handleNavigation('/')}
                         >
                             <PlanIcon size={22} color={isHome ? 'var(--mui-palette-primary-main, #38BDF8)' : 'currentColor'} />
+                        </IconButton>
+                    </Tooltip>
+
+                    <Tooltip title={t('common.sidebar.execution', 'Matriz de Ejecución')} placement="right">
+                        <IconButton
+                            color={isActive('/execution') ? 'primary' : 'default'}
+                            onClick={() => handleNavigation('/execution')}
+                        >
+                            <PlayIcon />
                         </IconButton>
                     </Tooltip>
 
@@ -265,6 +275,18 @@ const Sidebar: React.FC = () => {
                                 <PlanIcon size={22} color={isHome ? 'var(--mui-palette-primary-main, #38BDF8)' : 'currentColor'} />
                             </ListItemIcon>
                             <ListItemText primary={t('common.sidebar.test_plan')} />
+                        </ListItemButton>
+                    </ListItem>
+
+                    <ListItem disablePadding>
+                        <ListItemButton
+                            selected={isActive('/execution')}
+                            onClick={() => handleNavigation('/execution')}
+                        >
+                            <ListItemIcon>
+                                <PlayIcon color={isActive('/execution') ? 'primary' : 'inherit'} />
+                            </ListItemIcon>
+                            <ListItemText primary={t('common.sidebar.execution', 'Matriz de Ejecución')} />
                         </ListItemButton>
                     </ListItem>
 

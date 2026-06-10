@@ -24,8 +24,8 @@ interface PlanHeaderProps {
   targetPlanId?: string | null;
   isSaved: boolean;
   onSave: () => void;
-  onExecute: (scheduledAt?: string) => void;
-  isExecuting: boolean;
+  onExecute?: (scheduledAt?: string) => void;
+  isExecuting?: boolean;
   executionStatus?: string;
   canExecute?: boolean;
   onImport?: (file: File) => void;
@@ -37,7 +37,7 @@ const statusColors: Record<string, 'default' | 'warning' | 'success' | 'info'> =
   completed: 'success',
 };
 
-const PlanHeader: React.FC<PlanHeaderProps> = ({ plan, cycle, flow, activeBlueprintName, targetPlanName, targetPlanId, isSaved, onSave, onExecute, isExecuting, executionStatus, canExecute = false, onImport }) => {
+const PlanHeader: React.FC<PlanHeaderProps> = ({ plan, cycle, flow, activeBlueprintName, targetPlanName, targetPlanId, isSaved, onSave, onExecute, isExecuting = false, executionStatus, canExecute = false, onImport }) => {
   const { t } = useTranslation();
   const theme = useTheme();
 
@@ -60,6 +60,7 @@ const PlanHeader: React.FC<PlanHeaderProps> = ({ plan, cycle, flow, activeBluepr
 
   const handleScheduleOption = (option: string) => {
     setOpenSplit(false);
+    if (!onExecute) return;
     if (option === 'instant') {
       onExecute();
     } else if (option === 'delay_short') {
@@ -152,167 +153,171 @@ const PlanHeader: React.FC<PlanHeaderProps> = ({ plan, cycle, flow, activeBluepr
       </Tooltip>
 
       {/* Execute Full Plan Group */}
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 1.5,
-          pl: 1.5,
-          pr: 0.5,
-          py: 0.5,
-          borderRadius: 2,
-          border: 1,
-          borderColor: alpha(theme.palette.primary.main, 0.2),
-          bgcolor: alpha(theme.palette.primary.main, 0.04),
-        }}
-      >
-        <Typography
-          variant="caption"
+      {onExecute && (
+        <Box
           sx={{
-            fontWeight: 600,
-            color: 'text.secondary',
-            maxWidth: 150,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.5,
+            pl: 1.5,
+            pr: 0.5,
+            py: 0.5,
+            borderRadius: 2,
+            border: 1,
+            borderColor: alpha(theme.palette.primary.main, 0.2),
+            bgcolor: alpha(theme.palette.primary.main, 0.04),
           }}
         >
-          {targetPlanName || '—'}
-        </Typography>
-
-        <Tooltip title={isExecuting && executionStatus !== 'scheduled' ? t('pages.testPlan.executing') : t('pages.testPlan.executePlan')} arrow>
-          <ButtonGroup
-            variant="contained"
-            size="small"
-            ref={anchorRef}
-            disabled={!canExecute || !isSaved || (isExecuting && executionStatus !== 'scheduled')}
+          <Typography
+            variant="caption"
             sx={{
-              background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.8)}, ${alpha(theme.palette.secondary.main, 0.8)})`,
-              '& .MuiButton-root': {
-                color: '#fff',
-                borderColor: alpha(theme.palette.common.white, 0.2),
-              },
-              '&:hover': {
-                background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
-              },
-              '&.Mui-disabled': {
-                background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.2)}, ${alpha(theme.palette.secondary.main, 0.2)})`,
-                opacity: 0.8,
-              },
+              fontWeight: 600,
+              color: 'text.secondary',
+              maxWidth: 150,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
             }}
           >
-            <Button
-              onClick={() => onExecute()}
-              startIcon={
-                executionStatus === 'scheduled' ? (
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <PlayArrowRoundedIcon sx={{ fontSize: 18, mr: -0.5 }} />
-                    <AccessTimeIcon sx={{ fontSize: 12, mt: 1 }} />
-                  </Box>
-                ) : (
-                  <PlayArrowRoundedIcon />
-                )
-              }
-              sx={{ fontSize: '0.75rem', textTransform: 'none' }}
-            >
-              {executionStatus === 'scheduled' 
-                ? 'Programado' 
-                : isExecuting ? t('pages.testPlan.executing') : t('pages.testPlan.executePlan')}
-            </Button>
-            <Button
+            {targetPlanName || '—'}
+          </Typography>
+
+          <Tooltip title={isExecuting && executionStatus !== 'scheduled' ? t('pages.testPlan.executing') : t('pages.testPlan.executePlan')} arrow>
+            <ButtonGroup
+              variant="contained"
               size="small"
-              onClick={handleToggle}
-              sx={{ px: 0.5 }}
-            >
-              <ArrowDropDownIcon />
-            </Button>
-          </ButtonGroup>
-        </Tooltip>
-
-        {/* Import/Export Buttons */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, borderLeft: 1, borderColor: 'divider', pl: 1, ml: 0.5 }}>
-          <Tooltip title="Exportar Plan (.desb)">
-            <span>
-              <IconButton
-                size="small"
-                disabled={!targetPlanId || !isSaved}
-                onClick={() => setExportDialogOpen(true)}
-                sx={{ color: theme.palette.primary.main, '&.Mui-disabled': { opacity: 0.5 } }}
-              >
-                <FileDownloadRoundedIcon fontSize="small" />
-              </IconButton>
-            </span>
-          </Tooltip>
-          <Tooltip title="Importar Plan (.desb)">
-            <IconButton 
-              size="small" 
-              onClick={() => fileInputRef.current?.click()}
-              sx={{ color: theme.palette.primary.main }}
-            >
-              <FileUploadRoundedIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-          <input
-            type="file"
-            accept=".desb"
-            ref={fileInputRef}
-            style={{ display: 'none' }}
-            onChange={(e) => {
-              if (e.target.files && e.target.files.length > 0 && onImport) {
-                onImport(e.target.files[0]);
-                e.target.value = ''; // reset
-              }
-            }}
-          />
-        </Box>
-
-        <Popper
-          sx={{ zIndex: 1300 }}
-          open={openSplit}
-          anchorEl={anchorRef.current}
-          role={undefined}
-          transition
-          disablePortal
-        >
-          {({ TransitionProps, placement }) => (
-            <Grow
-              {...TransitionProps}
-              style={{
-                transformOrigin: placement === 'bottom' ? 'center top' : 'center bottom',
+              ref={anchorRef}
+              disabled={!canExecute || !isSaved || (isExecuting && executionStatus !== 'scheduled')}
+              sx={{
+                background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.8)}, ${alpha(theme.palette.secondary.main, 0.8)})`,
+                '& .MuiButton-root': {
+                  color: '#fff',
+                  borderColor: alpha(theme.palette.common.white, 0.2),
+                },
+                '&:hover': {
+                  background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
+                },
+                '&.Mui-disabled': {
+                  background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.2)}, ${alpha(theme.palette.secondary.main, 0.2)})`,
+                  opacity: 0.8,
+                },
               }}
             >
-              <Paper sx={{ mt: 0.5, borderRadius: 2, overflow: 'hidden', boxShadow: theme.shadows[4] }}>
-                <ClickAwayListener onClickAway={handleClose}>
-                  <MenuList autoFocusItem sx={{ p: 0 }}>
-                    <MenuItem onClick={() => handleScheduleOption('instant')} sx={{ fontSize: '0.8rem', py: 1 }}>
-                      ⚡ Ejecutar Ahora
-                    </MenuItem>
-                    <MenuItem onClick={() => handleScheduleOption('delay_short')} sx={{ fontSize: '0.8rem', py: 1 }}>
-                      ⏱️ En 1 minuto
-                    </MenuItem>
-                    <MenuItem onClick={() => handleScheduleOption('delay_medium')} sx={{ fontSize: '0.8rem', py: 1 }}>
-                      ⏱️ En 5 minutos
-                    </MenuItem>
-                    <MenuItem onClick={() => handleScheduleOption('custom')} sx={{ fontSize: '0.8rem', py: 1 }}>
-                      📅 Programar Fecha/Hora...
-                    </MenuItem>
-                  </MenuList>
-                </ClickAwayListener>
-              </Paper>
-            </Grow>
-          )}
-        </Popper>
+              <Button
+                onClick={() => onExecute()}
+                startIcon={
+                  executionStatus === 'scheduled' ? (
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <PlayArrowRoundedIcon sx={{ fontSize: 18, mr: -0.5 }} />
+                      <AccessTimeIcon sx={{ fontSize: 12, mt: 1 }} />
+                    </Box>
+                  ) : (
+                    <PlayArrowRoundedIcon />
+                  )
+                }
+                sx={{ fontSize: '0.75rem', textTransform: 'none' }}
+              >
+                {executionStatus === 'scheduled' 
+                  ? 'Programado' 
+                  : isExecuting ? t('pages.testPlan.executing') : t('pages.testPlan.executePlan')}
+              </Button>
+              <Button
+                size="small"
+                onClick={handleToggle}
+                sx={{ px: 0.5 }}
+              >
+                <ArrowDropDownIcon />
+              </Button>
+            </ButtonGroup>
+          </Tooltip>
+
+          <Popper
+            sx={{ zIndex: 1300 }}
+            open={openSplit}
+            anchorEl={anchorRef.current}
+            role={undefined}
+            transition
+            disablePortal
+          >
+            {({ TransitionProps, placement }) => (
+              <Grow
+                {...TransitionProps}
+                style={{
+                  transformOrigin: placement === 'bottom' ? 'center top' : 'center bottom',
+                }}
+              >
+                <Paper sx={{ mt: 0.5, borderRadius: 2, overflow: 'hidden', boxShadow: theme.shadows[4] }}>
+                  <ClickAwayListener onClickAway={handleClose}>
+                    <MenuList autoFocusItem sx={{ p: 0 }}>
+                      <MenuItem onClick={() => handleScheduleOption('instant')} sx={{ fontSize: '0.8rem', py: 1 }}>
+                        ⚡ Ejecutar Ahora
+                      </MenuItem>
+                      <MenuItem onClick={() => handleScheduleOption('delay_short')} sx={{ fontSize: '0.8rem', py: 1 }}>
+                        ⏱️ En 1 minuto
+                      </MenuItem>
+                      <MenuItem onClick={() => handleScheduleOption('delay_medium')} sx={{ fontSize: '0.8rem', py: 1 }}>
+                        ⏱️ En 5 minutos
+                      </MenuItem>
+                      <MenuItem onClick={() => handleScheduleOption('custom')} sx={{ fontSize: '0.8rem', py: 1 }}>
+                        📅 Programar Fecha/Hora...
+                      </MenuItem>
+                    </MenuList>
+                  </ClickAwayListener>
+                </Paper>
+              </Grow>
+            )}
+          </Popper>
+        </Box>
+      )}
+
+      {/* Import/Export Buttons */}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, borderLeft: onExecute ? 1 : 0, borderColor: 'divider', pl: onExecute ? 1 : 0, ml: onExecute ? 0.5 : 0 }}>
+        <Tooltip title="Exportar Plan (.desb)">
+          <span>
+            <IconButton
+              size="small"
+              disabled={!targetPlanId || !isSaved}
+              onClick={() => setExportDialogOpen(true)}
+              sx={{ color: theme.palette.primary.main, '&.Mui-disabled': { opacity: 0.5 } }}
+            >
+              <FileDownloadRoundedIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
+        <Tooltip title="Importar Plan (.desb)">
+          <IconButton 
+            size="small" 
+            onClick={() => fileInputRef.current?.click()}
+            sx={{ color: theme.palette.primary.main }}
+          >
+            <FileUploadRoundedIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+        <input
+          type="file"
+          accept=".desb"
+          ref={fileInputRef}
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            if (e.target.files && e.target.files.length > 0 && onImport) {
+              onImport(e.target.files[0]);
+              e.target.value = ''; // reset
+            }
+          }}
+        />
       </Box>
 
       {/* Schedule Dialog */}
-      <TestPlanScheduleDialog
-        open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
-        onConfirm={(scheduledAt) => {
-          setDialogOpen(false);
-          onExecute(scheduledAt);
-        }}
-      />
+      {onExecute && (
+        <TestPlanScheduleDialog
+          open={dialogOpen}
+          onClose={() => setDialogOpen(false)}
+          onConfirm={(scheduledAt) => {
+            setDialogOpen(false);
+            onExecute(scheduledAt);
+          }}
+        />
+      )}
 
       {/* Export Options Dialog */}
       <ExportPlanDialog

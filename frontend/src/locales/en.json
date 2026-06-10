@@ -48,6 +48,7 @@
             "apps": "Running Apps",
             "reports": "Reports",
             "test_plan": "Test Plan Designer",
+            "execution": "Execution Matrix",
             "guide": "Concepts Guide",
             "feedback": "Report Bug / Improvement"
         }
