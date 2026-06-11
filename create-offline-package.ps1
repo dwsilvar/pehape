@@ -192,11 +192,20 @@ if (Test-Path "package_offline\README.md") {
 }
 # 5.2 Include Tesseract OCR
 Write-Log "Step 5.2: Including Tesseract OCR" "INFO"
-$tesseractExe = (Get-Content "config\config.py" | Select-String 'TESSERACT_CMD_PATH = r"(.*)"').Matches.Groups[1].Value
+$tesseractExe = ""
+$ocrConfigFile = "config\ocr_config.json"
+if (Test-Path $ocrConfigFile) {
+    try {
+        $ocrJson = Get-Content $ocrConfigFile -Raw | ConvertFrom-Json
+        if ($ocrJson.tesseract_cmd_path) {
+            $tesseractExe = $ocrJson.tesseract_cmd_path
+        }
+    } catch {}
+}
 if (-not $tesseractExe) {
     # Fallback to a common path if not found in config
     $tesseractExe = "C:\src\tesseract-ocr\tesseract.exe"
-    Write-Log "Tesseract path not found in config.py, using fallback: $tesseractExe" "INFO"
+    Write-Log "Tesseract path not found in ocr_config.json, using fallback: $tesseractExe" "INFO"
 }
 if (Test-Path $tesseractExe) {
     $tesseractDir = Split-Path $tesseractExe
@@ -640,11 +649,16 @@ if (`$LASTEXITCODE -ne 0) {
 if (Test-Path "Tesseract-OCR\tesseract.exe") {
  Write-Host "Configuring local Tesseract OCR..."
 `$localTesseract = "`$ProjectRoot\Tesseract-OCR\tesseract.exe"
- # Update config.py to use the local path
-`$configFile = "config\config.py"
- (Get-Content `$configFile) | ForEach-Object {
-`$_ -replace 'TESSERACT_CMD_PATH = r".*"', "TESSERACT_CMD_PATH = r'`$localTesseract'"
- } | Set-Content `$configFile
+`$ocrConfigFile = "config\ocr_config.json"
+ if (Test-Path `$ocrConfigFile) {
+     try {
+         `$ocrJson = Get-Content `$ocrConfigFile -Raw | ConvertFrom-Json
+         `$ocrJson.tesseract_cmd_path = `$localTesseract
+         `$ocrJson | ConvertTo-Json -Depth 10 | Out-File `$ocrConfigFile -Encoding utf8
+     } catch {
+         Write-Host "WARNING: Failed to update ocr_config.json automatically." -ForegroundColor Yellow
+     }
+ }
 }
 # Crear archivo de bandera para instalación exitosa
 New-Item -ItemType File -Path "install.ok" -Force | Out-Null
@@ -671,10 +685,10 @@ Write-Host "========================================" -ForegroundColor Blue
 
 # Definition of protected items (WILL NOT BE OVERWRITTEN)
 `$ProtectedFiles = @(
-    "config\config.py",
+    "config\network_config.json",
+    "config\ocr_config.json",
     "features\run_list.json",
-    "features\ui_settings.json",
-    "backend\server_config.json"
+    "features\ui_settings.json"
 )
 `$ProtectedFolders = @(
     "resources\images",

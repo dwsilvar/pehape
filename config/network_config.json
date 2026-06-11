@@ -1,0 +1,6 @@
+{
+  "description": "Network configuration for PeHaPe. Shared between Python Backend, Vite Frontend, and PowerShell Scripts.",
+  "backend_host": "0.0.0.0",
+  "backend_port": 5001,
+  "frontend_port": 3000
+}

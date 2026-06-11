@@ -139,15 +139,20 @@ To run the full environment (Frontend editor + Backend server) in a single comma
 
 This will launch both servers. You can then access the Web UI at `http://localhost:3000`.
 
-### Port Configuration 🔌
+### Configuration 🔌
 
-If the default ports (**5001** for Backend, **3000** for Frontend) are in use, you can change them by editing the JSON configuration files in each module:
+The system configuration is divided into two JSON files inside the `config/` directory:
 
-- **Backend**: `backend/server_config.json`
-    - Change `"port"` to your desired port (e.g., `5005`).
-- **Frontend**: `frontend/app_config.json`
-    - Change `"port"` to your desired port (e.g., `3005`).
-    - **Important**: Update `"api_url"` if you changed the Backend port.
+- **Network Settings**: `config/network_config.json`
+    - `"backend_port"`: Port where the FastAPI server runs (default: `5001`).
+    - `"frontend_port"`: Port where the Vite dev server runs (default: `3000`).
+    - `"backend_host"`: Host address to bind the backend to (default: `"0.0.0.0"`).
+- **OCR & Automation Settings**: `config/ocr_config.json`
+    - `"tesseract_cmd_path"`: Path to the Tesseract OCR executable.
+    - `"tesseract_language"`: Language for OCR text recognition (default: `"spa"`).
+    - `"image_confidence_threshold"`: Threshold percentage for template matching (0-100).
+    - `"ocr_confidence_threshold"`: Threshold percentage for word filtering (0-100).
+    - `"stop_on_failure"`: Stop behave execution immediately on first failure.
 
 ### Running tests from CLI 🏃‍♂️
 

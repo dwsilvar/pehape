@@ -178,10 +178,10 @@ Write-Host ""
 
 # --- Archivos y carpetas protegidos (NO se sobrescriben) ---
 `$ProtectedFiles = @(
-    "config\config.py",
+    "config\network_config.json",
+    "config\ocr_config.json",
     "features\run_list.json",
-    "features\ui_settings.json",
-    "backend\server_config.json"
+    "features\ui_settings.json"
 )
 `$ProtectedFolders = @(
     "resources\images",

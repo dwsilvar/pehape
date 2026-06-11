@@ -90,7 +90,6 @@ if __name__ == "__main__":
     import threading
     import time
     import sys
-    import json
     import uvicorn
 
     parser = argparse.ArgumentParser(description='PeHaPe FastAPI Orchestrator Server')
@@ -106,20 +105,14 @@ if __name__ == "__main__":
                         help='Port to bind to')
     args = parser.parse_args()
 
-    # Load configuration from JSON if exists
-    config_path = Path(__file__).parent / "backend" / "server_config.json"
-    host = "0.0.0.0"
-    port = 5001
-    
-    if config_path.exists():
-        try:
-            with open(config_path, "r", encoding="utf-8") as f:
-                config = json.load(f)
-                host = config.get("host", host)
-                port = config.get("port", port)
-                print(f"Loaded configuration from {config_path}")
-        except Exception as e:
-            print(f"Error loading config: {e}. Using defaults.")
+    # Load configuration from config/config.py
+    try:
+        from config.config import BACKEND_HOST, BACKEND_PORT
+        host = BACKEND_HOST
+        port = BACKEND_PORT
+    except ImportError:
+        host = "0.0.0.0"
+        port = 5001
 
     # CLI arguments override config file
     if args.host:
