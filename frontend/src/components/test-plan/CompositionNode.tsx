@@ -10,7 +10,7 @@ import KeyboardArrowUpRoundedIcon from '@mui/icons-material/KeyboardArrowUpRound
 import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded';
 import AccountTreeRoundedIcon from '@mui/icons-material/AccountTreeRounded';
 import CallSplitRoundedIcon from '@mui/icons-material/CallSplitRounded';
-import SettingsIcon from '@mui/icons-material/Settings';
+import AssignmentIcon from '@mui/icons-material/Assignment';
 import { BlueprintRef, BlueprintsData, PlanTask } from '../../types';
 import { CycleIcon, FlowIcon, ScenarioIcon, FeatureIcon } from '../PehapeIcons';
 import LibraryBooksRoundedIcon from '@mui/icons-material/LibraryBooksRounded';
@@ -184,7 +184,7 @@ const CompositionNode: React.FC<CompositionNodeProps> = ({
           </Box>
           <Box sx={{ display: 'flex', gap: 0.25 }}>
             <Tooltip title="Configurar Tareas">
-              <IconButton size="small" onClick={() => setTaskDialogOpen(true)} sx={{ p: compact ? 0.25 : 0.5 }}><SettingsIcon sx={{ fontSize: compact ? 14 : 16 }} /></IconButton>
+              <IconButton size="small" onClick={() => setTaskDialogOpen(true)} sx={{ p: compact ? 0.25 : 0.5 }}><AssignmentIcon sx={{ fontSize: compact ? 14 : 16 }} /></IconButton>
             </Tooltip>
             <Tooltip title="Remover">
               <IconButton size="small" color="error" onClick={() => onRemove(item.id)} sx={{ p: compact ? 0.25 : 0.5 }}><DeleteOutlineRoundedIcon sx={{ fontSize: compact ? 14 : 16 }} /></IconButton>

@@ -7,7 +7,7 @@ import {
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
-import SettingsIcon from '@mui/icons-material/Settings';
+import AssignmentIcon from '@mui/icons-material/Assignment';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import { PlanTask } from '../../types';
 import { v4 as uuidv4 } from 'uuid';
@@ -184,7 +184,7 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
             background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.08)} 0%, ${alpha(theme.palette.primary.main, 0.02)} 100%)`,
           }}
         >
-          <SettingsIcon sx={{ color: theme.palette.primary.main, fontSize: 22 }} />
+              <AssignmentIcon fontSize="small" />
           <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary', fontSize: '1.05rem', flexGrow: 1 }}>
             Configurar Tareas de Ejecución
           </Typography>
@@ -253,7 +253,7 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
                               '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.1) }
                             }}
                           >
-                            <SettingsIcon fontSize="small" />
+                            <AssignmentIcon fontSize="small" />
                           </IconButton>
                           <IconButton
                             edge="end"

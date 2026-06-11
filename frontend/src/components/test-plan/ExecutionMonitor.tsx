@@ -13,7 +13,7 @@ import LibraryBooksRoundedIcon from '@mui/icons-material/LibraryBooksRounded';
 import ViewListRoundedIcon from '@mui/icons-material/ViewListRounded';
 import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded';
 import KeyboardArrowRightRoundedIcon from '@mui/icons-material/KeyboardArrowRightRounded';
-import SettingsIcon from '@mui/icons-material/Settings';
+import AssignmentIcon from '@mui/icons-material/Assignment';
 import { BlueprintsData, BlueprintRef, PlanBlueprint, PlanTask } from '../../types';
 import { ScenarioIcon, FeatureIcon, CycleIcon, FlowIcon } from '../PehapeIcons';
 import { useExecutionScenarioStatus, ScenarioExecStatus } from '../../hooks/useExecutionScenarioStatus';
@@ -874,7 +874,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                 }}
               >
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, overflow: 'hidden' }}>
-                  <SettingsIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                  <AssignmentIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
                   <Tooltip title="Tareas" placement="top" arrow enterDelay={200}>
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Tareas</span>
                   </Tooltip>
@@ -1020,7 +1020,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                                 onClick={() => handleOpenTaskDialog('cycle', fs.cycleId!, fs.cycleName, 'cycle')}
                                 sx={{ p: 0.25, opacity: 0.7, '&:hover': { opacity: 1 }, flexShrink: 0 }}
                               >
-                                <SettingsIcon sx={{ fontSize: 13 }} />
+                                <AssignmentIcon sx={{ fontSize: 13 }} />
                               </IconButton>
                             </Tooltip>
                           )}
@@ -1059,7 +1059,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                                   onClick={() => handleOpenTaskDialog('set', fs.setId!, fs.parentGroupName!, 'set')}
                                   sx={{ p: 0.25, opacity: 0.7, '&:hover': { opacity: 1 }, flexShrink: 0 }}
                                 >
-                                  <SettingsIcon sx={{ fontSize: 13 }} />
+                                  <AssignmentIcon sx={{ fontSize: 13 }} />
                                 </IconButton>
                               </Tooltip>
                             )}
@@ -1096,7 +1096,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                                   onClick={() => handleOpenTaskDialog('flow', fs.flowId!, fs.groupName, 'flow')}
                                   sx={{ p: 0.25, opacity: 0.7, '&:hover': { opacity: 1 }, flexShrink: 0 }}
                                 >
-                                  <SettingsIcon sx={{ fontSize: 13 }} />
+                                  <AssignmentIcon sx={{ fontSize: 13 }} />
                                 </IconButton>
                               </Tooltip>
                             )}
@@ -1295,7 +1295,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                             )}
                             sx={{ p: 0.25, opacity: 0.6, '&:hover': { opacity: 1 }, flexShrink: 0 }}
                           >
-                            <SettingsIcon sx={{ fontSize: 13 }} />
+                            <AssignmentIcon sx={{ fontSize: 13 }} />
                           </IconButton>
                         </Tooltip>
                       </Box>
@@ -1369,7 +1369,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                                 <Chip
                                   key={task.id}
                                   size="small"
-                                  icon={<SettingsIcon sx={{ fontSize: '10px !important' }} />}
+                                  icon={<AssignmentIcon sx={{ fontSize: '10px !important' }} />}
                                   label={`@${task.name}`}
                                   sx={{
                                     height: 18,

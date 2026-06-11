@@ -15,6 +15,8 @@ import PlanHeader from '../components/test-plan/PlanHeader';
 import BlueprintCatalogPanel from '../components/test-plan/BlueprintCatalogPanel';
 import CompositionCanvas from '../components/test-plan/CompositionCanvas';
 import CompositionAssetLibraryPanel from '../components/test-plan/CompositionAssetLibraryPanel';
+import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 
 const LEFT_WIDTH_DEFAULT = 260;
 const RIGHT_WIDTH_DEFAULT = 320;
@@ -87,6 +89,22 @@ const TestPlanPage: React.FC = () => {
       console.error('Failed to save blueprints', e);
     }
   }, [blueprints]);
+
+  // ── Unsaved Changes Guard ──────────────────────────────────────────────
+  const blocker = useUnsavedChangesGuard(!isSaved, '/');
+
+  const handleSaveAndLeave = useCallback(async () => {
+    await handleSave();
+    blocker.proceed?.();
+  }, [handleSave, blocker]);
+
+  const handleDiscardAndLeave = useCallback(() => {
+    blocker.proceed?.();
+  }, [blocker]);
+
+  const handleCancelLeave = useCallback(() => {
+    blocker.reset?.();
+  }, [blocker]);
 
   const handleImport = useCallback(async (file: File) => {
     const formData = new FormData();
@@ -376,6 +394,14 @@ const TestPlanPage: React.FC = () => {
           </Box>
         </Box>
       </Box>
+
+      {/* Unsaved Changes Confirmation Dialog */}
+      <UnsavedChangesDialog
+        open={blocker.state === 'blocked'}
+        onSaveAndLeave={handleSaveAndLeave}
+        onDiscardAndLeave={handleDiscardAndLeave}
+        onCancel={handleCancelLeave}
+      />
     </DndContext>
   );
 };

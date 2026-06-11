@@ -8,7 +8,7 @@ import AccountTreeRoundedIcon from '@mui/icons-material/AccountTreeRounded';
 import DragIndicatorRoundedIcon from '@mui/icons-material/DragIndicatorRounded';
 import ViewAgendaRoundedIcon from '@mui/icons-material/ViewAgendaRounded';
 import ViewListRoundedIcon from '@mui/icons-material/ViewListRounded';
-import SettingsIcon from '@mui/icons-material/Settings';
+import AssignmentIcon from '@mui/icons-material/Assignment';
 import { BlueprintRef, BlueprintsData, PlanTask } from '../../types';
 import CompositionNode from './CompositionNode';
 import FlowConnector from './FlowConnector';
@@ -85,7 +85,7 @@ const CompositionCanvas: React.FC<CompositionCanvasProps> = ({
         {onUpdateTasks && (
           <Tooltip title={`Configurar tareas del ${category.slice(0, -1)}`}>
             <IconButton size="small" onClick={() => setBlueprintTaskDialogOpen(true)} sx={{ p: 0.5, position: 'relative' }}>
-              <SettingsIcon sx={{ fontSize: 16 }} />
+              <AssignmentIcon sx={{ fontSize: 16 }} />
               {tasks.length > 0 && (
                 <Box sx={{ position: 'absolute', top: 2, right: 2, bgcolor: 'primary.main', width: 6, height: 6, borderRadius: '50%' }} />
               )}

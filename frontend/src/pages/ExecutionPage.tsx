@@ -18,6 +18,9 @@ import ExecutionMonitor from '../components/test-plan/ExecutionMonitor';
 import ExecutionDrawer from '../components/test-plan/ExecutionDrawer';
 import TestPlanScheduleDialog from '../components/test-plan/TestPlanScheduleDialog';
 import { BlueprintsData, PlanTask } from '../types';
+import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+
 
 const ExecutionPage: React.FC = () => {
   const { t } = useTranslation();
@@ -80,6 +83,22 @@ const ExecutionPage: React.FC = () => {
       console.error('Failed to save blueprints', e);
     }
   }, [blueprints]);
+
+  // ── Unsaved Changes Guard ──────────────────────────────────────────────
+  const blocker = useUnsavedChangesGuard(!isSaved, '/execution');
+
+  const handleSaveAndLeave = useCallback(async () => {
+    await handleSave();
+    blocker.proceed?.();
+  }, [handleSave, blocker]);
+
+  const handleDiscardAndLeave = useCallback(() => {
+    blocker.proceed?.();
+  }, [blocker]);
+
+  const handleCancelLeave = useCallback(() => {
+    blocker.reset?.();
+  }, [blocker]);
 
   // ── Execution Actions ─────────────────────────────────────────────────
   const handleExecute = useCallback(async (scheduledAt?: string) => {
@@ -421,6 +440,14 @@ const ExecutionPage: React.FC = () => {
           setScheduleDialogOpen(false);
           handleExecute(scheduledAt);
         }}
+      />
+
+      {/* Unsaved Changes Confirmation Dialog */}
+      <UnsavedChangesDialog
+        open={blocker.state === 'blocked'}
+        onSaveAndLeave={handleSaveAndLeave}
+        onDiscardAndLeave={handleDiscardAndLeave}
+        onCancel={handleCancelLeave}
       />
     </Box>
   );
