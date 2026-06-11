@@ -7,6 +7,5 @@ from api.routers import (  # noqa: F401
     features,
     ocr,
     reports,
-    test_plans,
     tools,
 )

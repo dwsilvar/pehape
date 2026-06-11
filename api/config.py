@@ -54,7 +54,6 @@ except ImportError:
 # ── Filesystem paths ───────────────────────────────────────────────────────────
 
 FEATURES_DIR       = PROJECT_ROOT / "features"
-PLANS_DB_FILE      = FEATURES_DIR / "test_plans.json"
 BLUEPRINTS_DB_FILE = FEATURES_DIR / "blueprints.json"
 RESOURCES_DIR      = PROJECT_ROOT / "resources"
 IMAGES_DIR         = RESOURCES_DIR / "images"
@@ -69,7 +68,6 @@ plan_manager = ExecutionPlanManager(str(FEATURES_DIR)) if ExecutionPlanManager e
 # Ensure required directories exist at startup
 FEATURES_DIR.mkdir(parents=True, exist_ok=True)
 IMAGES_DIR.mkdir(parents=True, exist_ok=True)
-PLANS_DB_FILE.parent.mkdir(parents=True, exist_ok=True)
 ALLURE_RESULTS.mkdir(parents=True, exist_ok=True)
 ALLURE_REPORT.mkdir(parents=True, exist_ok=True)
 

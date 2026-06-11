@@ -16,7 +16,7 @@ from __future__ import annotations
 # ── Application & routers ──────────────────────────────────────────────────────
 
 from api.config import app                          # noqa: F401  (re-exported for uvicorn)
-from api.config import ALLURE_REPORT, ORCHESTRATOR, PLANS_DB_FILE  # health endpoint
+from api.config import ALLURE_REPORT, ORCHESTRATOR, BLUEPRINTS_DB_FILE  # health endpoint
 from api.routers import (
     blueprints,
     execution,
@@ -26,7 +26,6 @@ from api.routers import (
     ocr,
     reports,
     settings,
-    test_plans,
     tools,
 )
 
@@ -38,7 +37,6 @@ app.include_router(reports.router)
 app.include_router(settings.router)
 app.include_router(execution_plan.router)
 app.include_router(execution.router)
-app.include_router(test_plans.router)
 app.include_router(tools.router)
 app.include_router(export_import.router)
 
@@ -51,7 +49,7 @@ def health_check():
     return {
         "status":               "ok",
         "orchestrator_exists":  ORCHESTRATOR.exists(),
-        "plans_db":             str(PLANS_DB_FILE),
+        "blueprints_db":        str(BLUEPRINTS_DB_FILE),
         "allure_report_ready":  ALLURE_REPORT.exists() and any(ALLURE_REPORT.iterdir()),
         "report_url":           "/allure-report/index.html",
     }
