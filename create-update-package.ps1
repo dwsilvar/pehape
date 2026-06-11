@@ -177,11 +177,9 @@ Write-Host "Aplicando actualizacion a version: `$newVersion" -ForegroundColor Gr
 Write-Host ""
 
 # --- Archivos y carpetas protegidos (NO se sobrescriben) ---
-`$ProtectedFiles = @(
+$ProtectedFiles = @(
     "config\network_config.json",
-    "config\ocr_config.json",
-    "features\run_list.json",
-    "features\ui_settings.json"
+    "config\ocr_config.json"
 )
 `$ProtectedFolders = @(
     "resources\images",

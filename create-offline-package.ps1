@@ -686,9 +686,7 @@ Write-Host "========================================" -ForegroundColor Blue
 # Definition of protected items (WILL NOT BE OVERWRITTEN)
 `$ProtectedFiles = @(
     "config\network_config.json",
-    "config\ocr_config.json",
-    "features\run_list.json",
-    "features\ui_settings.json"
+    "config\ocr_config.json"
 )
 `$ProtectedFolders = @(
     "resources\images",

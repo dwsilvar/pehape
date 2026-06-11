@@ -15,18 +15,8 @@ from pathlib import Path
 # ── Project paths ──────────────────────────────────────────────────────────────
 
 PROJECT_ROOT = Path(__file__).parent.parent
-BACKEND_DIR  = PROJECT_ROOT / "backend"
-
-# Make sure backend helpers (ExecutionPlanManager, etc.) are importable
-if str(BACKEND_DIR) not in sys.path:
-    sys.path.append(str(BACKEND_DIR))
 
 # ── Optional imports ────────────────────────────────────────────────────────────
-
-try:
-    from execution_plan_manager import ExecutionPlanManager
-except ImportError:
-    ExecutionPlanManager = None  # type: ignore[assignment,misc]
 
 try:
     from behave.step_registry import registry
@@ -61,9 +51,6 @@ ALLURE_RESULTS     = PROJECT_ROOT / "reports" / "allure_results"
 ALLURE_REPORT      = PROJECT_ROOT / "reports" / "allure-report"
 ORCHESTRATOR       = PROJECT_ROOT / "orchestrator.py"
 
-# ── Singletons ─────────────────────────────────────────────────────────────────
-
-plan_manager = ExecutionPlanManager(str(FEATURES_DIR)) if ExecutionPlanManager else None
 
 # Ensure required directories exist at startup
 FEATURES_DIR.mkdir(parents=True, exist_ok=True)
