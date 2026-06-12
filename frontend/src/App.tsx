@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { Box } from '@mui/material';
 import { DndContext, DragEndEvent, DragStartEvent, useSensor, useSensors, PointerSensor, TouchSensor } from '@dnd-kit/core';
 import Sidebar from './components/Sidebar';
@@ -103,15 +103,20 @@ const AppLayout: React.FC = () => {
   );
 };
 
+const router = createBrowserRouter([
+  {
+    path: '*',
+    element: <AppLayout />
+  }
+]);
+
 const App: React.FC = () => {
   return (
-    <BrowserRouter>
-      <LayoutProvider>
-        <ThemeWrapper>
-          <AppLayout />
-        </ThemeWrapper>
-      </LayoutProvider>
-    </BrowserRouter>
+    <LayoutProvider>
+      <ThemeWrapper>
+        <RouterProvider router={router} />
+      </ThemeWrapper>
+    </LayoutProvider>
   );
 };
 
