@@ -39,10 +39,11 @@ const UnsavedChangesDialog: React.FC<UnsavedChangesDialogProps> = ({
         sx: {
           borderRadius: 2,
           border: `1px solid ${alpha(theme.palette.warning.main, 0.3)}`,
-          background:
+          bgcolor: 'background.paper',
+          backgroundImage:
             theme.palette.mode === 'dark'
-              ? `linear-gradient(135deg, ${alpha(theme.palette.background.paper, 0.98)} 0%, ${alpha(theme.palette.warning.dark, 0.06)} 100%)`
-              : theme.palette.background.paper,
+              ? `linear-gradient(135deg, rgba(255, 255, 255, 0) 0%, ${alpha(theme.palette.warning.dark, 0.08)} 100%)`
+              : 'none',
         },
       }}
     >

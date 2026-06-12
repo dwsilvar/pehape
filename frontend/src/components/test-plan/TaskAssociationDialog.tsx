@@ -8,7 +8,7 @@ import {
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import AssignmentIcon from '@mui/icons-material/Assignment';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import SaveRoundedIcon from '@mui/icons-material/SaveRounded';
 import { PlanTask } from '../../types';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -48,6 +48,17 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
   initialScope
 }) => {
   const theme = useTheme();
+  
+  const getNodeTypeLabel = () => {
+    switch (nodeType) {
+      case 'cycle': return 'Ciclo';
+      case 'set': return 'Set';
+      case 'flow': return 'Flujo';
+      case 'feature': return 'Escenario elegido';
+      case 'scenario': return 'Escenario elegido';
+      default: return 'Escenario elegido';
+    }
+  };
   const [availableTasks, setAvailableTasks] = useState<TaskDef[]>([]);
   const [associatedTasks, setAssociatedTasks] = useState<PlanTask[]>([]);
   const [selectedTaskName, setSelectedTaskName] = useState<string>('');
@@ -59,6 +70,29 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [currentTargetScenario, setCurrentTargetScenario] = useState<string>('all');
   const [applyScope, setApplyScope] = useState<'instance' | 'all'>('instance');
+
+  // Animation states
+  const [animatingTaskId, setAnimatingTaskId] = useState<string | null>(null);
+  const [animationType, setAnimationType] = useState<'add' | 'edit' | null>(null);
+
+  const targetScenarioVal = currentTargetScenario === 'all' ? undefined : currentTargetScenario;
+  const isDuplicate = !!(
+    selectedTaskName &&
+    associatedTasks.some(t => {
+      if (t.id === editingTaskId) return false;
+      const baseMatch = 
+        t.name === selectedTaskName &&
+        t.hook === currentHook &&
+        t.scope === currentScope;
+      if (!baseMatch) return false;
+      if (nodeType === 'feature') {
+        const tTarget = t.targetScenario || undefined;
+        const currentTarget = targetScenarioVal || undefined;
+        return tTarget === currentTarget;
+      }
+      return true;
+    })
+  );
 
   // Fetch available tasks on mount
   useEffect(() => {
@@ -72,6 +106,8 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
       
       setAssociatedTasks(initialTasks ? [...initialTasks] : []);
       resetForm();
+      setAnimatingTaskId(null);
+      setAnimationType(null);
       setApplyScope(initialScope || 'instance');
     }
   }, [open, initialTasks, initialScope]);
@@ -107,12 +143,15 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
   };
 
   const handleAddOrUpdateTask = () => {
-    if (!selectedTaskName) return;
+    if (!selectedTaskName || isDuplicate) return;
 
-    const targetScenarioVal = currentTargetScenario === 'all' ? undefined : currentTargetScenario;
+    let targetId = '';
+    let isEdit = false;
 
     if (editingTaskId) {
       // Update existing task
+      targetId = editingTaskId;
+      isEdit = true;
       setAssociatedTasks(prev => prev.map(t => 
         t.id === editingTaskId 
           ? { ...t, name: selectedTaskName, hook: currentHook, scope: currentScope, args: { ...currentArgs }, targetScenario: targetScenarioVal }
@@ -120,8 +159,11 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
       ));
     } else {
       // Add new task
+      const newId = uuidv4();
+      targetId = newId;
+      isEdit = false;
       const newTask: PlanTask = {
-        id: uuidv4(),
+        id: newId,
         name: selectedTaskName,
         hook: currentHook,
         scope: currentScope,
@@ -130,6 +172,17 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
       };
       setAssociatedTasks(prev => [...prev, newTask]);
     }
+
+    // Trigger animation
+    setAnimatingTaskId(targetId);
+    setAnimationType(isEdit ? 'edit' : 'add');
+
+    // Clean up animation state after 2000ms
+    setTimeout(() => {
+      setAnimatingTaskId(null);
+      setAnimationType(null);
+    }, 2000);
+
     resetForm();
   };
 
@@ -172,6 +225,45 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
         }
       }}
     >
+      <style>{`
+        @keyframes slideFromRight {
+          0% {
+            transform: translateX(120%);
+            opacity: 0;
+            background-color: rgba(16, 185, 129, 0.35);
+            box-shadow: 0 0 12px rgba(16, 185, 129, 0.5);
+          }
+          30% {
+            transform: translateX(-10px);
+            opacity: 1;
+            background-color: rgba(16, 185, 129, 0.2);
+          }
+          60% {
+            transform: translateX(4px);
+            background-color: rgba(16, 185, 129, 0.1);
+          }
+          100% {
+            transform: translateX(0);
+            opacity: 1;
+          }
+        }
+
+        @keyframes pulseUpdate {
+          0% {
+            transform: scale(1);
+            background-color: rgba(25, 118, 210, 0.35);
+            box-shadow: 0 0 12px rgba(25, 118, 210, 0.5);
+          }
+          50% {
+            transform: scale(1.04);
+            background-color: rgba(25, 118, 210, 0.15);
+            box-shadow: 0 0 8px rgba(25, 118, 210, 0.3);
+          }
+          100% {
+            transform: scale(1);
+          }
+        }
+      `}</style>
       <DialogTitle sx={{ p: 0 }}>
         <Box
           sx={{
@@ -191,261 +283,436 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
           <Typography
             variant="caption"
             sx={{
-              bgcolor: alpha(theme.palette.primary.main, 0.1),
-              px: 1.25,
-              py: 0.5,
-              borderRadius: 1.5,
-              color: theme.palette.primary.main,
+              bgcolor: 'primary.main',
+              px: 2,
+              py: 0.75,
+              borderRadius: '20px',
+              color: '#FFFFFF',
               fontWeight: 700,
-              border: `1px solid ${alpha(theme.palette.primary.main, 0.25)}`,
-              fontSize: '0.7rem',
-              letterSpacing: 0.5
+              boxShadow: `0 2px 8px ${alpha(theme.palette.primary.main, 0.25)}`,
+              fontSize: '0.825rem',
+              letterSpacing: 0.5,
+              maxWidth: '300px',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap'
             }}
           >
-            Nodo: {nodeName}
+            {getNodeTypeLabel()}: {nodeName}
           </Typography>
         </Box>
       </DialogTitle>
-
-      <DialogContent sx={{ p: 3, borderColor: alpha(theme.palette.divider, 0.5) }} dividers>
-        <Grid container spacing={3}>
-          {/* Left panel: Associated tasks list */}
-          <Grid size={{ xs: 12, md: 5 }} sx={{ borderRight: { md: 1 }, borderColor: alpha(theme.palette.divider, 0.5) }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2, color: 'text.secondary', fontSize: '0.8rem', letterSpacing: 0.5, textTransform: 'uppercase' }}>
-              Tareas Configuradas ({associatedTasks.length})
-            </Typography>
-            {associatedTasks.length === 0 ? (
-              <Box sx={{ p: 4, textAlign: 'center', bgcolor: alpha(theme.palette.action.hover, 0.5), borderRadius: '10px', border: '1px dashed', borderColor: alpha(theme.palette.divider, 0.8) }}>
-                <Typography variant="body2" color="text.disabled">
-                  No hay tareas asociadas a este nodo.
-                </Typography>
-              </Box>
-            ) : (
-              <List dense sx={{ maxHeight: 380, overflow: 'auto', pr: 0.5, '&::-webkit-scrollbar': { width: 4 }, '&::-webkit-scrollbar-thumb': { bgcolor: 'divider', borderRadius: 2 } }}>
-                {associatedTasks.map((task) => (
-                  <Paper
-                    variant="outlined"
-                    key={task.id}
-                    sx={{
-                      mb: 1.5,
-                      p: 1.5,
-                      borderRadius: '8px',
-                      borderColor: editingTaskId === task.id ? theme.palette.primary.main : alpha(theme.palette.divider, 0.8),
-                      bgcolor: editingTaskId === task.id ? alpha(theme.palette.primary.main, 0.04) : 'background.paper',
-                      boxShadow: editingTaskId === task.id ? `0 2px 8px ${alpha(theme.palette.primary.main, 0.15)}` : 'none',
-                      transition: 'all 0.2s ease',
-                      '&:hover': {
-                        borderColor: theme.palette.primary.main,
-                        bgcolor: alpha(theme.palette.primary.main, 0.02),
-                      }
-                    }}
-                  >
-                    <ListItem
-                      secondaryAction={
-                        <Stack direction="row" spacing={0.5}>
-                          <IconButton
-                            edge="end"
-                            size="small"
-                            onClick={() => handleEditClick(task)}
-                            title="Editar"
-                            sx={{
-                              color: editingTaskId === task.id ? 'primary.main' : 'text.secondary',
-                              '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.1) }
-                            }}
-                          >
-                            <AssignmentIcon fontSize="small" />
-                          </IconButton>
-                          <IconButton
-                            edge="end"
-                            size="small"
-                            color="error"
-                            onClick={() => handleDeleteTask(task.id)}
-                            title="Eliminar"
-                            sx={{
-                              color: 'error.main',
-                              '&:hover': { bgcolor: alpha(theme.palette.error.main, 0.1) }
-                            }}
-                          >
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </Stack>
-                      }
-                      disablePadding
-                    >
-                      <ListItemText
-                        primary={
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Typography variant="body2" sx={{ fontWeight: 'bold', fontFamily: 'monospace', color: editingTaskId === task.id ? 'primary.main' : 'text.primary' }}>
+      <DialogContent
+        sx={{
+          p: 1.5,
+          borderColor: alpha(theme.palette.divider, 0.5),
+          bgcolor: theme.palette.mode === 'dark' ? '#0F172A' : '#F8FAFC'
+        }}
+        dividers
+      >
+        <Grid container spacing={1} alignItems="stretch">
+          {/* Left panel: Associated tasks list (Separate Section) */}
+          <Grid size={{ xs: 12, md: 5 }} sx={{ display: 'flex' }}>
+            <Paper
+              variant="outlined"
+              sx={{
+                p: 1.25,
+                borderRadius: '12px',
+                width: '100%',
+                bgcolor: theme.palette.mode === 'dark' ? '#1E293B' : '#FFFFFF',
+                borderColor: alpha(theme.palette.divider, 0.6),
+                display: 'flex',
+                flexDirection: 'column',
+                boxShadow: theme.palette.mode === 'dark' ? '0 4px 20px rgba(0,0,0,0.4)' : '0 4px 20px rgba(0,0,0,0.05)',
+              }}
+            >
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.25, color: 'text.secondary', fontSize: '0.8rem', letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                Tareas Configuradas ({associatedTasks.length})
+              </Typography>
+              {associatedTasks.length === 0 ? (
+                <Box sx={{ p: 4, textAlign: 'center', bgcolor: alpha(theme.palette.action.hover, 0.5), borderRadius: '10px', border: '1px dashed', borderColor: alpha(theme.palette.divider, 0.8), flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Typography variant="body2" color="text.disabled">
+                    No hay tareas asociadas a este {nodeType === 'cycle' ? 'ciclo' : nodeType === 'set' ? 'set' : nodeType === 'flow' ? 'flujo' : 'escenario'}.
+                  </Typography>
+                </Box>
+              ) : (
+                <List dense sx={{ maxHeight: 420, overflow: 'auto', pr: 0.5, '&::-webkit-scrollbar': { width: 4 }, '&::-webkit-scrollbar-thumb': { bgcolor: 'divider', borderRadius: 2 } }}>
+                  {associatedTasks.map((task) => {
+                    const isNew = !initialTasks.some(it => it.id === task.id);
+                    return (
+                      <Paper
+                        variant="outlined"
+                        key={task.id}
+                        sx={{
+                          mb: 1.25,
+                          p: 1.25,
+                          borderRadius: '8px',
+                          borderColor: editingTaskId === task.id 
+                            ? theme.palette.primary.main 
+                            : isNew 
+                              ? alpha('#10b981', 0.45) 
+                              : alpha(theme.palette.divider, 0.8),
+                          bgcolor: editingTaskId === task.id 
+                            ? alpha(theme.palette.primary.main, 0.04) 
+                            : isNew 
+                              ? alpha('#10b981', 0.08) 
+                              : 'background.paper',
+                          boxShadow: editingTaskId === task.id ? `0 2px 8px ${alpha(theme.palette.primary.main, 0.15)}` : 'none',
+                          transition: 'all 0.2s ease',
+                          animation: animatingTaskId === task.id
+                            ? (animationType === 'add' ? 'slideFromRight 1.6s cubic-bezier(0.16, 1, 0.3, 1) forwards' : 'pulseUpdate 1.6s ease-out forwards')
+                            : 'none',
+                          '&:hover': {
+                            borderColor: editingTaskId === task.id 
+                              ? theme.palette.primary.main 
+                              : isNew 
+                                ? '#10b981' 
+                                : theme.palette.primary.main,
+                            bgcolor: editingTaskId === task.id 
+                              ? alpha(theme.palette.primary.main, 0.04) 
+                              : isNew 
+                                ? alpha('#10b981', 0.12) 
+                                : alpha(theme.palette.primary.main, 0.02),
+                          }
+                        }}
+                      >
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%', gap: 1 }}>
+                          <Box sx={{ minWidth: 0, flexGrow: 1 }}>
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                fontWeight: 'bold',
+                                fontFamily: 'monospace',
+                                color: editingTaskId === task.id ? 'primary.main' : 'text.primary',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis'
+                              }}
+                              title={`@${task.name}`}
+                            >
                               @{task.name}
                             </Typography>
-                          </Box>
-                        }
-                        secondary={
-                          <>
                             <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-                              Ejecutar: <strong>{task.hook.toUpperCase()}</strong> · Alcance: <strong>{task.scope.toUpperCase()}</strong>
+                              Ejecución <strong>{task.hook === 'before' ? 'Before' : 'After'}</strong> <strong>{task.scope === 'scenario' ? 'Escenario' : 'Paso'}</strong>
                             </Typography>
                             {task.targetScenario && (
-                              <Typography variant="caption" color="primary.main" display="block" sx={{ fontWeight: 'bold', mt: 0.5 }}>
+                              <Typography variant="caption" color="primary.main" display="block" sx={{ fontWeight: 'bold', mt: 0.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={task.targetScenario}>
                                 Filtro: Solo en "{
                                   task.targetScenario.startsWith('flow-') || task.targetScenario.startsWith('set-')
-                                    ? (task.targetScenario.length > 10 ? task.targetScenario.substring(0, 10) + '...' : task.targetScenario)
+                                    ? (task.targetScenario.length > 15 ? task.targetScenario.substring(0, 15) + '...' : task.targetScenario)
                                     : task.targetScenario
                                 }"
                               </Typography>
                             )}
-                          </>
-                        }
-                      />
-                    </ListItem>
-                  </Paper>
-                ))}
-              </List>
-            )}
-          </Grid>
-
-          {/* Right panel: Task configuration Form */}
-          <Grid size={{ xs: 12, md: 7 }} sx={{ pl: { md: 1 } }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2, color: 'text.secondary', fontSize: '0.8rem', letterSpacing: 0.5, textTransform: 'uppercase' }}>
-              {editingTaskId ? 'Editar Tarea Seleccionada' : 'Asociar Nueva Tarea'}
-            </Typography>
-
-            {nodeType && nodeType !== 'scenario' ? (
-              <Alert severity="info" sx={{ mb: 2.5, fontSize: '0.75rem', borderRadius: '8px', border: `1px solid ${alpha(theme.palette.info.main, 0.2)}` }}>
-                <strong>Nota de Herencia ({nodeType === 'plans' || nodeType === 'plan' ? 'Plan' : nodeType === 'cycles' || nodeType === 'cycle' ? 'Ciclo' : nodeType === 'flows' || nodeType === 'flow' ? 'Flujo' : nodeType === 'sets' || nodeType === 'set' ? 'Test Set' : nodeType}):</strong> Esta tarea se heredará en cascada y se ejecutará para <strong>cada escenario</strong> dentro de este contenedor.
-                <br />
-                • <em>Escenario</em>: Se ejecuta antes/después de cada escenario.
-                <br />
-                • <em>Paso</em>: Se ejecuta antes/después de cada paso de todos los escenarios.
-              </Alert>
-            ) : (
-              <Alert severity="info" sx={{ mb: 2.5, fontSize: '0.75rem', borderRadius: '8px', border: `1px solid ${alpha(theme.palette.info.main, 0.2)}` }}>
-                <strong>Nota de Instancia:</strong> Esta tarea se asocia a este escenario específico y se ejecutará únicamente en su ciclo de vida.
-              </Alert>
-            )}
-
-            <Stack spacing={2.5}>
-              <FormControl fullWidth size="small">
-                <InputLabel id="task-select-label">Seleccionar Tarea</InputLabel>
-                <Select
-                  labelId="task-select-label"
-                  value={selectedTaskName}
-                  label="Seleccionar Tarea"
-                  onChange={(e) => handleTaskSelection(e.target.value)}
-                  sx={{ borderRadius: '8px' }}
-                >
-                  <MenuItem value="">
-                    <em>Ninguna</em>
-                  </MenuItem>
-                  {availableTasks.map((t) => (
-                    <MenuItem key={t.name} value={t.name}>
-                      {t.class_name} (@{t.name})
-                    </MenuItem>
-                  ))}
-                </Select>
-                {selectedTaskDef?.doc && (
-                  <FormHelperText sx={{ fontStyle: 'italic', mt: 1, color: 'text.secondary', fontSize: '0.72rem' }}>
-                    {selectedTaskDef.doc}
-                  </FormHelperText>
-                )}
-              </FormControl>
-
-              {selectedTaskName && (
-                <>
-                  {nodeType === 'feature' && scenarios && scenarios.length > 0 && (
-                    <FormControl fullWidth size="small">
-                      <InputLabel id="target-scenario-select-label">Escenario Objetivo</InputLabel>
-                      <Select
-                        labelId="target-scenario-select-label"
-                        value={currentTargetScenario}
-                        label="Escenario Objetivo"
-                        onChange={(e) => setCurrentTargetScenario(e.target.value)}
-                        sx={{ borderRadius: '8px' }}
-                      >
-                        <MenuItem value="all">
-                          <em>Todos los escenarios de este Feature</em>
-                        </MenuItem>
-                        {scenarios.map((sname) => (
-                          <MenuItem key={sname} value={sname}>
-                            Solo: "{sname}"
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  )}
-
-                  <Grid container spacing={2}>
-                    <Grid size={{ xs: 6 }}>
-                      <FormControl fullWidth size="small">
-                        <InputLabel id="hook-select-label">Momento (Hook)</InputLabel>
-                        <Select
-                          labelId="hook-select-label"
-                          value={currentHook}
-                          label="Momento (Hook)"
-                          onChange={(e) => setCurrentHook(e.target.value as 'before' | 'after')}
-                          sx={{ borderRadius: '8px' }}
-                        >
-                          <MenuItem value="before">Antes (Before)</MenuItem>
-                          <MenuItem value="after">Después (After)</MenuItem>
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                    <Grid size={{ xs: 6 }}>
-                      <FormControl fullWidth size="small">
-                        <InputLabel id="scope-select-label">Alcance (Scope)</InputLabel>
-                        <Select
-                          labelId="scope-select-label"
-                          value={currentScope}
-                          label="Alcance (Scope)"
-                          onChange={(e) => setCurrentScope(e.target.value as 'scenario' | 'step')}
-                          sx={{ borderRadius: '8px' }}
-                        >
-                          <MenuItem value="scenario">Escenario</MenuItem>
-                          <MenuItem value="step">Paso (Step)</MenuItem>
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                  </Grid>
-
-                  {/* Dynamic arguments from schema */}
-                  {selectedTaskDef?.args_schema && selectedTaskDef.args_schema.length > 0 && (
-                    <Box>
-                      <Divider sx={{ mb: 2, borderColor: alpha(theme.palette.divider, 0.5) }} />
-                      <Typography variant="caption" display="block" sx={{ fontWeight: 700, mb: 1.5, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                        Parámetros de la Tarea
-                      </Typography>
-                      <Stack spacing={2}>
-                        {selectedTaskDef.args_schema.map((arg) => (
-                          <Box key={arg.name}>
-                            {arg.type === 'textarea' ? (
-                              <TextField
-                                fullWidth
-                                multiline
-                                rows={3}
-                                size="small"
-                                label={arg.label}
-                                value={currentArgs[arg.name] || ''}
-                                onChange={(e) => handleArgChange(arg.name, e.target.value)}
-                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
-                              />
-                            ) : (
-                              <TextField
-                                fullWidth
-                                size="small"
-                                label={arg.label}
-                                value={currentArgs[arg.name] || ''}
-                                onChange={(e) => handleArgChange(arg.name, e.target.value)}
-                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
-                              />
-                            )}
                           </Box>
-                        ))}
-                      </Stack>
-                    </Box>
-                  )}
+                          <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0, mt: -0.5 }}>
+                            <IconButton
+                              size="small"
+                              onClick={() => handleEditClick(task)}
+                              title="Editar"
+                              sx={{
+                                color: editingTaskId === task.id ? 'primary.main' : 'text.secondary',
+                                '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.1) }
+                              }}
+                            >
+                              <AssignmentIcon fontSize="small" />
+                            </IconButton>
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={() => handleDeleteTask(task.id)}
+                              title="Eliminar"
+                              sx={{
+                                color: 'error.main',
+                                '&:hover': { bgcolor: alpha(theme.palette.error.main, 0.1) }
+                              }}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Stack>
+                        </Box>
+                      </Paper>
+                    );
+                  })}
+                </List>
+              )}
+ 
+              {/* Bottom Dialog-level Actions (Contained inside this panel) */}
+              <Box sx={{ mt: 'auto', pt: 1.5 }}>
+                <Divider sx={{ mb: 1.5, borderColor: alpha(theme.palette.divider, 0.5) }} />
+                <Box sx={{ display: 'flex', gap: 1.5, justifyContent: 'flex-end', alignItems: 'center' }}>
+                  <Button
+                    onClick={onClose}
+                    variant="outlined"
+                    sx={{
+                      textTransform: 'none',
+                      fontWeight: 600,
+                      color: 'text.secondary',
+                      borderColor: alpha(theme.palette.divider, 0.8),
+                      borderRadius: '8px',
+                      '&:hover': { backgroundColor: alpha(theme.palette.action.hover, 0.8), borderColor: 'text.secondary' },
+                    }}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    onClick={handleSaveClick}
+                    variant="contained"
+                    sx={{
+                      textTransform: 'none',
+                      fontWeight: 600,
+                      borderRadius: '8px',
+                      backgroundColor: theme.palette.primary.main,
+                      color: '#fff',
+                      px: 3,
+                      boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.3)}`,
+                      '&:hover': { backgroundColor: alpha(theme.palette.primary.main, 0.85) },
+                    }}
+                    startIcon={<SaveRoundedIcon />}
+                  >
+                    Guardar Configuración
+                  </Button>
+                </Box>
+              </Box>
+            </Paper>
+          </Grid>
+ 
+          {/* Right panel: Task configuration Form (Separate Section containing actions) */}
+          <Grid size={{ xs: 12, md: 7 }} sx={{ display: 'flex' }}>
+            <Paper
+              variant="outlined"
+              sx={{
+                p: 1.25,
+                borderRadius: '12px',
+                width: '100%',
+                bgcolor: theme.palette.mode === 'dark' ? '#1E293B' : '#FFFFFF',
+                borderColor: alpha(theme.palette.divider, 0.6),
+                display: 'flex',
+                flexDirection: 'column',
+                boxShadow: theme.palette.mode === 'dark' ? '0 4px 20px rgba(0,0,0,0.4)' : '0 4px 20px rgba(0,0,0,0.05)',
+              }}
+            >
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5, color: 'text.secondary', fontSize: '0.8rem', letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                {editingTaskId ? 'Editar Tarea Seleccionada' : 'Asociar Nueva Tarea'}
+              </Typography>              {nodeType === 'scenario' || nodeType === 'feature' ? (
+                <Box
+                  sx={{
+                    mb: 1.5,
+                    p: 1.25,
+                    borderRadius: '8px',
+                    border: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
+                    bgcolor: theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.02) : alpha(theme.palette.common.black, 0.015),
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 1.5
+                  }}
+                >
+                  <Alert
+                    severity="info"
+                    sx={{
+                      fontSize: '0.75rem',
+                      borderRadius: '6px',
+                      border: `1px solid ${alpha(theme.palette.info.main, 0.15)}`,
+                      bgcolor: theme.palette.mode === 'dark' ? alpha(theme.palette.info.main, 0.05) : alpha(theme.palette.info.main, 0.02)
+                    }}
+                  >
+                    {applyScope === 'all' ? (
+                      <>
+                        <strong>Nota de Escenario Global:</strong> Esta tarea se aplicará a <strong>todos los escenarios</strong> de esta plantilla en el plan de pruebas, guardándose en la definición del blueprint original.
+                      </>
+                    ) : (
+                      <>
+                        <strong>Nota de Escenario Específico:</strong> Esta tarea se asocia a <strong>este escenario elegido ("{nodeName}")</strong> y se ejecutará únicamente en su ciclo de vida local.
+                      </>
+                    )}
+                  </Alert>
 
-                  <Box sx={{ display: 'flex', gap: 1.5, justifyContent: 'flex-end', pt: 1 }}>
-                    {editingTaskId && (
+                  <Box>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, fontSize: '0.75rem', color: 'text.secondary', letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                      Ámbito de Aplicación del Guardado
+                    </Typography>
+                    <RadioGroup
+                      value={applyScope}
+                      onChange={(e) => setApplyScope(e.target.value as 'instance' | 'all')}
+                      sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}
+                    >
+                      <FormControlLabel
+                        value="instance"
+                        control={<Radio size="small" sx={{ p: 0.5 }} />}
+                        label={
+                          <Typography variant="body2" sx={{ fontSize: '0.78rem', color: 'text.primary', fontWeight: applyScope === 'instance' ? 600 : 400 }}>
+                            Solo para esta instancia del escenario
+                          </Typography>
+                        }
+                        sx={{ ml: -0.75 }}
+                      />
+                      <FormControlLabel
+                        value="all"
+                        control={<Radio size="small" sx={{ p: 0.5 }} />}
+                        label={
+                          <Typography variant="body2" sx={{ fontSize: '0.78rem', color: 'text.primary', fontWeight: applyScope === 'all' ? 600 : 400 }}>
+                            Todas las instancias de este escenario en el plan
+                          </Typography>
+                        }
+                        sx={{ ml: -0.75 }}
+                      />
+                    </RadioGroup>
+                  </Box>
+                </Box>
+              ) : (
+                <Alert
+                  severity="info"
+                  sx={{
+                    mb: 2.25,
+                    fontSize: '0.75rem',
+                    borderRadius: '8px',
+                    border: `1px solid ${alpha(theme.palette.info.main, 0.2)}`
+                  }}
+                >
+                  <strong>Nota de Herencia ({nodeType === 'plans' || nodeType === 'plan' ? 'Plan' : nodeType === 'cycles' || nodeType === 'cycle' ? 'Ciclo' : nodeType === 'flows' || nodeType === 'flow' ? 'Flujo' : nodeType === 'sets' || nodeType === 'set' ? 'Test Set' : nodeType}):</strong> Esta tarea se heredará en cascada y se ejecutará para <strong>cada escenario</strong> dentro de este contenedor.
+                  <br />
+                  • <em>Escenario</em>: Se ejecuta antes/después de cada escenario.
+                  <br />
+                  • <em>Paso</em>: Se ejecuta antes/después de cada paso de todos los escenarios.
+                </Alert>
+              )}
+
+              <Stack spacing={2.5} sx={{ flexGrow: 1 }}>
+                <FormControl fullWidth size="small">
+                  <InputLabel id="task-select-label">Seleccionar Tarea</InputLabel>
+                  <Select
+                    labelId="task-select-label"
+                    value={selectedTaskName}
+                    label="Seleccionar Tarea"
+                    onChange={(e) => handleTaskSelection(e.target.value)}
+                    sx={{ borderRadius: '8px' }}
+                  >
+                    <MenuItem value="">
+                      <em>Ninguna</em>
+                    </MenuItem>
+                    {availableTasks.map((t) => (
+                      <MenuItem key={t.name} value={t.name}>
+                        {t.class_name} (@{t.name})
+                      </MenuItem>
+                    ))}
+                  </Select>
+                  {selectedTaskDef?.doc && (
+                    <FormHelperText sx={{ fontStyle: 'italic', mt: 1, color: 'text.secondary', fontSize: '0.72rem' }}>
+                      {selectedTaskDef.doc}
+                    </FormHelperText>
+                  )}
+                </FormControl>
+
+                {selectedTaskName && (
+                  <>
+                    {nodeType === 'feature' && scenarios && scenarios.length > 0 && (
+                      <FormControl fullWidth size="small">
+                        <InputLabel id="target-scenario-select-label">Escenario Objetivo</InputLabel>
+                        <Select
+                          labelId="target-scenario-select-label"
+                          value={currentTargetScenario}
+                          label="Escenario Objetivo"
+                          onChange={(e) => setCurrentTargetScenario(e.target.value)}
+                          sx={{ borderRadius: '8px' }}
+                        >
+                          <MenuItem value="all">
+                            <em>Todos los escenarios de este Feature</em>
+                          </MenuItem>
+                          {scenarios.map((sname) => (
+                            <MenuItem key={sname} value={sname}>
+                              Solo: "{sname}"
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    )}
+
+                    <Grid container spacing={2}>
+                      <Grid size={{ xs: 6 }}>
+                        <FormControl fullWidth size="small">
+                          <InputLabel id="hook-select-label">Momento (Hook)</InputLabel>
+                          <Select
+                            labelId="hook-select-label"
+                            value={currentHook}
+                            label="Momento (Hook)"
+                            onChange={(e) => setCurrentHook(e.target.value as 'before' | 'after')}
+                            sx={{ borderRadius: '8px' }}
+                          >
+                            <MenuItem value="before">Antes (Before)</MenuItem>
+                            <MenuItem value="after">Después (After)</MenuItem>
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                      <Grid size={{ xs: 6 }}>
+                        <FormControl fullWidth size="small">
+                          <InputLabel id="scope-select-label">Alcance (Scope)</InputLabel>
+                          <Select
+                            labelId="scope-select-label"
+                            value={currentScope}
+                            label="Alcance (Scope)"
+                            onChange={(e) => setCurrentScope(e.target.value as 'scenario' | 'step')}
+                            sx={{ borderRadius: '8px' }}
+                          >
+                            <MenuItem value="scenario">Escenario</MenuItem>
+                            <MenuItem value="step">Paso (Step)</MenuItem>
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                    </Grid>
+
+                    {/* Dynamic arguments from schema */}
+                    {selectedTaskDef?.args_schema && selectedTaskDef.args_schema.length > 0 && (
+                      <Box>
+                        <Divider sx={{ mb: 2, borderColor: alpha(theme.palette.divider, 0.5) }} />
+                        <Typography variant="caption" display="block" sx={{ fontWeight: 700, mb: 1.5, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                          Parámetros de la Tarea
+                        </Typography>
+                        <Stack spacing={2}>
+                          {selectedTaskDef.args_schema.map((arg) => (
+                            <Box key={arg.name}>
+                              {arg.type === 'textarea' ? (
+                                <TextField
+                                  fullWidth
+                                  multiline
+                                  rows={3}
+                                  size="small"
+                                  label={arg.label}
+                                  value={currentArgs[arg.name] || ''}
+                                  onChange={(e) => handleArgChange(arg.name, e.target.value)}
+                                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                                />
+                              ) : (
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  label={arg.label}
+                                  value={currentArgs[arg.name] || ''}
+                                  onChange={(e) => handleArgChange(arg.name, e.target.value)}
+                                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                                />
+                              )}
+                            </Box>
+                          ))}
+                        </Stack>
+                      </Box>
+                    )}
+
+                    {isDuplicate && (
+                      <Alert
+                        severity="warning"
+                        sx={{
+                          mb: 1.5,
+                          fontSize: '0.75rem',
+                          borderRadius: '8px',
+                          border: `1px solid ${alpha(theme.palette.warning.main, 0.35)}`,
+                          backgroundColor: alpha(theme.palette.warning.main, 0.08)
+                        }}
+                      >
+                        <strong>Asociación existente:</strong> Ya existe una tarea @{selectedTaskName} configurada para {currentHook === 'before' ? 'Antes' : 'Después'} de cada {currentScope === 'scenario' ? 'Escenario' : 'Paso'}{targetScenarioVal ? ` en el escenario "${targetScenarioVal}"` : ''}.
+                      </Alert>
+                    )}
+
+                    <Box sx={{ display: 'flex', gap: 1.5, justifyContent: 'flex-end', pt: 1 }}>
                       <Button
                         size="small"
                         variant="outlined"
@@ -458,114 +725,35 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
                           borderColor: alpha(theme.palette.divider, 0.8),
                         }}
                       >
-                        Cancelar Edición
+                        Cancelar
                       </Button>
-                    )}
-                    <Button
-                      size="small"
-                      variant="contained"
-                      color={editingTaskId ? 'primary' : 'secondary'}
-                      startIcon={<AddCircleOutlineIcon />}
-                      onClick={handleAddOrUpdateTask}
-                      sx={{
-                        textTransform: 'none',
-                        fontWeight: 600,
-                        borderRadius: '8px',
-                        px: 2,
-                        py: 0.75,
-                        boxShadow: `0 2px 6px ${alpha(editingTaskId ? theme.palette.primary.main : theme.palette.secondary.main, 0.2)}`,
-                      }}
-                    >
-                      {editingTaskId ? 'Guardar Cambios' : 'Agregar Tarea'}
-                    </Button>
-                  </Box>
-                </>
-              )}
-            </Stack>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        color={editingTaskId ? 'primary' : 'secondary'}
+                        startIcon={<AddCircleOutlineIcon />}
+                        disabled={isDuplicate}
+                        onClick={handleAddOrUpdateTask}
+                        sx={{
+                          textTransform: 'none',
+                          fontWeight: 600,
+                          borderRadius: '8px',
+                          px: 2,
+                          py: 0.75,
+                          boxShadow: `0 2px 6px ${alpha(editingTaskId ? theme.palette.primary.main : theme.palette.secondary.main, 0.2)}`,
+                        }}
+                      >
+                        {editingTaskId ? 'Actualizar esta asociación' : 'Guardar esta asociación'}
+                      </Button>
+                    </Box>
+                  </>
+                )}
+              </Stack>
+
+            </Paper>
           </Grid>
         </Grid>
       </DialogContent>
-
-      <DialogActions
-        sx={{
-          px: 3,
-          py: 2.5,
-          borderTop: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
-          display: 'flex',
-          justifyContent: (nodeType === 'scenario' || nodeType === 'feature') ? 'space-between' : 'flex-end',
-          alignItems: 'center',
-          gap: 1.5,
-          bgcolor: alpha(theme.palette.background.default, 0.4)
-        }}
-      >
-        {(nodeType === 'scenario' || nodeType === 'feature') && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.75rem', mr: 1 }}>
-              Asociar tareas a:
-            </Typography>
-            <RadioGroup
-              row
-              value={applyScope}
-              onChange={(e) => setApplyScope(e.target.value as 'instance' | 'all')}
-              sx={{ gap: 1 }}
-            >
-              <FormControlLabel
-                value="instance"
-                control={<Radio size="small" sx={{ p: 0.5 }} />}
-                label={
-                  <Typography variant="caption" sx={{ fontSize: '0.72rem', color: 'text.primary', fontWeight: applyScope === 'instance' ? 600 : 400 }}>
-                    Solo esta instancia
-                  </Typography>
-                }
-                sx={{ m: 0 }}
-              />
-              <FormControlLabel
-                value="all"
-                control={<Radio size="small" sx={{ p: 0.5 }} />}
-                label={
-                  <Typography variant="caption" sx={{ fontSize: '0.72rem', color: 'text.primary', fontWeight: applyScope === 'all' ? 600 : 400 }}>
-                    Todas las instancias
-                  </Typography>
-                }
-                sx={{ m: 0 }}
-              />
-            </RadioGroup>
-          </Box>
-        )}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          <Button
-            onClick={onClose}
-            variant="outlined"
-            sx={{
-              textTransform: 'none',
-              fontWeight: 600,
-              color: 'text.secondary',
-              borderColor: alpha(theme.palette.divider, 0.8),
-              borderRadius: '8px',
-              '&:hover': { backgroundColor: alpha(theme.palette.action.hover, 0.8), borderColor: 'text.secondary' },
-            }}
-          >
-            Cancelar
-          </Button>
-          <Button
-            onClick={handleSaveClick}
-            variant="contained"
-            sx={{
-              textTransform: 'none',
-              fontWeight: 600,
-              borderRadius: '8px',
-              backgroundColor: theme.palette.primary.main,
-              color: '#fff',
-              px: 3,
-              boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.3)}`,
-              '&:hover': { backgroundColor: alpha(theme.palette.primary.main, 0.85) },
-            }}
-            startIcon={<PlayArrowIcon />}
-          >
-            Guardar Configuración
-          </Button>
-        </Box>
-      </DialogActions>
     </Dialog>
   );
 };

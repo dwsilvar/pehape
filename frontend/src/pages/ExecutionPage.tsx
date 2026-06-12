@@ -101,15 +101,27 @@ const ExecutionPage: React.FC = () => {
   }, [blocker]);
 
   // ── Execution Actions ─────────────────────────────────────────────────
-  const handleExecute = useCallback(async (scheduledAt?: string) => {
+  const handleExecute = useCallback(async (
+    scheduledAt?: string,
+    setInstanceId?: string,
+    flowInstanceId?: string,
+    scenarioInstanceId?: string
+  ) => {
     if (!selectedPlanId) return;
     setIsExecuting(true);
     setIsDrawerOpen(true);
     setCurrentTaskId(null);
     
     try {
-      const url = scheduledAt
-        ? `/api/execute-plan/${selectedPlanId}?scheduled_at=${encodeURIComponent(scheduledAt)}`
+      const params = new URLSearchParams();
+      if (scheduledAt) params.append('scheduled_at', scheduledAt);
+      if (setInstanceId) params.append('set_instance_id', setInstanceId);
+      if (flowInstanceId) params.append('flow_instance_id', flowInstanceId);
+      if (scenarioInstanceId) params.append('scenario_instance_id', scenarioInstanceId);
+
+      const queryString = params.toString();
+      const url = queryString 
+        ? `/api/execute-plan/${selectedPlanId}?${queryString}`
         : `/api/execute-plan/${selectedPlanId}`;
 
       const res = await fetch(url, { method: 'POST' });
@@ -124,6 +136,16 @@ const ExecutionPage: React.FC = () => {
       setIsExecuting(false);
     }
   }, [selectedPlanId]);
+
+  const handleExecuteAtLevel = useCallback((level: 'set' | 'flow' | 'scenario', instanceId: string) => {
+    if (level === 'set') {
+      handleExecute(undefined, instanceId, undefined, undefined);
+    } else if (level === 'flow') {
+      handleExecute(undefined, undefined, instanceId, undefined);
+    } else if (level === 'scenario') {
+      handleExecute(undefined, undefined, undefined, instanceId);
+    }
+  }, [handleExecute]);
 
   const handleStopExecution = useCallback(async () => {
     try {
@@ -419,6 +441,7 @@ const ExecutionPage: React.FC = () => {
           isExecuting={isExecuting}
           isGeneratingReport={isGeneratingReport}
           onUpdateTasksAtLevel={handleUpdateTasksAtLevel}
+          onExecute={handleExecuteAtLevel}
         />
       </Box>
 

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import {
   Box, Typography, alpha, useTheme, Chip, Tooltip,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  CircularProgress, IconButton,
+  CircularProgress, IconButton, Popover,
 } from '@mui/material';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import CancelRoundedIcon from '@mui/icons-material/CancelRounded';
@@ -14,6 +14,9 @@ import ViewListRoundedIcon from '@mui/icons-material/ViewListRounded';
 import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded';
 import KeyboardArrowRightRoundedIcon from '@mui/icons-material/KeyboardArrowRightRounded';
 import AssignmentIcon from '@mui/icons-material/Assignment';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import DeleteIcon from '@mui/icons-material/Delete';
+import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
 import { BlueprintsData, BlueprintRef, PlanBlueprint, PlanTask } from '../../types';
 import { ScenarioIcon, FeatureIcon, CycleIcon, FlowIcon } from '../PehapeIcons';
 import { useExecutionScenarioStatus, ScenarioExecStatus } from '../../hooks/useExecutionScenarioStatus';
@@ -60,6 +63,7 @@ interface ExecutionMonitorProps {
     cycleId?: string,
     blueprintId?: string
   ) => void;
+  onExecute?: (level: 'set' | 'flow' | 'scenario', instanceId: string) => void;
 }
 
 // ── Status badge ──────────────────────────────────────────────────────────────
@@ -176,10 +180,41 @@ const getTaskChipStyles = (status: 'pending' | 'running' | 'passed' | 'failed', 
 
 const toSentenceCase = (str: string) => str ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : '';
 
-// ── Main component ────────────────────────────────────────────────────────────
+const TaskIconWithAdd: React.FC<{ hasTasks: boolean }> = ({ hasTasks }) => {
+  const theme = useTheme();
+  return (
+    <Box sx={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+      <AssignmentIcon sx={{ fontSize: 13 }} />
+      {!hasTasks && (
+        <Box
+          sx={{
+            position: 'absolute',
+            bottom: -3,
+            right: -4,
+            bgcolor: theme.palette.background.paper,
+            borderRadius: '50%',
+            width: 10,
+            height: 10,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 0.5px 2px rgba(0,0,0,0.25)',
+            border: `1px solid ${alpha(theme.palette.divider, 0.8)}`,
+          }}
+        >
+          <span style={{ fontSize: '8px', fontWeight: 900, color: theme.palette.text.secondary, marginTop: '-2px' }}>
+            +
+          </span>
+        </Box>
+      )}
+    </Box>
+  );
+};
+
+// ── Main component ─────────────────────────────────────────────────────────────────────────────────────
 
 const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
-  blueprints, selectedPlanId, taskId, isExecuting, isGeneratingReport = false, onUpdateTasksAtLevel,
+  blueprints, selectedPlanId, taskId, isExecuting, isGeneratingReport = false, onUpdateTasksAtLevel, onExecute,
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -193,7 +228,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
     flow: 130,
     scenario: 320,
     feature: 180,
-    tareas: 220,
+    tareas: 100,
     resultado: 120,
   });
 
@@ -233,41 +268,95 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
       pTasks: PlanTask[] = [],
       cTasks: PlanTask[] = [],
       fTasks: PlanTask[] = [],
-      sTasks: PlanTask[] = []
+      sTasks: PlanTask[] = [],
+      planId?: string,
+      cycleId?: string,
+      flowId?: string,
+      setId?: string,
+      blueprintId?: string
     ) => {
-      // 1. Check if there are any instance-specific tasks in the containers
-      const hasInstanceOverride = [pTasks, cTasks, fTasks].some(tasksList =>
-        Array.isArray(tasksList) && tasksList.some(t => t.targetScenario === scenarioId)
-      );
+      // 1. Check if there are any instance-specific tasks in the cycle
+      const cycleTasksForInstance = cTasks.filter(t => t.targetScenario === scenarioId);
+      const hasInstanceOverride = cycleTasksForInstance.length > 0;
 
-      const merged: PlanTask[] = [];
+      const merged: any[] = [];
 
       // 2. Process container tasks (plan, cycle, flow)
-      [pTasks, cTasks, fTasks].forEach(tasksList => {
-        if (Array.isArray(tasksList)) {
-          tasksList.forEach(t => {
-            const targetS = t.targetScenario;
-            const matchesInstance = targetS === scenarioId;
-            const matchesName = targetS === scenarioName;
-            const isGlobal = !targetS || targetS === 'all';
-
-            if (matchesInstance || matchesName || isGlobal) {
-              if (t.name === '__none__') {
-                return;
-              }
-              merged.push({ ...t, id: t.id || `${scenarioId}-${t.name}` });
-            }
+      pTasks.forEach(t => {
+        if (t.name === '__none__') return;
+        const targetS = t.targetScenario;
+        const matchesInstance = targetS === scenarioId;
+        const matchesName = targetS === scenarioName;
+        const isGlobal = !targetS || targetS === 'all';
+        if (matchesInstance || matchesName || isGlobal) {
+          merged.push({ 
+            ...t, 
+            id: t.id || `${scenarioId}-${t.name}`,
+            originLevel: 'plan',
+            originId: planId
           });
         }
       });
 
-      // 3. Process scenario-level blueprint tasks only if there is no instance override
-      if (!hasInstanceOverride && Array.isArray(sTasks)) {
+      cTasks.forEach(t => {
+        if (t.name === '__none__') return;
+        if (t.targetScenario) return;
+        const targetS = t.targetScenario;
+        const matchesName = targetS === scenarioName;
+        const isGlobal = !targetS || targetS === 'all';
+        if (matchesName || isGlobal) {
+          merged.push({ 
+            ...t, 
+            id: t.id || `${scenarioId}-${t.name}`,
+            originLevel: 'cycle',
+            originId: cycleId
+          });
+        }
+      });
+
+      fTasks.forEach(t => {
+        if (t.name === '__none__') return;
+        const targetS = t.targetScenario;
+        const matchesInstance = targetS === scenarioId;
+        const matchesName = targetS === scenarioName;
+        const isGlobal = !targetS || targetS === 'all';
+        if (matchesInstance || matchesName || isGlobal) {
+          merged.push({ 
+            ...t, 
+            id: t.id || `${scenarioId}-${t.name}`,
+            originLevel: setId ? 'set' : 'flow',
+            originId: setId || flowId
+          });
+        }
+      });
+
+      // 3. Process scenario-level blueprint tasks
+      if (hasInstanceOverride) {
+        cycleTasksForInstance.forEach(t => {
+          if (t.name === '__none__') return;
+          merged.push({
+            ...t,
+            id: t.id || `${scenarioId}-${t.name}`,
+            originLevel: 'scenario',
+            originId: scenarioId,
+            originCycleId: cycleId,
+            originApplyToAll: false
+          });
+        });
+      } else if (Array.isArray(sTasks)) {
         sTasks.forEach(t => {
+          if (t.name === '__none__') return;
           const targetS = t.targetScenario;
           if (!targetS || targetS === 'all' || targetS === scenarioName || targetS === scenarioId) {
-            if (t.name === '__none__') return;
-            merged.push({ ...t, id: t.id || `${scenarioId}-${t.name}` });
+            merged.push({
+              ...t,
+              id: t.id || `${scenarioId}-${t.name}`,
+              originLevel: 'scenario',
+              originId: scenarioId,
+              originCycleId: cycleId,
+              originApplyToAll: true,
+              originBlueprintId: blueprintId
+            });
           }
         });
       }
@@ -303,7 +392,19 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
               const fTasks = flow.tasks ?? [];
               const sTasks = s.tasks ?? [];
               const scenarioInstanceId = `flow-${cRef.id}-${ref.id}-${s.id}`;
-              const scenarioTasks = mergeAndStampTasks(scenarioInstanceId, s.scenarioName || s.name, pTasks, cTasks, fTasks, sTasks);
+              const scenarioTasks = mergeAndStampTasks(
+                scenarioInstanceId,
+                s.scenarioName || s.name,
+                pTasks,
+                cTasks,
+                fTasks,
+                sTasks,
+                plan.id,
+                cycle.id,
+                flow.id,
+                undefined,
+                s.id
+              );
 
               flat.push({
                 id: scenarioInstanceId,
@@ -388,7 +489,19 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                     fTasks = [...fTasks, ...(s.feature_tasks ?? [])];
                   }
 
-                  const scenarioTasks = mergeAndStampTasks(scenarioId, s.scenarioName || s.name, pTasks, cTasks, fTasks, sTasks);
+                  const scenarioTasks = mergeAndStampTasks(
+                    scenarioId,
+                    s.scenarioName || s.name,
+                    pTasks,
+                    cTasks,
+                    fTasks,
+                    sTasks,
+                    plan.id,
+                    cycle.id,
+                    s.sourceType === 'flow' ? s.flowId : undefined,
+                    set.id,
+                    s.sourceType === 'feature' ? s.featureRefId : s.id
+                  );
 
                   flat.push({
                     id: scenarioId,
@@ -449,6 +562,79 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
   const [dialogCycleId, setDialogCycleId] = useState<string | undefined>(undefined);
   const [dialogBlueprintId, setDialogBlueprintId] = useState<string | undefined>(undefined);
   const [dialogInitialScope, setDialogInitialScope] = useState<'instance' | 'all'>('instance');
+
+  // State for the Tasks Viewer Popover
+  const [tasksViewerAnchor, setTasksViewerAnchor] = useState<HTMLButtonElement | null>(null);
+  const [tasksViewerTitle, setTasksViewerTitle] = useState('');
+  const [tasksViewerList, setTasksViewerList] = useState<PlanTask[]>([]);
+
+  const handleDeleteTaskInline = (taskToDelete: any) => {
+    const { originLevel, originId, originCycleId, originApplyToAll, originBlueprintId, name, id } = taskToDelete;
+    
+    if (!onUpdateTasksAtLevel) return;
+
+    let updatedTasks: PlanTask[] = [];
+
+    if (originLevel === 'cycle') {
+      const cycle = blueprints.cycles.find(c => c.id === originId);
+      if (cycle) {
+        updatedTasks = (cycle.tasks || []).filter(t => t.id !== id && t.name !== name);
+      }
+      onUpdateTasksAtLevel('cycle', originId, updatedTasks);
+    } else if (originLevel === 'set') {
+      const set = blueprints.sets.find(s => s.id === originId);
+      if (set) {
+        updatedTasks = (set.tasks || []).filter(t => t.id !== id && t.name !== name);
+      }
+      onUpdateTasksAtLevel('set', originId, updatedTasks);
+    } else if (originLevel === 'flow') {
+      const flow = blueprints.flows.find(f => f.id === originId);
+      if (flow) {
+        updatedTasks = (flow.tasks || []).filter(t => t.id !== id && t.name !== name);
+      }
+      onUpdateTasksAtLevel('flow', originId, updatedTasks);
+    } else if (originLevel === 'scenario') {
+      if (!originApplyToAll) {
+        const cycle = blueprints.cycles.find(c => c.id === originCycleId);
+        if (cycle) {
+          const baseTasks = (cycle.tasks || []).filter(t => t.targetScenario === originId);
+          const filtered = baseTasks.filter(t => t.id !== id && t.name !== name && t.name !== '__none__');
+          onUpdateTasksAtLevel('scenario', originId, filtered, false, originCycleId);
+        }
+      } else {
+        let foundTasks: PlanTask[] = [];
+        let found = false;
+        if (originBlueprintId) {
+          for (const flow of blueprints.flows) {
+            const item = flow.items.find(i => i.id === originBlueprintId);
+            if (item) { foundTasks = item.tasks || []; found = true; break; }
+          }
+          if (!found) {
+            for (const set of blueprints.sets) {
+              const item = set.items.find(i => i.id === originBlueprintId);
+              if (item) { foundTasks = item.tasks || []; found = true; break; }
+            }
+          }
+          if (!found) {
+            for (const cycleBp of blueprints.cycles) {
+              const item = cycleBp.items.find(i => i.id === originBlueprintId);
+              if (item) { foundTasks = item.tasks || []; found = true; break; }
+            }
+          }
+          if (!found) {
+            for (const p of blueprints.plans) {
+              const item = p.items.find(i => i.id === originBlueprintId);
+              if (item) { foundTasks = item.tasks || []; found = true; break; }
+            }
+          }
+        }
+        updatedTasks = foundTasks.filter(t => t.id !== id && t.name !== name);
+        onUpdateTasksAtLevel('scenario', originId, updatedTasks, true, originCycleId, originBlueprintId);
+      }
+    }
+
+    setTasksViewerList(prev => prev.filter(t => t.id !== id));
+  };
 
   const handleOpenTaskDialog = (
     level: 'scenario' | 'flow' | 'set' | 'cycle',
@@ -834,7 +1020,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                   pr: 1.5,
                 }}
               >
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, overflow: 'hidden' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.75, overflow: 'hidden', width: '100%' }}>
                   <FeatureIcon size={14} color={theme.palette.text.secondary} />
                   <Tooltip title="Feature" placement="top" arrow enterDelay={200}>
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Feature</span>
@@ -981,6 +1167,16 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                   const statusColor = statusColors[groupStatus];
                   const totalGroupTasks = groupScenarios.reduce((sum: number, s: FlatScenario) => sum + (s.tasks?.length || 0), 0);
 
+                  // Calculate tasks per entity level in group row
+                  const cycle = blueprints.cycles.find(c => c.id === fs.cycleId);
+                  const hasCycleTasks = !!(cycle && cycle.tasks && cycle.tasks.filter(t => t.name !== '__none__').length > 0);
+
+                  const set = blueprints.sets.find(s => s.id === fs.setId);
+                  const hasSetTasks = !!(set && set.tasks && set.tasks.filter(t => t.name !== '__none__').length > 0);
+
+                  const flow = blueprints.flows.find(f => f.id === fs.flowId);
+                  const hasFlowTasks = !!(flow && flow.tasks && flow.tasks.filter(t => t.name !== '__none__').length > 0);
+
                   // Define beautiful hierarchial backgrounds based on grouping type
                   const isSetGroup = !!fs.parentGroupId;
                   const groupBgColor = isSetGroup
@@ -1014,13 +1210,35 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                             </Typography>
                           </Tooltip>
                           {((fs.parentGroupId && isFirstOfSet) || !fs.parentGroupId) && fs.cycleId && (
-                            <Tooltip title="Configurar Tareas de Ciclo">
+                            <Tooltip title={hasCycleTasks ? "Configurar Tareas de Ciclo (Tiene tareas asociadas)" : "Configurar Tareas de Ciclo"}>
                               <IconButton
                                 size="small"
                                 onClick={() => handleOpenTaskDialog('cycle', fs.cycleId!, fs.cycleName, 'cycle')}
-                                sx={{ p: 0.25, opacity: 0.7, '&:hover': { opacity: 1 }, flexShrink: 0 }}
+                                sx={{ 
+                                  p: 0.25, 
+                                  opacity: hasCycleTasks ? 1 : 0.7, 
+                                  color: hasCycleTasks ? '#10b981' : 'text.secondary',
+                                  bgcolor: '#ffffff',
+                                  boxShadow: '0 2px 5px rgba(0,0,0,0.18)',
+                                  border: hasCycleTasks ? '1px solid rgba(16, 185, 129, 0.2)' : `1px solid ${alpha(theme.palette.divider, 0.5)}`,
+                                  transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+                                  '&:hover': { 
+                                    opacity: 1,
+                                    bgcolor: '#ffffff',
+                                    borderColor: hasCycleTasks ? '#10b981' : theme.palette.primary.main,
+                                    boxShadow: hasCycleTasks 
+                                      ? '0 4px 10px rgba(16, 185, 129, 0.28)' 
+                                      : `0 4px 10px ${alpha(theme.palette.primary.main, 0.28)}`,
+                                    transform: 'translateY(-1.5px)',
+                                  },
+                                  '&:active': {
+                                    transform: 'translateY(1px)',
+                                    boxShadow: 'none',
+                                  },
+                                  flexShrink: 0 
+                                }}
                               >
-                                <AssignmentIcon sx={{ fontSize: 13 }} />
+                                <TaskIconWithAdd hasTasks={hasCycleTasks} />
                               </IconButton>
                             </Tooltip>
                           )}
@@ -1053,15 +1271,75 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                               </Tooltip>
                             </Box>
                             {fs.setId && (
-                              <Tooltip title="Configurar Tareas de Suite (Set)">
-                                <IconButton
-                                  size="small"
-                                  onClick={() => handleOpenTaskDialog('set', fs.setId!, fs.parentGroupName!, 'set')}
-                                  sx={{ p: 0.25, opacity: 0.7, '&:hover': { opacity: 1 }, flexShrink: 0 }}
-                                >
-                                  <AssignmentIcon sx={{ fontSize: 13 }} />
-                                </IconButton>
-                              </Tooltip>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
+                                <Tooltip title="Ejecutar Suite (Set)">
+                                  <span>
+                                    <IconButton
+                                      size="small"
+                                      disabled={isExecuting}
+                                      onClick={() => onExecute?.('set', fs.parentGroupId!)}
+                                      sx={{ 
+                                        p: 0.25, 
+                                        color: isExecuting ? 'text.disabled' : theme.palette.success.main,
+                                        bgcolor: '#ffffff',
+                                        boxShadow: isExecuting ? 'none' : '0 2px 5px rgba(0,0,0,0.18)',
+                                        border: `1px solid ${alpha(theme.palette.success.main, 0.35)}`,
+                                        transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+                                        '&:hover': { 
+                                          bgcolor: '#ffffff',
+                                          borderColor: theme.palette.success.main,
+                                          boxShadow: `0 4px 10px ${alpha(theme.palette.success.main, 0.38)}`,
+                                          transform: 'translateY(-1.5px)',
+                                        },
+                                        '&:active': {
+                                          transform: 'translateY(1px)',
+                                          boxShadow: 'none',
+                                        },
+                                        '&.Mui-disabled': {
+                                          bgcolor: '#f5f5f5',
+                                          color: '#bdbdbd',
+                                          border: '1px solid #e0e0e0',
+                                        },
+                                        flexShrink: 0 
+                                      }}
+                                    >
+                                      <PlayArrowRoundedIcon sx={{ fontSize: 16 }} />
+                                    </IconButton>
+                                  </span>
+                                </Tooltip>
+
+                                <Tooltip title={hasSetTasks ? "Configurar Tareas de Suite (Tiene tareas asociadas)" : "Configurar Tareas de Suite (Set)"}>
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleOpenTaskDialog('set', fs.setId!, fs.parentGroupName!, 'set')}
+                                    sx={{ 
+                                      p: 0.25, 
+                                      opacity: hasSetTasks ? 1 : 0.7, 
+                                      color: hasSetTasks ? '#10b981' : 'text.secondary',
+                                      bgcolor: '#ffffff',
+                                      boxShadow: '0 2px 5px rgba(0,0,0,0.18)',
+                                      border: hasSetTasks ? '1px solid rgba(16, 185, 129, 0.2)' : `1px solid ${alpha(theme.palette.divider, 0.5)}`,
+                                      transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+                                      '&:hover': { 
+                                        opacity: 1,
+                                        bgcolor: '#ffffff',
+                                        borderColor: hasSetTasks ? '#10b981' : theme.palette.primary.main,
+                                        boxShadow: hasSetTasks 
+                                          ? '0 4px 10px rgba(16, 185, 129, 0.25)' 
+                                          : `0 4px 10px ${alpha(theme.palette.primary.main, 0.25)}`,
+                                        transform: 'translateY(-1.5px)',
+                                      },
+                                      '&:active': {
+                                        transform: 'translateY(0.5px)',
+                                        boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+                                      },
+                                      flexShrink: 0 
+                                    }}
+                                  >
+                                    <TaskIconWithAdd hasTasks={hasSetTasks} />
+                                  </IconButton>
+                                </Tooltip>
+                              </Box>
                             )}
                           </Box>
                         ) : (fs.parentGroupId ? '' : '—')}
@@ -1090,15 +1368,75 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                               </Tooltip>
                             </Box>
                             {fs.flowId && (
-                              <Tooltip title="Configurar Tareas de Flujo">
-                                <IconButton
-                                  size="small"
-                                  onClick={() => handleOpenTaskDialog('flow', fs.flowId!, fs.groupName, 'flow')}
-                                  sx={{ p: 0.25, opacity: 0.7, '&:hover': { opacity: 1 }, flexShrink: 0 }}
-                                >
-                                  <AssignmentIcon sx={{ fontSize: 13 }} />
-                                </IconButton>
-                              </Tooltip>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
+                                <Tooltip title="Ejecutar Flujo">
+                                  <span>
+                                    <IconButton
+                                      size="small"
+                                      disabled={isExecuting}
+                                      onClick={() => onExecute?.('flow', fs.groupId)}
+                                      sx={{ 
+                                        p: 0.25, 
+                                        color: isExecuting ? 'text.disabled' : theme.palette.success.main,
+                                        bgcolor: '#ffffff',
+                                        boxShadow: isExecuting ? 'none' : '0 2px 5px rgba(0,0,0,0.18)',
+                                        border: `1px solid ${alpha(theme.palette.success.main, 0.35)}`,
+                                        transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+                                        '&:hover': { 
+                                          bgcolor: '#ffffff',
+                                          borderColor: theme.palette.success.main,
+                                          boxShadow: `0 4px 10px ${alpha(theme.palette.success.main, 0.38)}`,
+                                          transform: 'translateY(-1.5px)',
+                                        },
+                                        '&:active': {
+                                          transform: 'translateY(1px)',
+                                          boxShadow: 'none',
+                                        },
+                                        '&.Mui-disabled': {
+                                          bgcolor: '#f5f5f5',
+                                          color: '#bdbdbd',
+                                          border: '1px solid #e0e0e0',
+                                        },
+                                        flexShrink: 0 
+                                      }}
+                                    >
+                                      <PlayArrowRoundedIcon sx={{ fontSize: 16 }} />
+                                    </IconButton>
+                                  </span>
+                                </Tooltip>
+
+                                <Tooltip title={hasFlowTasks ? "Configurar Tareas de Flujo (Tiene tareas asociadas)" : "Configurar Tareas de Flujo"}>
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleOpenTaskDialog('flow', fs.flowId!, fs.groupName, 'flow')}
+                                    sx={{ 
+                                      p: 0.25, 
+                                      opacity: hasFlowTasks ? 1 : 0.7, 
+                                      color: hasFlowTasks ? '#10b981' : 'text.secondary',
+                                      bgcolor: '#ffffff',
+                                      boxShadow: '0 2px 5px rgba(0,0,0,0.18)',
+                                      border: hasFlowTasks ? '1px solid rgba(16, 185, 129, 0.2)' : `1px solid ${alpha(theme.palette.divider, 0.5)}`,
+                                      transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+                                      '&:hover': { 
+                                        opacity: 1,
+                                        bgcolor: '#ffffff',
+                                        borderColor: hasFlowTasks ? '#10b981' : theme.palette.primary.main,
+                                        boxShadow: hasFlowTasks 
+                                          ? '0 4px 10px rgba(16, 185, 129, 0.28)' 
+                                          : `0 4px 10px ${alpha(theme.palette.primary.main, 0.28)}`,
+                                        transform: 'translateY(-1.5px)',
+                                      },
+                                      '&:active': {
+                                        transform: 'translateY(1px)',
+                                        boxShadow: 'none',
+                                      },
+                                      flexShrink: 0 
+                                    }}
+                                  >
+                                    <TaskIconWithAdd hasTasks={hasFlowTasks} />
+                                  </IconButton>
+                                </Tooltip>
+                              </Box>
                             )}
                           </Box>
                         )}
@@ -1141,17 +1479,40 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                         }}
                       >
                         {totalGroupTasks > 0 && (
-                          <Chip
-                            label={`${totalGroupTasks} ${totalGroupTasks === 1 ? 'tarea' : 'tareas'}`}
-                            size="small"
-                            sx={{
-                              height: 16,
-                              fontSize: '0.65rem',
-                              bgcolor: alpha(theme.palette.primary.main, 0.1),
-                              color: theme.palette.primary.main,
-                              fontWeight: 500,
-                            }}
-                          />
+                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 32, width: '100%' }}>
+                            <Tooltip title={`Ver listado de tareas del grupo (${totalGroupTasks})`}>
+                              <IconButton
+                                size="small"
+                                onClick={(e) => {
+                                  const groupTasks = groupScenarios.flatMap(s => (s.tasks || []).map(t => ({ ...t, scenarioName: s.scenarioName })));
+                                  setTasksViewerAnchor(e.currentTarget);
+                                  setTasksViewerTitle(`Tareas del Grupo: ${fs.groupName} (${totalGroupTasks})`);
+                                  setTasksViewerList(groupTasks);
+                                }}
+                                sx={{ 
+                                  p: 0.25, 
+                                  color: 'primary.main', 
+                                  bgcolor: '#ffffff',
+                                  boxShadow: '0 2px 5px rgba(0,0,0,0.18)',
+                                  border: `1px solid ${alpha(theme.palette.primary.main, 0.25)}`,
+                                  transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+                                  '&:hover': { 
+                                    bgcolor: '#ffffff',
+                                    borderColor: theme.palette.primary.main,
+                                    boxShadow: `0 4px 10px ${alpha(theme.palette.primary.main, 0.38)}`,
+                                    transform: 'translateY(-1.5px)',
+                                  },
+                                  '&:active': {
+                                    transform: 'translateY(1px)',
+                                    boxShadow: 'none',
+                                  },
+                                  flexShrink: 0 
+                                }}
+                              >
+                                <VisibilityIcon sx={{ fontSize: 18 }} />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
                         )}
                       </TableCell>
                       {/* Status Summary */}
@@ -1206,6 +1567,43 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                     ? (isDark ? '#3d2569' : '#e5cbff')
                     : (isDark ? '#1f3e6a' : '#cce3ff')
                   );
+
+                // Determine if this scenario has tasks
+                let hasScenarioTasks = false;
+                const cycleForS = blueprints.cycles.find(c => c.id === fs.cycleId);
+                const instanceTasksForS = (cycleForS?.tasks || []).filter(t => t.targetScenario === fs.id);
+                if (instanceTasksForS.length > 0) {
+                  hasScenarioTasks = instanceTasksForS.some(t => t.name !== '__none__');
+                } else {
+                  const blueprintIdForS = fs.sourceType === 'feature' ? fs.featureRefId : fs.scenarioRefId || fs.id;
+                  if (blueprintIdForS) {
+                    let foundTasks: PlanTask[] = [];
+                    let found = false;
+                    for (const f of blueprints.flows) {
+                      const item = f.items.find(i => i.id === blueprintIdForS);
+                      if (item) { foundTasks = item.tasks || []; found = true; break; }
+                    }
+                    if (!found) {
+                      for (const s of blueprints.sets) {
+                        const item = s.items.find(i => i.id === blueprintIdForS);
+                        if (item) { foundTasks = item.tasks || []; found = true; break; }
+                      }
+                    }
+                    if (!found) {
+                      for (const cBp of blueprints.cycles) {
+                        const item = cBp.items.find(i => i.id === blueprintIdForS);
+                        if (item) { foundTasks = item.tasks || []; found = true; break; }
+                      }
+                    }
+                    if (!found) {
+                      for (const p of blueprints.plans) {
+                        const item = p.items.find(i => i.id === blueprintIdForS);
+                        if (item) { foundTasks = item.tasks || []; found = true; break; }
+                      }
+                    }
+                    hasScenarioTasks = foundTasks.some(t => t.name !== '__none__');
+                  }
+                }
 
                 rows.push(
                   <TableRow
@@ -1281,23 +1679,83 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                             {fs.scenarioName}
                           </Typography>
                         </Tooltip>
-                        <Tooltip title={fs.sourceType === 'feature' ? "Configurar Tareas de Feature (Suite)" : "Configurar Tareas de Escenario"}>
-                          <IconButton
-                            size="small"
-                            onClick={() => handleOpenTaskDialog(
-                              'scenario',
-                              fs.id,
-                              fs.sourceType === 'feature' ? fs.sourceName : fs.scenarioName,
-                              fs.sourceType === 'feature' ? 'feature' : 'scenario',
-                              fs.featureScenarios,
-                              fs.cycleId,
-                              fs.sourceType === 'feature' ? fs.featureRefId! : fs.scenarioRefId || fs.id
-                            )}
-                            sx={{ p: 0.25, opacity: 0.6, '&:hover': { opacity: 1 }, flexShrink: 0 }}
-                          >
-                            <AssignmentIcon sx={{ fontSize: 13 }} />
-                          </IconButton>
-                        </Tooltip>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
+                          <Tooltip title="Ejecutar Escenario">
+                            <span>
+                              <IconButton
+                                size="small"
+                                disabled={isExecuting}
+                                onClick={() => onExecute?.('scenario', fs.id)}
+                                sx={{ 
+                                  p: 0.25, 
+                                  color: isExecuting ? 'text.disabled' : theme.palette.success.main,
+                                  bgcolor: '#ffffff',
+                                  boxShadow: isExecuting ? 'none' : '0 2px 5px rgba(0,0,0,0.18)',
+                                  border: `1px solid ${alpha(theme.palette.success.main, 0.35)}`,
+                                  transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+                                  '&:hover': { 
+                                    bgcolor: '#ffffff',
+                                    borderColor: theme.palette.success.main,
+                                    boxShadow: `0 4px 10px ${alpha(theme.palette.success.main, 0.38)}`,
+                                    transform: 'translateY(-1.5px)',
+                                  },
+                                  '&:active': {
+                                    transform: 'translateY(1px)',
+                                    boxShadow: 'none',
+                                  },
+                                  '&.Mui-disabled': {
+                                    bgcolor: '#f5f5f5',
+                                    color: '#bdbdbd',
+                                    border: '1px solid #e0e0e0',
+                                  },
+                                  flexShrink: 0 
+                                }}
+                              >
+                                <PlayArrowRoundedIcon sx={{ fontSize: 16 }} />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+
+                          <Tooltip title="Asociar tarea al escenario">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleOpenTaskDialog(
+                                'scenario',
+                                fs.id,
+                                fs.sourceType === 'feature' ? fs.sourceName : fs.scenarioName,
+                                fs.sourceType === 'feature' ? 'feature' : 'scenario',
+                                fs.featureScenarios,
+                                fs.cycleId,
+                                fs.sourceType === 'feature' ? fs.featureRefId! : fs.scenarioRefId || fs.id
+                              )}
+                              sx={{ 
+                                p: 0.25, 
+                                opacity: hasScenarioTasks ? 1 : 0.6, 
+                                color: hasScenarioTasks ? '#10b981' : 'text.secondary',
+                                bgcolor: '#ffffff',
+                                boxShadow: '0 2px 5px rgba(0,0,0,0.18)',
+                                border: hasScenarioTasks ? '1px solid rgba(16, 185, 129, 0.2)' : `1px solid ${alpha(theme.palette.divider, 0.5)}`,
+                                transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+                                '&:hover': { 
+                                  opacity: 1,
+                                  bgcolor: '#ffffff',
+                                  borderColor: hasScenarioTasks ? '#10b981' : theme.palette.primary.main,
+                                  boxShadow: hasScenarioTasks 
+                                    ? '0 4px 10px rgba(16, 185, 129, 0.28)' 
+                                    : `0 4px 10px ${alpha(theme.palette.primary.main, 0.28)}`,
+                                  transform: 'translateY(-1.5px)',
+                                },
+                                '&:active': {
+                                  transform: 'translateY(1px)',
+                                  boxShadow: 'none',
+                                },
+                                flexShrink: 0 
+                              }}
+                            >
+                              <TaskIconWithAdd hasTasks={hasScenarioTasks} />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
                       </Box>
                     </TableCell>
                     <TableCell
@@ -1310,6 +1768,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                         whiteSpace: 'nowrap',
                         textOverflow: 'ellipsis',
                         fontSize: '0.65rem', // Smaller by 1 (0.65rem)
+                        textAlign: 'center',
                       }}
                     >
                       <Tooltip title={fs.featurePath} placement="top-start" arrow enterDelay={200}>
@@ -1338,57 +1797,45 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                       }}
                     >
                       {/* Rendering of associated tasks */}
-                      {fs.tasks && fs.tasks.length > 0 ? (
-                        <Tooltip
-                          title={
-                            <Box sx={{ p: 0.5 }}>
-                              <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 0.5 }}>Tareas asociadas:</Typography>
-                              {fs.tasks.map(t => (
-                                <Box key={t.id} sx={{ mb: 0.5, borderBottom: '1px solid rgba(255,255,255,0.1)', pb: 0.5 }}>
-                                  <Typography variant="caption" display="block" sx={{ fontWeight: 'bold' }}>
-                                    @{t.name} ({t.hook.toUpperCase()})
-                                  </Typography>
-                                  {t.args && Object.keys(t.args).length > 0 && (
-                                    <Typography variant="caption" display="block">
-                                      Parámetros: {JSON.stringify(t.args)}
-                                    </Typography>
-                                  )}
-                                </Box>
-                              ))}
-                            </Box>
-                          }
-                          arrow
-                          placement="top"
-                          enterDelay={300}
-                        >
-                          <Box sx={{ display: 'flex', flexWrap: 'nowrap', gap: 0.5, overflow: 'hidden' }}>
-                            {fs.tasks.map((task) => {
-                              const taskKey = `${fs.id}::${task.id}`;
-                              const taskStatus = taskStatusMap.get(taskKey) || 'pending';
-                              return (
-                                <Chip
-                                  key={task.id}
-                                  size="small"
-                                  icon={<AssignmentIcon sx={{ fontSize: '10px !important' }} />}
-                                  label={`@${task.name}`}
-                                  sx={{
-                                    height: 18,
-                                    fontSize: '0.65rem', // Smaller by 1 (0.65rem)
-                                    fontWeight: 400,
-                                    borderRadius: '4px',
-                                    flexShrink: 0,
-                                    ...getTaskChipStyles(taskStatus, theme)
-                                  }}
-                                />
-                              );
-                            })}
-                          </Box>
-                        </Tooltip>
-                      ) : (
-                        <Typography sx={{ fontSize: '0.65rem', color: 'text.disabled', fontStyle: 'italic' }}>
-                          Sin tareas
-                        </Typography>
-                      )}
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 28, width: '100%' }}>
+                        {fs.tasks && fs.tasks.length > 0 ? (
+                          <Tooltip title={`Ver listado de tareas (${fs.tasks.length})`}>
+                            <IconButton
+                              size="small"
+                              onClick={(e) => {
+                                setTasksViewerAnchor(e.currentTarget);
+                                setTasksViewerTitle(`Tareas del Escenario: ${fs.scenarioName} (${fs.tasks!.length})`);
+                                setTasksViewerList(fs.tasks || []);
+                              }}
+                              sx={{ 
+                                p: 0.25, 
+                                color: 'primary.main', 
+                                bgcolor: '#ffffff',
+                                boxShadow: '0 2px 5px rgba(0,0,0,0.18)',
+                                border: `1px solid ${alpha(theme.palette.primary.main, 0.25)}`,
+                                transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+                                '&:hover': { 
+                                  bgcolor: '#ffffff',
+                                  borderColor: theme.palette.primary.main,
+                                  boxShadow: `0 4px 10px ${alpha(theme.palette.primary.main, 0.38)}`,
+                                  transform: 'translateY(-1.5px)',
+                                },
+                                '&:active': {
+                                  transform: 'translateY(1px)',
+                                  boxShadow: 'none',
+                                },
+                                flexShrink: 0 
+                              }}
+                            >
+                              <VisibilityIcon sx={{ fontSize: 18 }} />
+                            </IconButton>
+                          </Tooltip>
+                        ) : (
+                          <Typography sx={{ fontSize: '0.65rem', color: 'text.disabled', fontStyle: 'italic' }}>
+                            Sin tareas
+                          </Typography>
+                        )}
+                      </Box>
                     </TableCell>
                     <TableCell
                       sx={{
@@ -1492,6 +1939,111 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
           initialScope={dialogInitialScope}
         />
       )}
+
+      {/* Popover to view full list of tasks */}
+      <Popover
+        open={Boolean(tasksViewerAnchor)}
+        anchorEl={tasksViewerAnchor}
+        onClose={() => setTasksViewerAnchor(null)}
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'left',
+        }}
+        transformOrigin={{
+          vertical: 'top',
+          horizontal: 'left',
+        }}
+        PaperProps={{
+          sx: {
+            p: 2,
+            width: 320,
+            maxHeight: 400,
+            borderRadius: 2,
+            boxShadow: theme.shadows[4],
+            border: `1px solid ${theme.palette.divider}`,
+            bgcolor: 'background.paper',
+          }
+        }}
+      >
+        <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: 'text.primary', borderBottom: `1px solid ${theme.palette.divider}`, pb: 0.75 }}>
+          {tasksViewerTitle}
+        </Typography>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, overflowY: 'auto', maxHeight: 320, mt: 1 }}>
+          {tasksViewerList.length === 0 ? (
+            <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', textAlign: 'center', py: 2 }}>
+              No hay tareas
+            </Typography>
+          ) : (
+            tasksViewerList.map((task: any, index: number) => (
+              <Box 
+                key={`${task.id}-${index}`} 
+                sx={{ 
+                  p: 1, 
+                  borderRadius: 1, 
+                  bgcolor: theme.palette.mode === 'dark' 
+                    ? alpha(theme.palette.common.white, 0.04) 
+                    : alpha(theme.palette.common.black, 0.03),
+                  borderLeft: `3px solid ${task.hook === 'before' ? theme.palette.info.main : theme.palette.success.main}`,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'flex-start',
+                  gap: 1
+                }}
+              >
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  {task.scenarioName && (
+                    <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, fontSize: '0.65rem', textTransform: 'uppercase' }}>
+                      Escenario: {task.scenarioName}
+                    </Typography>
+                  )}
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary', fontSize: '0.8rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      Tarea: {task.name}
+                    </Typography>
+                    <Chip 
+                      label={task.hook.toUpperCase()} 
+                      size="small" 
+                      sx={{ 
+                        height: 16, 
+                        fontSize: '0.6rem', 
+                        bgcolor: task.hook === 'before' ? alpha(theme.palette.info.main, 0.1) : alpha(theme.palette.success.main, 0.1),
+                        color: task.hook === 'before' ? 'info.main' : 'success.main',
+                        fontWeight: 700
+                      }} 
+                    />
+                  </Box>
+                  {task.args && Object.keys(task.args).length > 0 && (
+                    <Box sx={{ mt: 0.5, p: 0.75, borderRadius: '4px', bgcolor: alpha(theme.palette.background.default, 0.5), border: `1px dashed ${theme.palette.divider}` }}>
+                      <Typography variant="caption" sx={{ fontFamily: 'monospace', fontSize: '0.65rem', display: 'block', whiteSpace: 'pre-wrap', wordBreak: 'break-all', color: 'text.secondary' }}>
+                        {JSON.stringify(task.args, null, 2)}
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
+                {onUpdateTasksAtLevel && (
+                  <IconButton
+                    size="small"
+                    color="error"
+                    onClick={() => handleDeleteTaskInline(task)}
+                    sx={{ 
+                      p: 0.25, 
+                      mt: 0.25,
+                      color: 'error.main', 
+                      bgcolor: '#ffffff',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
+                      border: `1px solid ${alpha(theme.palette.error.main, 0.25)}`,
+                      '&:hover': { bgcolor: '#fdf2f2' },
+                      flexShrink: 0 
+                    }}
+                  >
+                    <DeleteIcon sx={{ fontSize: 13 }} />
+                  </IconButton>
+                )}
+              </Box>
+            ))
+          )}
+        </Box>
+      </Popover>
     </Box>
   );
 };

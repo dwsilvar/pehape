@@ -38,6 +38,9 @@ def execute_plan(
     plan_id: str,
     background_tasks: BackgroundTasks,
     scheduled_at: Optional[str] = None,
+    set_instance_id: Optional[str] = None,
+    flow_instance_id: Optional[str] = None,
+    scenario_instance_id: Optional[str] = None,
 ):
     """Trigger the execution of a specific Test Plan from Blueprints."""
     blueprints = _load_blueprints()
@@ -46,6 +49,47 @@ def execute_plan(
         raise HTTPException(status_code=404, detail=f"Plan '{plan_id}' not found.")
 
     orchestrator_input = _convert_plan_to_orchestrator_format(plan, blueprints)
+
+    # Filter the orchestrator input if execution level parameters are provided
+    if set_instance_id or flow_instance_id or scenario_instance_id:
+        filtered_cycles = []
+        for cycle in orchestrator_input.get("test_cycles", []):
+            filtered_flows = []
+            for flow in cycle.get("test_flows", []):
+                filtered_scenarios = []
+                for scenario in flow.get("scenarios", []):
+                    scen_id = scenario.get("id", "")
+                    match = False
+                    if scenario_instance_id:
+                        match = (scen_id == scenario_instance_id)
+                    elif flow_instance_id:
+                        if flow_instance_id.startswith("flow-"):
+                            match = scen_id.startswith(flow_instance_id + "-")
+                        elif flow_instance_id.startswith("set-") and "-combo-" in flow_instance_id:
+                            parts = flow_instance_id.split("-combo-")
+                            prefix = f"{parts[0]}-{parts[1]}-"
+                            match = scen_id.startswith(prefix)
+                    elif set_instance_id:
+                        match = scen_id.startswith(set_instance_id + "-")
+                    
+                    if match:
+                        filtered_scenarios.append(scenario)
+                
+                if filtered_scenarios:
+                    flow["scenarios"] = filtered_scenarios
+                    filtered_flows.append(flow)
+            
+            if filtered_flows:
+                cycle["test_flows"] = filtered_flows
+                filtered_cycles.append(cycle)
+        
+        if not filtered_cycles:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No scenarios found matching the filter (set_instance_id={set_instance_id}, flow_instance_id={flow_instance_id}, scenario_instance_id={scenario_instance_id})"
+            )
+        orchestrator_input["test_cycles"] = filtered_cycles
+
     plan_json_str      = json.dumps(orchestrator_input, ensure_ascii=False)
 
     task_id = str(uuid.uuid4())
