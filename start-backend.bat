@@ -12,7 +12,6 @@ set "ORIGINAL_DIR=%CD%"
 
 REM Definir rutas
 set "PROJECT_ROOT=%~dp0"
-set "BACKEND_DIR=%PROJECT_ROOT%backend"
 
 REM Cambiar al directorio raíz
 cd /d "%PROJECT_ROOT%"
@@ -33,18 +32,10 @@ if exist "%VENV_PATH%\Scripts\activate.bat" (
     goto :run_server
 )
 
-REM Buscar entorno virtual en el directorio backend (venv)
-set "VENV_PATH=%BACKEND_DIR%\venv"
-if exist "%VENV_PATH%\Scripts\activate.bat" (
-    echo Activando entorno virtual en: %VENV_PATH%
-    call "%VENV_PATH%\Scripts\activate.bat"
-    goto :run_server
-)
-
-REM Si no existe, crear entorno virtual en backend\venv
+REM Si no existe, crear entorno virtual en la raíz (.venv)
 echo.
 echo Entorno virtual no encontrado. Creandolo en: %VENV_PATH%
-python -m venv venv
+python -m venv .venv
 if errorlevel 1 (
     echo.
     echo ERROR: No se pudo crear el entorno virtual.

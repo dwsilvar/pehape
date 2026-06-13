@@ -4,12 +4,10 @@
 #
 # Contenido del paquete de actualizacion:
 #   - frontend/dist/     (build compilado, lo que mas cambia)
-#   - backend/           (archivos .py del servidor)
 #   - api/               (modulos FastAPI)
 #   - executor/          (motor de ejecucion)
-#   - behave_runner/     (runner de Behave)
 #   - util/              (utilidades)
-#   - orchestrator.py, orchestrator_api.py, run_behave.py, behave_master.py
+#   - orchestrator.py, orchestrator_api.py
 #   - version.json       (para que el cliente sepa a que version actualizo)
 #   - requirements.txt   (para detectar si hay nuevas deps)
 #   - update.ps1         (script inteligente que aplica los cambios)
@@ -41,8 +39,12 @@ $VersionInfo = Get-Content $VersionFile | ConvertFrom-Json
 $AppVersion  = $VersionInfo.version
 $BuildDate   = Get-Date -Format 'yyyyMMdd'
 
-$UpdateDir = Join-Path $ProjectRoot "update_package"
-$ZipFile   = Join-Path $ProjectRoot "pehape-update-$AppVersion-$BuildDate.zip"
+$TargetDir = Join-Path $ProjectRoot "target"
+if (-not (Test-Path $TargetDir)) {
+    New-Item -ItemType Directory -Path $TargetDir -Force | Out-Null
+}
+$UpdateDir = Join-Path $TargetDir "update_package"
+$ZipFile   = Join-Path $TargetDir "pehape-update-$AppVersion-$BuildDate.zip"
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  PeHaPe - Generador de Actualizacion" -ForegroundColor Cyan
@@ -59,10 +61,8 @@ if (Test-Path $UpdateDir) {
 # --- Crear estructura ---
 $dirs = @(
     "$UpdateDir\frontend\dist",
-    "$UpdateDir\backend",
     "$UpdateDir\api",
     "$UpdateDir\executor",
-    "$UpdateDir\behave_runner",
     "$UpdateDir\util"
 )
 foreach ($dir in $dirs) {
@@ -72,7 +72,7 @@ Write-Host "Estructura de directorios creada." -ForegroundColor Green
 
 # --- 1. Compilar Frontend ---
 Write-Host ""
-Write-Host "[1/6] Compilando Frontend..." -ForegroundColor Cyan
+Write-Host "[1/5] Compilando Frontend..." -ForegroundColor Cyan
 Set-Location frontend
 & npm run build
 if ($LASTEXITCODE -ne 0) {
@@ -84,17 +84,10 @@ Set-Location ..
 Copy-Item -Recurse "frontend\dist\*" "$UpdateDir\frontend\dist\"
 Write-Host "Frontend compilado y copiado." -ForegroundColor Green
 
-# --- 2. Copiar Backend ---
+# --- 2. Copiar modulos del proyecto ---
 Write-Host ""
-Write-Host "[2/6] Copiando Backend..." -ForegroundColor Cyan
-Copy-Item "backend\*.py"   "$UpdateDir\backend\" -ErrorAction SilentlyContinue
-Copy-Item "backend\*.json" "$UpdateDir\backend\" -ErrorAction SilentlyContinue
-Write-Host "Backend copiado." -ForegroundColor Green
-
-# --- 3. Copiar modulos del proyecto ---
-Write-Host ""
-Write-Host "[3/6] Copiando modulos del proyecto..." -ForegroundColor Cyan
-$modules = @("api", "executor", "behave_runner", "util")
+Write-Host "[2/5] Copiando modulos del proyecto..." -ForegroundColor Cyan
+$modules = @("api", "executor", "util", "config")
 foreach ($mod in $modules) {
     if (Test-Path $mod) {
         Copy-Item -Recurse -Force $mod "$UpdateDir\"
@@ -103,25 +96,58 @@ foreach ($mod in $modules) {
 }
 
 # Scripts raiz
-$rootScripts = @("orchestrator.py", "orchestrator_api.py", "run_behave.py", "behave_master.py")
+$rootScripts = @("orchestrator.py", "orchestrator_api.py")
 foreach ($script in $rootScripts) {
     if (Test-Path $script) {
         Copy-Item $script "$UpdateDir\"
         Write-Host "  Copiado: $script" -ForegroundColor Gray
     }
 }
+
+# Copiar features (solo .py y example.feature)
+if (Test-Path "features") {
+    $SourceFeaturesDir = Join-Path $ProjectRoot "features"
+    $DestFeaturesDir = Join-Path $UpdateDir "features"
+    New-Item -ItemType Directory -Path $DestFeaturesDir -Force | Out-Null
+    
+    $featuresPyCount = 0
+    $files = Get-ChildItem -Path $SourceFeaturesDir -Recurse -File
+    foreach ($file in $files) {
+        $relativePath = $file.FullName.Substring($SourceFeaturesDir.Length + 1)
+        $shouldCopy = $false
+        
+        if ($file.Extension -eq ".py") {
+            $shouldCopy = $true
+            $featuresPyCount++
+        }
+        elseif ($relativePath -eq "example.feature") {
+            $shouldCopy = $true
+        }
+        
+        if ($shouldCopy) {
+            $destFilePath = Join-Path $DestFeaturesDir $relativePath
+            $destFileDir = Split-Path $destFilePath
+            if (-not (Test-Path $destFileDir)) {
+                New-Item -ItemType Directory -Path $destFileDir -Force | Out-Null
+            }
+            Copy-Item $file.FullName $destFilePath -Force
+        }
+    }
+    Write-Host "  Copiado: features (incluyendo $featuresPyCount archivos .py y example.feature)" -ForegroundColor Gray
+}
+
 Write-Host "Modulos copiados." -ForegroundColor Green
 
-# --- 4. Copiar version.json y requirements.txt ---
+# --- 3. Copiar version.json y requirements.txt ---
 Write-Host ""
-Write-Host "[4/6] Copiando archivos de control de version..." -ForegroundColor Cyan
+Write-Host "[3/5] Copiando archivos de control de version..." -ForegroundColor Cyan
 Copy-Item "version.json"    "$UpdateDir\"
 Copy-Item "requirements.txt" "$UpdateDir\"
 Write-Host "Archivos de control copiados." -ForegroundColor Green
 
-# --- 5. Detectar si requirements.txt cambio y si hay que incluir nuevas deps ---
+# --- 4. Detectar si requirements.txt cambio y si hay que incluir nuevas deps ---
 Write-Host ""
-Write-Host "[5/6] Verificando dependencias Python..." -ForegroundColor Cyan
+Write-Host "[4/5] Verificando dependencias Python..." -ForegroundColor Cyan
 
 # Comparar requirements.txt actual con el de la ultima instalacion (si existe hash guardado)
 $depsHashFile = Join-Path $ProjectRoot ".last_pkg_requirements_hash"
@@ -151,9 +177,9 @@ if ($requirementsChanged) {
     Write-Host "  requirements.txt sin cambios. No se incluyen .whl (el cliente ya los tiene)." -ForegroundColor Gray
 }
 
-# --- 6. Generar update.ps1 y update.bat en el paquete ---
+# --- 5. Generar update.ps1 y update.bat en el paquete ---
 Write-Host ""
-Write-Host "[6/6] Generando scripts de actualizacion..." -ForegroundColor Cyan
+Write-Host "[5/5] Generando scripts de actualizacion..." -ForegroundColor Cyan
 
 $updateScript = @"
 # update.ps1 - Aplica una actualizacion de PeHaPe
@@ -179,13 +205,13 @@ Write-Host ""
 # --- Archivos y carpetas protegidos (NO se sobrescriben) ---
 $ProtectedFiles = @(
     "config\network_config.json",
-    "config\ocr_config.json"
+    "config\ocr_config.json",
+    "features\example.feature"
 )
 `$ProtectedFolders = @(
     "resources\images",
     "resources\ocr_images",
-    "reports",
-    "features"
+    "reports"
 )
 
 # --- Pedir al usuario la ruta de instalacion ---
@@ -305,7 +331,7 @@ Write-Host "Scripts de actualizacion generados." -ForegroundColor Green
 Write-Host ""
 Write-Host "Creando ZIP del paquete de actualizacion..." -ForegroundColor Cyan
 if (Test-Path $ZipFile) { Remove-Item $ZipFile }
-Compress-Archive -Path "$UpdateDir\*" -DestinationPath $ZipFile -Force
+Get-ChildItem -Path "$UpdateDir" | Compress-Archive -DestinationPath $ZipFile -Force
 
 $zipSizeMB = [math]::Round((Get-Item $ZipFile).Length / 1MB, 2)
 

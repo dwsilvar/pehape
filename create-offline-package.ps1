@@ -12,10 +12,25 @@ if ($currentPolicy -ne 'Bypass' -and $currentPolicy -ne 'Unrestricted') {
 
 $ErrorActionPreference = "Stop"
 $ProjectRoot = Get-Location
-$PackageDir = Join-Path $ProjectRoot "package_offline"
+# Asegurar la existencia del directorio target
+$TargetDir = Join-Path $ProjectRoot "target"
+if (-not (Test-Path $TargetDir)) {
+    New-Item -ItemType Directory -Path $TargetDir -Force | Out-Null
+}
+
+$PackageDir = Join-Path $TargetDir "package_offline"
+
+# Leer versión del aplicativo
+$VersionFile = Join-Path $ProjectRoot "version.json"
+if (Test-Path $VersionFile) {
+    $VersionInfo = Get-Content $VersionFile | ConvertFrom-Json
+    $AppVersion  = $VersionInfo.version
+} else {
+    $AppVersion  = "unknown"
+}
 
 # Initialize logging
-$LogFile = Join-Path $ProjectRoot "package-creation-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
+$LogFile = Join-Path $TargetDir "package-creation-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
 $WarningCount = 0
 $ErrorCount = 0
 
@@ -62,10 +77,8 @@ Write-Log "Creating directory structure..." "INFO"
 $dirs = @(
     "$PackageDir\dependencies\python",
     "$PackageDir\frontend\dist",
-    "$PackageDir\backend",
     "$PackageDir\api",
     "$PackageDir\config",
-    "$PackageDir\resources",
     "$PackageDir\util",
     "$PackageDir\reports"
 )
@@ -112,32 +125,12 @@ if (Test-Path "frontend\dist") {
 else {
     Write-Log "Frontend dist folder not found. Build may have failed." "WARNING"
 }
-# 4. Copy Backend Code
-Write-Log "Step 4: Copying Backend code" "INFO"
-if (Test-Path "backend\*.py") {
-    Copy-Item "backend\*.py" "$PackageDir\backend\"
-    $backendPyCount = (Get-ChildItem "$PackageDir\backend\*.py").Count
-    Write-Log "Copied $backendPyCount Python files from backend." "SUCCESS"
-}
-else {
-    Write-Log "No Python files found in backend directory." "WARNING"
-}
-if (Test-Path "backend\*.json") {
-    Copy-Item "backend\*.json" "$PackageDir\backend\"
-    Write-Log "Copied JSON configuration files from backend." "SUCCESS"
-}
-else {
-    Write-Log "No JSON files found in backend directory." "WARNING"
-}
-# 5. Copy Core Automation Components
-Write-Log "Step 5: Copying Core automation components" "INFO"
+# 4. Copy Core Automation Components
+Write-Log "Step 4: Copying Core automation components" "INFO"
 $coreComponents = @(
     @{Name = "executor"; Path = "executor" },
-    @{Name = "behave_runner"; Path = "behave_runner" },
-    @{Name = "features"; Path = "features" },
     @{Name = "util"; Path = "util" },
     @{Name = "config"; Path = "config" },
-    @{Name = "resources"; Path = "resources" },
     @{Name = "api"; Path = "api" }
 )
 foreach ($component in $coreComponents) {
@@ -148,13 +141,6 @@ foreach ($component in $coreComponents) {
     else {
         Write-Log "Component not found: $($component.Name) at $($component.Path)" "WARNING"
     }
-}
-if (Test-Path "behave_master.py") {
-    Copy-Item "behave_master.py" "$PackageDir\"
-    Write-Log "Copied behave_master.py" "SUCCESS"
-}
-else {
-    Write-Log "behave_master.py not found" "WARNING"
 }
 if (Test-Path "orchestrator.py") {
     Copy-Item "orchestrator.py" "$PackageDir\"
@@ -170,13 +156,6 @@ if (Test-Path "orchestrator_api.py") {
 else {
     Write-Log "orchestrator_api.py not found" "WARNING"
 }
-if (Test-Path "run_behave.py") {
-    Copy-Item "run_behave.py" "$PackageDir\"
-    Write-Log "Copied run_behave.py" "SUCCESS"
-}
-else {
-    Write-Log "run_behave.py not found" "WARNING"
-}
 if (Test-Path "requirements.txt") {
     Copy-Item "requirements.txt" "$PackageDir\"
     Write-Log "Copied requirements.txt" "SUCCESS"
@@ -184,14 +163,56 @@ if (Test-Path "requirements.txt") {
 else {
     Write-Log "requirements.txt not found" "WARNING"
 }
-# 5.1 Copy README if exists
+if (Test-Path "version.json") {
+    Copy-Item "version.json" "$PackageDir\"
+    Write-Log "Copied version.json" "SUCCESS"
+}
+else {
+    Write-Log "version.json not found" "WARNING"
+}
+
+# Copy features folder (only .py files and example.feature)
+if (Test-Path "features") {
+    $SourceFeaturesDir = Join-Path $ProjectRoot "features"
+    $DestFeaturesDir = Join-Path $PackageDir "features"
+    New-Item -ItemType Directory -Path $DestFeaturesDir -Force | Out-Null
+    
+    $featuresPyCount = 0
+    $files = Get-ChildItem -Path $SourceFeaturesDir -Recurse -File
+    foreach ($file in $files) {
+        $relativePath = $file.FullName.Substring($SourceFeaturesDir.Length + 1)
+        $shouldCopy = $false
+        
+        if ($file.Extension -eq ".py") {
+            $shouldCopy = $true
+            $featuresPyCount++
+        }
+        elseif ($relativePath -eq "example.feature") {
+            $shouldCopy = $true
+        }
+        
+        if ($shouldCopy) {
+            $destFilePath = Join-Path $DestFeaturesDir $relativePath
+            $destFileDir = Split-Path $destFilePath
+            if (-not (Test-Path $destFileDir)) {
+                New-Item -ItemType Directory -Path $destFileDir -Force | Out-Null
+            }
+            Copy-Item $file.FullName $destFilePath -Force
+        }
+    }
+    Write-Log "Copied features folder (including $featuresPyCount Python steps/environment files and example.feature)." "SUCCESS"
+}
+else {
+    Write-Log "features folder not found" "WARNING"
+}
+# 4.1 Copy README if exists
 if (Test-Path "package_offline\README.md") {
     Write-Log "Copying README.md..." "INFO"
     Copy-Item "package_offline\README.md" "$PackageDir\"
     Write-Log "Copied README.md" "SUCCESS"
 }
-# 5.2 Include Tesseract OCR
-Write-Log "Step 5.2: Including Tesseract OCR" "INFO"
+
+Write-Log "Step 4.2: Including Tesseract OCR" "INFO"
 $tesseractExe = ""
 $ocrConfigFile = "config\ocr_config.json"
 if (Test-Path $ocrConfigFile) {
@@ -202,10 +223,36 @@ if (Test-Path $ocrConfigFile) {
         }
     } catch {}
 }
-if (-not $tesseractExe) {
-    # Fallback to a common path if not found in config
+if (-not $tesseractExe -or -not (Test-Path $tesseractExe)) {
+    # Try locating via command PATH
+    $tesseractCmd = Get-Command tesseract -ErrorAction SilentlyContinue
+    if ($tesseractCmd) {
+        $tesseractExe = $tesseractCmd.Source
+        Write-Log "Tesseract found in system PATH: $tesseractExe" "INFO"
+    }
+}
+if (-not $tesseractExe -or -not (Test-Path $tesseractExe)) {
+    # Check common system directories
+    $commonTesseractPaths = @(
+        "C:\Program Files\Tesseract-OCR\tesseract.exe",
+        "C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+        "C:\src\tesseract-ocr\tesseract.exe",
+        "C:\Tesseract-OCR\tesseract.exe",
+        "C:\Users\$env:USERNAME\AppData\Local\Programs\Tesseract-OCR\tesseract.exe",
+        "C:\Users\$env:USERNAME\AppData\Local\Tesseract-OCR\tesseract.exe"
+    )
+    foreach ($path in $commonTesseractPaths) {
+        if (Test-Path $path) {
+            $tesseractExe = $path
+            Write-Log "Tesseract found at common location: $tesseractExe" "INFO"
+            break
+        }
+    }
+}
+if (-not $tesseractExe -or -not (Test-Path $tesseractExe)) {
+    # Fallback warning
     $tesseractExe = "C:\src\tesseract-ocr\tesseract.exe"
-    Write-Log "Tesseract path not found in ocr_config.json, using fallback: $tesseractExe" "INFO"
+    Write-Log "Tesseract path not found in ocr_config.json or system, using default fallback path: $tesseractExe" "INFO"
 }
 if (Test-Path $tesseractExe) {
     $tesseractDir = Split-Path $tesseractExe
@@ -222,7 +269,7 @@ else {
 }
 
 # 5.3 Include Allure Commandline if exists
-Write-Log "Step 5.3: Including Allure Commandline" "INFO"
+Write-Log "Step 4.3: Including Allure Commandline" "INFO"
 if (Test-Path "allure-commandline") {
     Write-Log "Copying Allure Commandline..." "INFO"
     Copy-Item -Recurse -Force "allure-commandline" "$PackageDir\"
@@ -232,8 +279,8 @@ else {
     Write-Log "allure-commandline folder not found. Reports might not work offline." "WARNING"
 }
 
-# 6. Copy Start Scripts (Modified for offline)
-Write-Log "Step 6: Creating offline start scripts" "INFO"
+# 5. Copy Start Scripts (Modified for offline)
+Write-Log "Step 5: Creating offline start scripts" "INFO"
 $startBackendOffline = @"
 @echo off
 set "PROJECT_ROOT=%~dp0"
@@ -417,7 +464,6 @@ if not exist install.ok (
 REM Definir variables de ruta
 setlocal enableextensions enabledelayedexpansion
 set "BASE_DIR=%~dp0"
-set "BACKEND_DIR=%BASE_DIR%backend"
 set "FRONTEND_DIR=%BASE_DIR%frontend"
 set "TESSERACT_DIR=%BASE_DIR%Tesseract-OCR"
 
@@ -510,7 +556,7 @@ pause
 "@
 $startAllOffline | Out-File -FilePath "$PackageDir\start-all-offline.bat" -Encoding ascii
 # 7. Generate installation script for the target machine
-Write-Log "Step 7: Generating install.ps1" "INFO"
+Write-Log "Step 6: Generating install.ps1" "INFO"
 $installScript = @"
 # install.ps1 - Offline Installer for Pehape
 `$ProjectRoot = Get-Location
@@ -675,7 +721,7 @@ $installScript | Out-File -FilePath "$PackageDir\install.ps1" -Encoding utf8
 Write-Log "install.ps1 generated successfully." "SUCCESS"
 
 # 7.1 Generate update.ps1 - Intelligent Updater
-Write-Log "Step 7.1: Generating update.ps1" "INFO"
+Write-Log "Step 6.1: Generating update.ps1" "INFO"
 $updateScript = @"
 # update.ps1 - Intelligent Updater for Pehape
 `$ProjectRoot = Get-Location
@@ -686,7 +732,8 @@ Write-Host "========================================" -ForegroundColor Blue
 # Definition of protected items (WILL NOT BE OVERWRITTEN)
 `$ProtectedFiles = @(
     "config\network_config.json",
-    "config\ocr_config.json"
+    "config\ocr_config.json",
+    "features\example.feature"
 )
 `$ProtectedFolders = @(
     "resources\images",
@@ -766,7 +813,7 @@ Write-Host "========================================" -ForegroundColor Green
 $updateScript | Out-File -FilePath "$PackageDir\update.ps1" -Encoding utf8
 Write-Log "update.ps1 generated successfully." "SUCCESS"
 # 8. Generate README.md with instructions
-Write-Log "Step 8: Generating README.md" "INFO"
+Write-Log "Step 7: Generating README.md" "INFO"
 $readmeContent = @"
 # PeHaPe - Offline Package
 
@@ -877,15 +924,11 @@ package_offline/
 ├── start-app-window.bat        # ⭐ RECOMENDADO: Ventana nativa
 ├── start-all-offline.bat       # Servidor + instrucciones navegador
 ├── start-backend-offline.bat   # Solo servidor (acceso red)
-├── backend/                    # Configuración del servidor (FastAPI)
 ├── frontend/dist/              # Interfaz compilada
 ├── dependencies/python/        # Paquetes Python (.whl)
 ├── Tesseract-OCR/              # Motor OCR incluido
-├── features/                   # Tests BDD
 ├── executor/                   # Motor de ejecución
-├── behave_runner/              # Runner Behave
 ├── config/                     # Configuración
-├── resources/                  # Recursos (imágenes, etc)
 └── util/                       # Utilidades
 ``````
 
@@ -911,14 +954,16 @@ $readmeContent | Out-File -FilePath "$PackageDir\README.md" -Encoding utf8
 Write-Log "README.md generated successfully." "SUCCESS"
 
 # 9. Create ZIP Archive
-Write-Log "Step 9: Creating ZIP archive" "INFO"
-$ZipFile = Join-Path $ProjectRoot "pehape-package-offline-$(Get-Date -Format 'yyyyMMdd').zip"
+Write-Log "Step 8: Creating ZIP archive" "INFO"
+$BuildDate = Get-Date -Format 'yyyyMMdd'
+$ZipFile = Join-Path $TargetDir "pehape-package-offline-$AppVersion-$BuildDate.zip"
 if (Test-Path $ZipFile) { 
     Remove-Item $ZipFile 
     Write-Log "Removed existing ZIP file: $ZipFile" "INFO"
 }
 try {
-    Compress-Archive -Path "$PackageDir\*" -DestinationPath $ZipFile -Force -ErrorAction Stop
+    # Usar Get-ChildItem para evitar bloqueos de archivos en Windows
+    Get-ChildItem -Path "$PackageDir" | Compress-Archive -DestinationPath $ZipFile -Force -ErrorAction Stop
     Write-Log "ZIP archive created successfully: $ZipFile" "SUCCESS"
 }
 catch {

@@ -1,6 +1,6 @@
 {
   "version": "1.2.0-dev",
-  "build_date": "2026-06-04",
+  "build_date": "2026-06-13",
   "changelog": "Monitor de ejecucion en tiempo real. Fix SSE sin buffering. Matching de IDs en Test Sets.",
   "min_base_version": "1.0.0"
 }

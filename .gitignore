@@ -11,10 +11,8 @@ frontend/node_modules/
 *.jpg
 *.jpeg
 
-# Offline package
-offline-package/
-package-offline/
-package_offline/
+# Target build and packaging outputs
+target/
 
 # Frontend build artifacts
 frontend/dist/
@@ -34,6 +32,4 @@ frontend/public/*.ico
 !frontend/public/bird-icon.png
 !frontend/public/chavin-head.png
 
-pehape-package-offline*/
-pehape-package-offline*
 allure-commandline/
