@@ -131,7 +131,8 @@ const SettingsPage: React.FC = () => {
                                         <InputAdornment position="end">
                                             <IconButton onClick={async () => {
                                                 try {
-                                                    const res = await fetch('/api/settings/browse_file');
+                                                    const currentPath = encodeURIComponent(settings.TESSERACT_CMD_PATH || '');
+                                                    const res = await fetch(`/api/settings/browse_file?current_path=${currentPath}`);
                                                     if (res.ok) {
                                                         const data = await res.json();
                                                         if (data.path) {
@@ -193,6 +194,29 @@ const SettingsPage: React.FC = () => {
                                 value={settings.IMAGES_BASE_PATH}
                                 onChange={(e) => handleChange('IMAGES_BASE_PATH', e.target.value)}
                                 size="small"
+                                helperText="Ruta absoluta o relativa a la carpeta de imágenes"
+                                InputProps={{
+                                    endAdornment: (
+                                        <InputAdornment position="end">
+                                            <IconButton onClick={async () => {
+                                                try {
+                                                    const currentPath = encodeURIComponent(settings.IMAGES_BASE_PATH || '');
+                                                    const res = await fetch(`/api/settings/browse_directory?current_path=${currentPath}`);
+                                                    if (res.ok) {
+                                                        const data = await res.json();
+                                                        if (data.path) {
+                                                            handleChange('IMAGES_BASE_PATH', data.path);
+                                                        }
+                                                    }
+                                                } catch (err) {
+                                                    console.error("Error al abrir explorador:", err);
+                                                }
+                                            }} edge="end">
+                                                <FolderOpenIcon />
+                                            </IconButton>
+                                        </InputAdornment>
+                                    )
+                                }}
                             />
                             
                             <TextField 
@@ -202,6 +226,29 @@ const SettingsPage: React.FC = () => {
                                 value={settings.IMAGES_REPORT_PATH}
                                 onChange={(e) => handleChange('IMAGES_REPORT_PATH', e.target.value)}
                                 size="small"
+                                helperText="Ruta absoluta o relativa a la carpeta para guardar capturas de reportes"
+                                InputProps={{
+                                    endAdornment: (
+                                        <InputAdornment position="end">
+                                            <IconButton onClick={async () => {
+                                                try {
+                                                    const currentPath = encodeURIComponent(settings.IMAGES_REPORT_PATH || '');
+                                                    const res = await fetch(`/api/settings/browse_directory?current_path=${currentPath}`);
+                                                    if (res.ok) {
+                                                        const data = await res.json();
+                                                        if (data.path) {
+                                                            handleChange('IMAGES_REPORT_PATH', data.path);
+                                                        }
+                                                    }
+                                                } catch (err) {
+                                                    console.error("Error al abrir explorador:", err);
+                                                }
+                                            }} edge="end">
+                                                <FolderOpenIcon />
+                                            </IconButton>
+                                        </InputAdornment>
+                                    )
+                                }}
                             />
                             
                             <Box>

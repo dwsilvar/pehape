@@ -142,6 +142,22 @@ foreach ($component in $coreComponents) {
         Write-Log "Component not found: $($component.Name) at $($component.Path)" "WARNING"
     }
 }
+
+# Update tesseract_cmd_path inside the package config to use relative path of the bundled Tesseract
+$packagedOcrConfig = Join-Path $PackageDir "config\ocr_config.json"
+if (Test-Path $packagedOcrConfig) {
+    Write-Log "Updating tesseract_cmd_path inside package config to relative path..." "INFO"
+    try {
+        $configJson = Get-Content $packagedOcrConfig -Raw -Encoding utf8 | ConvertFrom-Json
+        $configJson.tesseract_cmd_path = "Tesseract-OCR\tesseract.exe"
+        $jsonContent = $configJson | ConvertTo-Json -Depth 10
+        [System.IO.File]::WriteAllText($packagedOcrConfig, $jsonContent, [System.Text.UTF8Encoding]::new($false))
+        Write-Log "Package config tesseract_cmd_path updated successfully (no BOM)." "SUCCESS"
+    }
+    catch {
+        Write-Log "Failed to update package config tesseract_cmd_path: $($_.Exception.Message)" "WARNING"
+    }
+}
 if (Test-Path "orchestrator.py") {
     Copy-Item "orchestrator.py" "$PackageDir\"
     Write-Log "Copied orchestrator.py" "SUCCESS"
@@ -694,13 +710,14 @@ if (`$LASTEXITCODE -ne 0) {
 # 4. Configure Tesseract
 if (Test-Path "Tesseract-OCR\tesseract.exe") {
  Write-Host "Configuring local Tesseract OCR..."
-`$localTesseract = "`$ProjectRoot\Tesseract-OCR\tesseract.exe"
-`$ocrConfigFile = "config\ocr_config.json"
+ `$localTesseract = "Tesseract-OCR\tesseract.exe"
+ `$ocrConfigFile = "config\ocr_config.json"
  if (Test-Path `$ocrConfigFile) {
      try {
-         `$ocrJson = Get-Content `$ocrConfigFile -Raw | ConvertFrom-Json
+         `$ocrJson = Get-Content `$ocrConfigFile -Raw -Encoding utf8 | ConvertFrom-Json
          `$ocrJson.tesseract_cmd_path = `$localTesseract
-         `$ocrJson | ConvertTo-Json -Depth 10 | Out-File `$ocrConfigFile -Encoding utf8
+         `$jsonOut = `$ocrJson | ConvertTo-Json -Depth 10
+         [System.IO.File]::WriteAllText((Resolve-Path `$ocrConfigFile).Path, `$jsonOut, [System.Text.UTF8Encoding]::new(`$false))
      } catch {
          Write-Host "WARNING: Failed to update ocr_config.json automatically." -ForegroundColor Yellow
      }

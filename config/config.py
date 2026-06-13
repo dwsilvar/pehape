@@ -14,17 +14,33 @@ _ocr_config_path = _config_dir / "ocr_config.json"
 _ocr_config = {}
 if _ocr_config_path.exists():
     try:
-        with open(_ocr_config_path, "r", encoding="utf-8") as _f:
+        with open(_ocr_config_path, "r", encoding="utf-8-sig") as _f:
             _ocr_config = json.load(_f)
     except Exception:
         pass
 
-IMAGES_BASE_PATH = _ocr_config.get("images_base_path", "resources/images")
-IMAGES_REPORT_PATH = _ocr_config.get("images_report_path", "reports/screenshots")
+_images_base_path = _ocr_config.get("images_base_path", "resources/images")
+_images_base_path_obj = Path(_images_base_path)
+if not _images_base_path_obj.is_absolute():
+    IMAGES_BASE_PATH = str((_config_dir.parent / _images_base_path_obj).resolve())
+else:
+    IMAGES_BASE_PATH = str(_images_base_path_obj)
+
+_images_report_path = _ocr_config.get("images_report_path", "reports/screenshots")
+_images_report_path_obj = Path(_images_report_path)
+if not _images_report_path_obj.is_absolute():
+    IMAGES_REPORT_PATH = str((_config_dir.parent / _images_report_path_obj).resolve())
+else:
+    IMAGES_REPORT_PATH = str(_images_report_path_obj)
 
 # --- Tesseract OCR Configuration ---
 # Path to the Tesseract executable. Required if not in the system PATH.
-TESSERACT_CMD_PATH = _ocr_config.get("tesseract_cmd_path", r"C:\src\tesseract-ocr\tesseract.exe")
+_tesseract_path = _ocr_config.get("tesseract_cmd_path", r"C:\src\tesseract-ocr\tesseract.exe")
+_tesseract_path_obj = Path(_tesseract_path)
+if not _tesseract_path_obj.is_absolute():
+    TESSERACT_CMD_PATH = str((_config_dir.parent / _tesseract_path_obj).resolve())
+else:
+    TESSERACT_CMD_PATH = str(_tesseract_path_obj)
 TESSERACT_LANGUAGE = _ocr_config.get("tesseract_language", "spa")
 
 # Threshold for image-based search (PyAutoGUI locateOnScreen).
@@ -46,7 +62,7 @@ _net_config_path = _config_dir / "network_config.json"
 _net_config = {}
 if _net_config_path.exists():
     try:
-        with open(_net_config_path, "r", encoding="utf-8") as _f:
+        with open(_net_config_path, "r", encoding="utf-8-sig") as _f:
             _net_config = json.load(_f)
     except Exception:
         pass
