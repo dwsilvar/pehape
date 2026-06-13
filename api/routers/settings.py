@@ -1,3 +1,4 @@
+import importlib
 import json
 import re
 import subprocess
@@ -7,6 +8,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from api.config import PROJECT_ROOT
+import config.config as configurator
 
 router = APIRouter(prefix="/api/settings", tags=["Settings"])
 
@@ -34,33 +36,20 @@ class SettingsModel(BaseModel):
 
 @router.get("/")
 def get_settings():
-    if not CONFIG_FILE_PATH.exists():
-        raise HTTPException(status_code=404, detail="config.py not found")
+    try:
+        importlib.reload(configurator)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error reloading config: {str(e)}")
         
-    settings = {}
-    with open(CONFIG_FILE_PATH, "r", encoding="utf-8") as f:
-        content = f.read()
-        
-    for match in re.finditer(r'^([A-Z_]+)\s*=\s*(.+)$', content, re.MULTILINE):
-        key = match.group(1)
-        val_str = match.group(2).strip()
-        
-        if val_str == "True": 
-            val = True
-        elif val_str == "False": 
-            val = False
-        elif val_str.isdigit(): 
-            val = int(val_str)
-        elif val_str.startswith('r"') or val_str.startswith("r'"):
-            val = val_str[2:-1]
-        elif val_str.startswith('"') or val_str.startswith("'"):
-            val = val_str[1:-1]
-        else:
-            val = val_str
-            
-        settings[key] = val
-        
-    return settings
+    return {
+        "IMAGES_BASE_PATH": configurator.IMAGES_BASE_PATH,
+        "IMAGES_REPORT_PATH": configurator.IMAGES_REPORT_PATH,
+        "TESSERACT_CMD_PATH": configurator.TESSERACT_CMD_PATH,
+        "TESSERACT_LANGUAGE": configurator.TESSERACT_LANGUAGE,
+        "IMAGE_CONFIDENCE_THRESHOLD": configurator.IMAGE_CONFIDENCE_THRESHOLD,
+        "OCR_CONFIDENCE_THRESHOLD": configurator.OCR_CONFIDENCE_THRESHOLD,
+        "STOP_ON_FAILURE": configurator.STOP_ON_FAILURE
+    }
 
 @router.get("/browse_file")
 def browse_file():
@@ -79,36 +68,30 @@ print(path)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+OCR_CONFIG_PATH = PROJECT_ROOT / "config" / "ocr_config.json"
+
 @router.put("/")
 def update_settings(new_settings: SettingsModel):
-    if not CONFIG_FILE_PATH.exists():
-        raise HTTPException(status_code=404, detail="config.py not found")
-        
-    with open(CONFIG_FILE_PATH, "r", encoding="utf-8") as f:
-        content = f.read()
-        
     if hasattr(new_settings, "model_dump"):
         settings_dict = new_settings.model_dump()
     else:
         settings_dict = new_settings.dict()
-    
-    for key, value in settings_dict.items():
-        if isinstance(value, bool):
-            val_str = "True" if value else "False"
-        elif isinstance(value, int):
-            val_str = str(value)
-        else:
-            if "\\" in value:
-                val_str = f'r"{value}"'
-            else:
-                val_str = f'"{value}"'
-                
-        # Regex to replace the value
-        pattern = rf'^({key})\s*=\s*.+$'
-        replacement = rf'\1 = {val_str}'
-        content = re.sub(pattern, replacement, content, flags=re.MULTILINE)
         
-    with open(CONFIG_FILE_PATH, "w", encoding="utf-8") as f:
-        f.write(content)
+    # Map from UPPERCASE settings (python constants) to lowercase JSON keys
+    json_data = {
+        "images_base_path": settings_dict["IMAGES_BASE_PATH"],
+        "images_report_path": settings_dict["IMAGES_REPORT_PATH"],
+        "tesseract_cmd_path": settings_dict["TESSERACT_CMD_PATH"],
+        "tesseract_language": settings_dict["TESSERACT_LANGUAGE"],
+        "image_confidence_threshold": settings_dict["IMAGE_CONFIDENCE_THRESHOLD"],
+        "ocr_confidence_threshold": settings_dict["OCR_CONFIDENCE_THRESHOLD"],
+        "stop_on_failure": settings_dict["STOP_ON_FAILURE"]
+    }
+    
+    try:
+        with open(OCR_CONFIG_PATH, "w", encoding="utf-8") as f:
+            json.dump(json_data, f, indent=4, ensure_ascii=False)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error writing ocr_config.json: {str(e)}")
         
     return {"status": "success", "settings": settings_dict}
