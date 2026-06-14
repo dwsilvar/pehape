@@ -73,3 +73,32 @@ BACKEND_PORT = _net_config.get("backend_port", 5001)
 
 # Port for the Frontend (Vite)
 FRONTEND_PORT = _net_config.get("frontend_port", 3000)
+
+# 3. Load upgrade settings from upgrade_config.json
+_upgrade_config_path = _config_dir / "upgrade_config.json"
+_upgrade_config = {}
+if not _upgrade_config_path.exists():
+    _upgrade_config = {
+        "update_url": "",
+        "local_update_dir": "updates"
+    }
+    try:
+        with open(_upgrade_config_path, "w", encoding="utf-8") as _f:
+            json.dump(_upgrade_config, _f, indent=4)
+    except Exception:
+        pass
+else:
+    try:
+        with open(_upgrade_config_path, "r", encoding="utf-8-sig") as _f:
+            _upgrade_config = json.load(_f)
+    except Exception:
+        pass
+
+UPDATE_URL = _upgrade_config.get("update_url", "")
+_local_update_dir = _upgrade_config.get("local_update_dir", "updates")
+_local_update_dir_obj = Path(_local_update_dir)
+if not _local_update_dir_obj.is_absolute():
+    LOCAL_UPDATE_DIR = str((_config_dir.parent / _local_update_dir_obj).resolve())
+else:
+    LOCAL_UPDATE_DIR = str(_local_update_dir_obj)
+

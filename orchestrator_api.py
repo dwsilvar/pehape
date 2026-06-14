@@ -26,6 +26,7 @@ from api.routers import (
     reports,
     settings,
     tools,
+    update,
 )
 
 # Register all routers
@@ -37,6 +38,7 @@ app.include_router(settings.router)
 app.include_router(execution.router)
 app.include_router(tools.router)
 app.include_router(export_import.router)
+app.include_router(update.router)
 
 
 # ── Utility endpoints ──────────────────────────────────────────────────────────

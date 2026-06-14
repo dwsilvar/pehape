@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { createBrowserRouter, RouterProvider, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
-import { Box } from '@mui/material';
+import { Box, Alert, Button } from '@mui/material';
 import { DndContext, DragEndEvent, DragStartEvent, useSensor, useSensors, PointerSensor, TouchSensor } from '@dnd-kit/core';
 import Sidebar from './components/Sidebar';
 import AppNavbar from './components/AppNavbar';
@@ -39,6 +39,8 @@ const ThemeWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 
 const AppLayout: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [updateVersion, setUpdateVersion] = useState('');
 
   // Drag and Drop State (File Explorer -> Editor)
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
@@ -46,6 +48,26 @@ const AppLayout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const isTestPlanVisible = location.pathname === '/';
+
+  React.useEffect(() => {
+    const checkUpdateStatus = async () => {
+      try {
+        const res = await fetch('/api/update/status');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.local_update_available) {
+            setUpdateAvailable(true);
+            setUpdateVersion(data.local_update_version);
+          } else {
+            setUpdateAvailable(false);
+          }
+        }
+      } catch (e) {
+        console.error("Error checking updates on mount:", e);
+      }
+    };
+    checkUpdateStatus();
+  }, [location.pathname]);
 
   const handleFileSelect = (path: string) => {
     setSelectedFile(path);
@@ -75,6 +97,19 @@ const AppLayout: React.FC = () => {
       <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
         <Sidebar />
         <Box sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          {updateAvailable && (
+            <Alert 
+              severity="info" 
+              action={
+                <Button color="inherit" size="small" onClick={() => navigate('/settings')}>
+                  Ver Detalles
+                </Button>
+              }
+              sx={{ borderRadius: 0 }}
+            >
+              Nueva versión de la aplicación disponible localmente (v{updateVersion}).
+            </Alert>
+          )}
           <AppNavbar />
           <Box sx={{ display: isTestPlanVisible ? 'flex' : 'none', flex: 1, overflow: 'hidden', flexDirection: 'column' }}>
             <TestPlanPage />

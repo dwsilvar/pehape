@@ -1,4 +1,5 @@
 @echo off
+set "PEHAPE_LAUNCHER=start-all.bat"
 REM Script independiente para iniciar backend y frontend sin usar PowerShell
 REM No requiere permisos de administrador
 REM Inicia cada servidor en su propia ventana

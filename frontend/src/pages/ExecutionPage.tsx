@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import {
   Box, useTheme, alpha, FormControl, InputLabel, Select, MenuItem,
   Button, ButtonGroup, ClickAwayListener, Grow, Paper, Popper, MenuList,
-  CircularProgress, Tooltip, Typography
+  CircularProgress, Tooltip, Typography, IconButton
 } from '@mui/material';
 import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
@@ -12,11 +12,14 @@ import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import CancelRoundedIcon from '@mui/icons-material/CancelRounded';
 import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
+import FileDownloadRoundedIcon from '@mui/icons-material/FileDownloadRounded';
+import FileUploadRoundedIcon from '@mui/icons-material/FileUploadRounded';
 
 import AppToolbar from '../components/AppToolbar';
 import ExecutionMonitor from '../components/test-plan/ExecutionMonitor';
 import ExecutionDrawer from '../components/test-plan/ExecutionDrawer';
 import TestPlanScheduleDialog from '../components/test-plan/TestPlanScheduleDialog';
+import ExportPlanDialog from '../components/test-plan/ExportPlanDialog';
 import { BlueprintsData, PlanTask } from '../types';
 import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
@@ -43,6 +46,10 @@ const ExecutionPage: React.FC = () => {
   const anchorRef = useRef<HTMLDivElement>(null);
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
 
+  // ── Import and Export states & refs ───────────────────────────────────
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // ── Load Blueprints ───────────────────────────────────────────────────
   const fetchBlueprints = useCallback(() => {
     setIsBlueprintsLoading(true);
@@ -60,6 +67,26 @@ const ExecutionPage: React.FC = () => {
       .catch(() => setBlueprints({ plans: [], cycles: [], sets: [], flows: [] }))
       .finally(() => setIsBlueprintsLoading(false));
   }, [selectedPlanId]);
+
+  const handleImport = useCallback(async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      const response = await fetch('/api/import-plan', {
+        method: 'POST',
+        body: formData,
+      });
+      if (response.ok) {
+        fetchBlueprints();
+        alert("Plan importado exitosamente");
+      } else {
+        const error = await response.json();
+        alert(`Error al importar: ${error.detail}`);
+      }
+    } catch (error) {
+      alert(`Error al importar: ${error}`);
+    }
+  }, [fetchBlueprints]);
 
   useEffect(() => {
     fetchBlueprints();
@@ -428,6 +455,43 @@ const ExecutionPage: React.FC = () => {
               </Grow>
             )}
           </Popper>
+
+          {/* Import/Export Buttons */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, borderLeft: 1, borderColor: 'divider', pl: 1, ml: 0.5 }}>
+            <Tooltip title="Exportar Plan (.desb)">
+              <span>
+                <IconButton
+                  size="small"
+                  disabled={!selectedPlanId || !isSaved}
+                  onClick={() => setExportDialogOpen(true)}
+                  sx={{ color: theme.palette.primary.main, '&.Mui-disabled': { opacity: 0.5 } }}
+                >
+                  <FileDownloadRoundedIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Tooltip title="Importar Plan (.desb)">
+              <IconButton 
+                size="small" 
+                onClick={() => fileInputRef.current?.click()}
+                sx={{ color: theme.palette.primary.main }}
+              >
+                <FileUploadRoundedIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <input
+              type="file"
+              accept=".desb"
+              ref={fileInputRef}
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                if (e.target.files && e.target.files.length > 0) {
+                  handleImport(e.target.files[0]);
+                  e.target.value = ''; // reset
+                }
+              }}
+            />
+          </Box>
         </Box>
       </AppToolbar>
 
@@ -471,6 +535,14 @@ const ExecutionPage: React.FC = () => {
         onSaveAndLeave={handleSaveAndLeave}
         onDiscardAndLeave={handleDiscardAndLeave}
         onCancel={handleCancelLeave}
+      />
+
+      {/* Export Options Dialog */}
+      <ExportPlanDialog
+        open={exportDialogOpen}
+        planId={selectedPlanId}
+        planName={activePlan?.name}
+        onClose={() => setExportDialogOpen(false)}
       />
     </Box>
   );

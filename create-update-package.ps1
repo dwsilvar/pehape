@@ -182,11 +182,20 @@ Write-Host ""
 Write-Host "[5/5] Generando scripts de actualizacion..." -ForegroundColor Cyan
 
 $updateScript = @"
+param(
+    [string]`$InstallDir = "",
+    [switch]`$Silent = `$false,
+    [switch]`$Restart = `$false,
+    [string]`$Launcher = "",
+    [string]`$NodePath = ""
+)
+
 # update.ps1 - Aplica una actualizacion de PeHaPe
 # Ejecutar desde la raiz de la instalacion existente.
 
 `$ErrorActionPreference = "Stop"
-`$UpdateSource = Get-Location
+`$UpdateSource = `$PSScriptRoot
+if (-not `$UpdateSource) { `$UpdateSource = (Get-Location).ToString() }
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  PeHaPe - Instalador de Actualizacion" -ForegroundColor Cyan
@@ -194,18 +203,17 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
 # --- Verificar version.json del update ---
-if (-not (Test-Path "version.json")) {
+if (-not (Test-Path (Join-Path `$UpdateSource "version.json"))) {
     Write-Host "ERROR: No se encontro version.json en el paquete de actualizacion." -ForegroundColor Red
-    pause; exit 1
+    if (-not `$Silent) { pause }
+    exit 1
 }
-`$newVersion = (Get-Content "version.json" | ConvertFrom-Json).version
+`$newVersion = (Get-Content (Join-Path `$UpdateSource "version.json") | ConvertFrom-Json).version
 Write-Host "Aplicando actualizacion a version: `$newVersion" -ForegroundColor Green
 Write-Host ""
 
 # --- Archivos y carpetas protegidos (NO se sobrescriben) ---
-$ProtectedFiles = @(
-    "config\network_config.json",
-    "config\ocr_config.json",
+`$ProtectedFiles = @(
     "features\example.feature"
 )
 `$ProtectedFolders = @(
@@ -214,12 +222,16 @@ $ProtectedFiles = @(
     "reports"
 )
 
-# --- Pedir al usuario la ruta de instalacion ---
-Write-Host "Ruta actual del paquete de actualizacion: `$UpdateSource"
-`$InstallDir = Read-Host "Ingrese la ruta de la instalacion de PeHaPe (donde esta install.ok)"
+# --- Pedir al usuario la ruta de instalacion si no se provee ---
+if (-not `$InstallDir) {
+    Write-Host "Ruta actual del paquete de actualizacion: `$UpdateSource"
+    `$InstallDir = Read-Host "Ingrese la ruta de la instalacion de PeHaPe (donde esta install.ok)"
+}
+
 if (-not (Test-Path "`$InstallDir\install.ok")) {
     Write-Host "ERROR: No se encontro install.ok en '`$InstallDir'. Verifique la ruta." -ForegroundColor Red
-    pause; exit 1
+    if (-not `$Silent) { pause }
+    exit 1
 }
 Write-Host ""
 Write-Host "Actualizando instalacion en: `$InstallDir" -ForegroundColor Cyan
@@ -233,28 +245,42 @@ Write-Host ""
 `$updated  = 0
 `$skipped  = 0
 `$newFiles = 0
+`$skippedJsonFiles = @()
 
 foreach (`$file in `$sourceFiles) {
-    `$relative = `$file.FullName.Substring(`$UpdateSource.Path.Length).TrimStart("\")
+    `$relative = `$file.FullName.Substring(`$UpdateSource.Length).TrimStart("\")
+    
+    # Validar si es un archivo de configuracion JSON en la carpeta config
+    `$isJsonConfig = `$relative.StartsWith("config\") -and `$relative.EndsWith(".json")
     
     # Verificar si es un archivo protegido
-    `$isProtected = `$false
+    `$isProtectedFile = `$false
     foreach (`$p in `$ProtectedFiles) {
-        if (`$relative -eq `$p) { `$isProtected = `$true; break }
+        if (`$relative -eq `$p) { `$isProtectedFile = `$true; break }
     }
-    if (-not `$isProtected) {
-        foreach (`$pf in `$ProtectedFolders) {
-            if (`$relative.StartsWith(`$pf)) { `$isProtected = `$true; break }
-        }
+    
+    # Verificar si es una carpeta protegida
+    `$isProtectedFolder = `$false
+    foreach (`$pf in `$ProtectedFolders) {
+        if (`$relative.StartsWith(`$pf)) { `$isProtectedFolder = `$true; break }
     }
     
     `$destPath = Join-Path `$InstallDir `$relative
     `$destDir  = Split-Path `$destPath
 
-    if (`$isProtected -and (Test-Path `$destPath)) {
-        Write-Host "  [SKIP] `$relative" -ForegroundColor Yellow
-        `$skipped++
-        continue
+    # Comportamiento personalizado para JSON
+    if (Test-Path `$destPath) {
+        if (`$isJsonConfig) {
+            Write-Host "  [SKIP - CONFIG] `$relative (Ya existe, requiere actualizacion manual)" -ForegroundColor Yellow
+            `$skippedJsonFiles += `$relative
+            `$skipped++
+            continue
+        }
+        if (`$isProtectedFile -or `$isProtectedFolder) {
+            Write-Host "  [SKIP] `$relative" -ForegroundColor Yellow
+            `$skipped++
+            continue
+        }
     }
 
     if (-not (Test-Path `$destDir)) { New-Item -ItemType Directory -Path `$destDir -Force | Out-Null }
@@ -275,12 +301,12 @@ Write-Host "Archivos nuevos:       `$newFiles" -ForegroundColor Green
 Write-Host "Archivos protegidos:   `$skipped"  -ForegroundColor Yellow
 
 # --- Instalar nuevas dependencias si vienen en el paquete ---
-if (Test-Path "dependencies\python") {
+if (Test-Path (Join-Path `$UpdateSource "dependencies\python")) {
     Write-Host ""
     Write-Host "Instalando nuevas dependencias Python..." -ForegroundColor Cyan
     `$venvPython = Join-Path `$InstallDir ".venv\Scripts\python.exe"
     if (Test-Path `$venvPython) {
-        & `$venvPython -m pip install --no-index --find-links="dependencies\python" -r "requirements.txt"
+        & `$venvPython -m pip install --no-index --find-links=(Join-Path `$UpdateSource "dependencies\python") -r (Join-Path `$UpdateSource "requirements.txt")
         if (`$LASTEXITCODE -eq 0) {
             Write-Host "Dependencias instaladas correctamente." -ForegroundColor Green
         } else {
@@ -292,17 +318,55 @@ if (Test-Path "dependencies\python") {
 }
 
 # --- Actualizar version en la instalacion ---
-Copy-Item "version.json" (Join-Path `$InstallDir "version.json") -Force
+Copy-Item (Join-Path `$UpdateSource "version.json") (Join-Path `$InstallDir "version.json") -Force
+
+# --- Alertar sobre configuraciones JSON omitidas que requieren actualizacion manual ---
+if (`$skippedJsonFiles.Count -gt 0) {
+    Write-Host ""
+    Write-Host "======================================================================" -ForegroundColor Yellow
+    Write-Host "  ATENCION: Archivos de configuracion JSON no sobrescritos" -ForegroundColor Yellow
+    Write-Host "======================================================================" -ForegroundColor Yellow
+    Write-Host "Los siguientes archivos ya existian y NO fueron sobrescritos para" -ForegroundColor Yellow
+    Write-Host "proteger sus configuraciones actuales. Si esta version de PeHaPe" -ForegroundColor Yellow
+    Write-Host "introduce nuevos parametros, debera agregarlos manualmente:" -ForegroundColor Yellow
+    foreach (`$jsonFile in `$skippedJsonFiles) {
+        Write-Host "  - `$jsonFile" -ForegroundColor Yellow
+    }
+    Write-Host "======================================================================" -ForegroundColor Yellow
+}
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Green
 Write-Host "  Actualizacion completada: v`$newVersion"  -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "Reinicie la aplicacion para que los cambios surtan efecto."
-Write-Host "(start-app-window.bat o start-all-offline.bat)"
+
+if (`$Restart) {
+    Write-Host "Reiniciando la aplicacion..." -ForegroundColor Green
+    `$restartScript = `$Launcher
+    if (-not `$restartScript) {
+        `$restartScript = "start-all.bat"
+        if (Test-Path (Join-Path `$InstallDir "start-all-offline.bat")) {
+            `$restartScript = "start-all-offline.bat"
+        } elseif (Test-Path (Join-Path `$InstallDir "start-all.bat")) {
+            `$restartScript = "start-all.bat"
+        } elseif (Test-Path (Join-Path `$InstallDir "startall-standalone.bat")) {
+            `$restartScript = "startall-standalone.bat"
+        }
+    }
+    
+    if (`$restartScript -eq "startall-standalone.bat" -and `$NodePath) {
+        Write-Host "Iniciando standalone con Node: `$NodePath" -ForegroundColor Green
+        Start-Process -FilePath (Join-Path `$InstallDir `$restartScript) -ArgumentList "`"`$NodePath`"" -WorkingDirectory `$InstallDir
+    } else {
+        Start-Process -FilePath (Join-Path `$InstallDir `$restartScript) -WorkingDirectory `$InstallDir
+    }
+} else {
+    Write-Host "Reinicie la aplicacion para que los cambios surtan efecto."
+    Write-Host "(start-all.bat o start-all-offline.bat)"
+}
 Write-Host ""
-pause
+if (-not `$Silent) { pause }
 "@
 $updateScript | Out-File -FilePath "$UpdateDir\update.ps1" -Encoding utf8
 

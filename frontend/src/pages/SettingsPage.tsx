@@ -37,6 +37,11 @@ interface SettingsData {
 const SettingsPage: React.FC = () => {
     const { t } = useTranslation();
     const [settings, setSettings] = useState<SettingsData | null>(null);
+    const [upgradeConfig, setUpgradeConfig] = useState({ update_url: '', local_update_dir: '' });
+    const [updateStatus, setUpdateStatus] = useState<any>(null);
+    const [checkingUpdate, setCheckingUpdate] = useState(false);
+    const [applyingUpdate, setApplyingUpdate] = useState(false);
+    const [updateMessage, setUpdateMessage] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -45,7 +50,25 @@ const SettingsPage: React.FC = () => {
 
     useEffect(() => {
         fetchSettings();
+        fetchUpgradeConfig();
     }, []);
+
+    const fetchUpgradeConfig = async () => {
+        try {
+            const res = await fetch('/api/update/config');
+            if (res.ok) {
+                const data = await res.json();
+                setUpgradeConfig(data);
+            }
+            const statusRes = await fetch('/api/update/status');
+            if (statusRes.ok) {
+                const data = await statusRes.json();
+                setUpdateStatus(data);
+            }
+        } catch (e) {
+            console.error("Error al cargar config del actualizador:", e);
+        }
+    };
 
     const fetchSettings = async () => {
         try {
@@ -66,18 +89,105 @@ const SettingsPage: React.FC = () => {
         if (!settings) return;
         try {
             setSaving(true);
+            
+            // Guardar configuraciones OCR/Globales
             const response = await fetch('/api/settings/', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(settings),
             });
             if (!response.ok) throw new Error('Error al guardar configuraciones');
+
+            // Guardar configuración del actualizador
+            const upgResponse = await fetch('/api/update/config', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(upgradeConfig),
+            });
+            if (!upgResponse.ok) throw new Error('Error al guardar configuración del actualizador');
+
             setSuccessMessage(true);
             setError(null);
+            fetchUpgradeConfig(); // Recargar estado actualizado
         } catch (err: any) {
             setError(err.message || 'Error desconocido');
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleUpgradeChange = (field: string, value: any) => {
+        setUpgradeConfig({ ...upgradeConfig, [field]: value });
+    };
+
+    const checkUpdates = async () => {
+        try {
+            setCheckingUpdate(true);
+            setUpdateMessage("Buscando actualizaciones...");
+            const res = await fetch('/api/update/check', { method: 'POST' });
+            if (res.ok) {
+                const data = await res.json();
+                if (data.status === "downloading") {
+                    setUpdateMessage("Descargando actualización en segundo plano...");
+                    // Poll status
+                    const interval = setInterval(async () => {
+                        const sRes = await fetch('/api/update/status');
+                        if (sRes.ok) {
+                            const sData = await sRes.json();
+                            setUpdateStatus(sData);
+                            if (sData.download_state.status === "completed") {
+                                clearInterval(interval);
+                                setUpdateMessage("Descarga completa. Actualización lista.");
+                                setCheckingUpdate(false);
+                            } else if (sData.download_state.status === "error") {
+                                clearInterval(interval);
+                                setUpdateMessage(`Error al descargar: ${sData.download_state.error_message}`);
+                                setCheckingUpdate(false);
+                            }
+                        }
+                    }, 2000);
+                } else if (data.status === "ready") {
+                    setUpdateMessage(`Actualización v${data.version} lista localmente.`);
+                    setCheckingUpdate(false);
+                    const statusRes = await fetch('/api/update/status');
+                    if (statusRes.ok) setUpdateStatus(await statusRes.json());
+                } else {
+                    setUpdateMessage("No se encontraron actualizaciones nuevas.");
+                    setCheckingUpdate(false);
+                    const statusRes = await fetch('/api/update/status');
+                    if (statusRes.ok) setUpdateStatus(await statusRes.json());
+                }
+            } else {
+                setUpdateMessage("Fallo al buscar actualizaciones.");
+                setCheckingUpdate(false);
+            }
+        } catch (err) {
+            setUpdateMessage("Error de conexión al buscar actualizaciones.");
+            setCheckingUpdate(false);
+        }
+    };
+
+    const applyUpdate = async () => {
+        if (!window.confirm("¿Está seguro de que desea aplicar la actualización? El servidor se reiniciará automáticamente y perderá la conexión por unos segundos.")) {
+            return;
+        }
+        try {
+            setApplyingUpdate(true);
+            const res = await fetch('/api/update/apply', { method: 'POST' });
+            if (res.ok) {
+                setUpdateMessage("Aplicando actualización y reiniciando el servidor...");
+                // Esperar a que se apague y recargar la página tras 8 segundos
+                setTimeout(() => {
+                    window.location.reload();
+                }, 8000);
+            } else {
+                const data = await res.json();
+                setError(data.detail || "Fallo al iniciar el actualizador");
+                setApplyingUpdate(false);
+            }
+        } catch (err) {
+            setError("Error al enviar comando de actualización");
+            setApplyingUpdate(false);
         }
     };
 
@@ -290,6 +400,86 @@ const SettingsPage: React.FC = () => {
                                     </Box>
                                 }
                             />
+
+                            <Divider sx={{ my: 1 }} />
+
+                            {/* --- System Updates --- */}
+                            <Typography variant="subtitle1" fontWeight="600" color="primary">Actualizaciones del Sistema</Typography>
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 1 }}>
+                                <TextField
+                                    label="URL del Servidor de Actualizaciones (UPDATE_URL)"
+                                    variant="outlined"
+                                    fullWidth
+                                    value={upgradeConfig.update_url}
+                                    onChange={(e) => handleUpgradeChange('update_url', e.target.value)}
+                                    size="small"
+                                    helperText="Dirección HTTP/HTTPS que sirve las actualizaciones del sistema"
+                                />
+
+                                <TextField
+                                    label="Carpeta Local de Actualizaciones (LOCAL_UPDATE_DIR)"
+                                    variant="outlined"
+                                    fullWidth
+                                    value={upgradeConfig.local_update_dir}
+                                    onChange={(e) => handleUpgradeChange('local_update_dir', e.target.value)}
+                                    size="small"
+                                    helperText="Carpeta donde se comprueban y descargan los archivos ZIP de actualización"
+                                    InputProps={{
+                                        endAdornment: (
+                                            <InputAdornment position="end">
+                                                <IconButton onClick={async () => {
+                                                    try {
+                                                        const currentPath = encodeURIComponent(upgradeConfig.local_update_dir || '');
+                                                        const res = await fetch(`/api/settings/browse_directory?current_path=${currentPath}`);
+                                                        if (res.ok) {
+                                                            const data = await res.json();
+                                                            if (data.path) {
+                                                                handleUpgradeChange('local_update_dir', data.path);
+                                                            }
+                                                        }
+                                                    } catch (err) {
+                                                        console.error("Error al abrir explorador:", err);
+                                                    }
+                                                }} edge="end">
+                                                    <FolderOpenIcon />
+                                                </IconButton>
+                                            </InputAdornment>
+                                        )
+                                    }}
+                                />
+
+                                <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <Button
+                                        variant="outlined"
+                                        color="primary"
+                                        disabled={checkingUpdate || applyingUpdate}
+                                        onClick={checkUpdates}
+                                        size="small"
+                                    >
+                                        {checkingUpdate ? <CircularProgress size={20} sx={{ mr: 1 }} /> : null}
+                                        Buscar Actualizaciones
+                                    </Button>
+
+                                    {updateStatus?.local_update_available && (
+                                        <Button
+                                            variant="contained"
+                                            color="secondary"
+                                            disabled={checkingUpdate || applyingUpdate}
+                                            onClick={applyUpdate}
+                                            size="small"
+                                        >
+                                            {applyingUpdate ? <CircularProgress size={20} color="inherit" sx={{ mr: 1 }} /> : null}
+                                            Instalar Actualización v{updateStatus.local_update_version}
+                                        </Button>
+                                    )}
+                                </Box>
+
+                                {updateMessage && (
+                                    <Alert severity={updateMessage.toLowerCase().includes("error") ? "error" : "info"} sx={{ py: 0.5 }}>
+                                        {updateMessage}
+                                    </Alert>
+                                )}
+                            </Box>
 
                             <Divider sx={{ my: 1 }} />
 
