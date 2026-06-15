@@ -48,11 +48,12 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
   initialScope
 }) => {
   const theme = useTheme();
+  const isContainerLevel = nodeType === 'cycle' || nodeType === 'set' || nodeType === 'flow';
   
   const getNodeTypeLabel = () => {
     switch (nodeType) {
       case 'cycle': return 'Ciclo';
-      case 'set': return 'Set';
+      case 'set': return 'Suite (Set)';
       case 'flow': return 'Flujo';
       case 'feature': return 'Escenario elegido';
       case 'scenario': return 'Escenario elegido';
@@ -154,7 +155,7 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
       isEdit = true;
       setAssociatedTasks(prev => prev.map(t => 
         t.id === editingTaskId 
-          ? { ...t, name: selectedTaskName, hook: currentHook, scope: currentScope, args: { ...currentArgs }, targetScenario: targetScenarioVal }
+          ? { ...t, name: selectedTaskName, hook: currentHook, scope: isContainerLevel ? 'scenario' : currentScope, args: { ...currentArgs }, targetScenario: targetScenarioVal }
           : t
       ));
     } else {
@@ -166,7 +167,7 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
         id: newId,
         name: selectedTaskName,
         hook: currentHook,
-        scope: currentScope,
+        scope: isContainerLevel ? 'scenario' : currentScope,
         args: { ...currentArgs },
         targetScenario: targetScenarioVal
       };
@@ -393,7 +394,11 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
                               @{task.name}
                             </Typography>
                             <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-                              Ejecución <strong>{task.hook === 'before' ? 'Before' : 'After'}</strong> <strong>{task.scope === 'scenario' ? 'Escenario' : 'Paso'}</strong>
+                              {isContainerLevel ? (
+                                <>Ejecución <strong>{task.hook === 'before' ? 'Al Inicio' : 'Al Final'}</strong> del {getNodeTypeLabel()}</>
+                              ) : (
+                                <>Ejecución <strong>{task.hook === 'before' ? 'Before' : 'After'}</strong> <strong>{task.scope === 'scenario' ? 'Escenario' : 'Paso'}</strong></>
+                              )}
                             </Typography>
                             {task.targetScenario && (
                               <Typography variant="caption" color="primary.main" display="block" sx={{ fontWeight: 'bold', mt: 0.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={task.targetScenario}>
@@ -569,11 +574,23 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
                     border: `1px solid ${alpha(theme.palette.info.main, 0.2)}`
                   }}
                 >
-                  <strong>Nota de Herencia ({nodeType === 'plans' || nodeType === 'plan' ? 'Plan' : nodeType === 'cycles' || nodeType === 'cycle' ? 'Ciclo' : nodeType === 'flows' || nodeType === 'flow' ? 'Flujo' : nodeType === 'sets' || nodeType === 'set' ? 'Test Set' : nodeType}):</strong> Esta tarea se heredará en cascada y se ejecutará para <strong>cada escenario</strong> dentro de este contenedor.
-                  <br />
-                  • <em>Escenario</em>: Se ejecuta antes/después de cada escenario.
-                  <br />
-                  • <em>Paso</em>: Se ejecuta antes/después de cada paso de todos los escenarios.
+                  {isContainerLevel ? (
+                    <>
+                      <strong>Nota de Ejecución ({getNodeTypeLabel()}):</strong> Esta tarea se ejecutará únicamente al <strong>inicio</strong> o al <strong>final</strong> de este contenedor.
+                      <br />
+                      • <em>Al inicio</em>: Se ejecutará antes del primer escenario de este {getNodeTypeLabel().toLowerCase()}.
+                      <br />
+                      • <em>Al final</em>: Se ejecutará después del último escenario de este {getNodeTypeLabel().toLowerCase()}.
+                    </>
+                  ) : (
+                    <>
+                      <strong>Nota de Herencia ({nodeType === 'plans' || nodeType === 'plan' ? 'Plan' : nodeType}):</strong> Esta tarea se heredará en cascada y se ejecutará para <strong>cada escenario</strong> dentro de este contenedor.
+                      <br />
+                      • <em>Escenario</em>: Se ejecuta antes/después de cada escenario.
+                      <br />
+                      • <em>Paso</em>: Se ejecuta antes/después de cada paso de todos los escenarios.
+                    </>
+                  )}
                 </Alert>
               )}
 
@@ -627,38 +644,57 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
                       </FormControl>
                     )}
 
-                    <Grid container spacing={2}>
-                      <Grid size={{ xs: 6 }}>
-                        <FormControl fullWidth size="small">
-                          <InputLabel id="hook-select-label">Momento (Hook)</InputLabel>
-                          <Select
-                            labelId="hook-select-label"
-                            value={currentHook}
-                            label="Momento (Hook)"
-                            onChange={(e) => setCurrentHook(e.target.value as 'before' | 'after')}
-                            sx={{ borderRadius: '8px' }}
-                          >
-                            <MenuItem value="before">Antes (Before)</MenuItem>
-                            <MenuItem value="after">Después (After)</MenuItem>
-                          </Select>
-                        </FormControl>
+                    {isContainerLevel ? (
+                      <FormControl fullWidth size="small">
+                        <InputLabel id="container-hook-select-label">Momento de Ejecución</InputLabel>
+                        <Select
+                          labelId="container-hook-select-label"
+                          value={currentHook}
+                          label="Momento de Ejecución"
+                          onChange={(e) => {
+                            setCurrentHook(e.target.value as 'before' | 'after');
+                            setCurrentScope('scenario');
+                          }}
+                          sx={{ borderRadius: '8px' }}
+                        >
+                          <MenuItem value="before">Al inicio del {getNodeTypeLabel()}</MenuItem>
+                          <MenuItem value="after">Al final del {getNodeTypeLabel()}</MenuItem>
+                        </Select>
+                      </FormControl>
+                    ) : (
+                      <Grid container spacing={2}>
+                        <Grid size={{ xs: 6 }}>
+                          <FormControl fullWidth size="small">
+                            <InputLabel id="hook-select-label">Momento (Hook)</InputLabel>
+                            <Select
+                              labelId="hook-select-label"
+                              value={currentHook}
+                              label="Momento (Hook)"
+                              onChange={(e) => setCurrentHook(e.target.value as 'before' | 'after')}
+                              sx={{ borderRadius: '8px' }}
+                            >
+                              <MenuItem value="before">Antes (Before)</MenuItem>
+                              <MenuItem value="after">Después (After)</MenuItem>
+                            </Select>
+                          </FormControl>
+                        </Grid>
+                        <Grid size={{ xs: 6 }}>
+                          <FormControl fullWidth size="small">
+                            <InputLabel id="scope-select-label">Alcance (Scope)</InputLabel>
+                            <Select
+                              labelId="scope-select-label"
+                              value={currentScope}
+                              label="Alcance (Scope)"
+                              onChange={(e) => setCurrentScope(e.target.value as 'scenario' | 'step')}
+                              sx={{ borderRadius: '8px' }}
+                            >
+                              <MenuItem value="scenario">Escenario</MenuItem>
+                              <MenuItem value="step">Paso (Step)</MenuItem>
+                            </Select>
+                          </FormControl>
+                        </Grid>
                       </Grid>
-                      <Grid size={{ xs: 6 }}>
-                        <FormControl fullWidth size="small">
-                          <InputLabel id="scope-select-label">Alcance (Scope)</InputLabel>
-                          <Select
-                            labelId="scope-select-label"
-                            value={currentScope}
-                            label="Alcance (Scope)"
-                            onChange={(e) => setCurrentScope(e.target.value as 'scenario' | 'step')}
-                            sx={{ borderRadius: '8px' }}
-                          >
-                            <MenuItem value="scenario">Escenario</MenuItem>
-                            <MenuItem value="step">Paso (Step)</MenuItem>
-                          </Select>
-                        </FormControl>
-                      </Grid>
-                    </Grid>
+                    )}
 
                     {/* Dynamic arguments from schema */}
                     {selectedTaskDef?.args_schema && selectedTaskDef.args_schema.length > 0 && (
@@ -708,7 +744,7 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
                           backgroundColor: alpha(theme.palette.warning.main, 0.08)
                         }}
                       >
-                        <strong>Asociación existente:</strong> Ya existe una tarea @{selectedTaskName} configurada para {currentHook === 'before' ? 'Antes' : 'Después'} de cada {currentScope === 'scenario' ? 'Escenario' : 'Paso'}{targetScenarioVal ? ` en el escenario "${targetScenarioVal}"` : ''}.
+                        <strong>Asociación existente:</strong> Ya existe una tarea @{selectedTaskName} configurada para {isContainerLevel ? (currentHook === 'before' ? 'el Inicio' : 'el Final') : (currentHook === 'before' ? 'Antes' : 'Después')} {isContainerLevel ? `del ${getNodeTypeLabel()}` : `de cada ${currentScope === 'scenario' ? 'Escenario' : 'Paso'}`}{targetScenarioVal ? ` en el escenario "${targetScenarioVal}"` : ''}.
                       </Alert>
                     )}
 

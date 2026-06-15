@@ -216,6 +216,18 @@ def _convert_plan_to_orchestrator_format(plan: dict, blueprints: dict) -> dict:
 
         return merged
 
+    def stamp_tasks_for_scenario(scenario_id: str, tasks: list) -> list:
+        stamped = []
+        if not tasks:
+            return stamped
+        for t in tasks:
+            if isinstance(t, dict):
+                if t.get("name") == "__none__":
+                    continue
+                task_id = t.get("id") or f"{scenario_id}-{t.get('name')}"
+                stamped.append({**t, "id": task_id, "scenario_id": scenario_id})
+        return stamped
+
     def expand_set(set_bp: dict, c_ref_id: str, ref_id: str) -> list:
         choices_per_item = []
         for ref in set_bp.get("items", []):
@@ -226,7 +238,7 @@ def _convert_plan_to_orchestrator_format(plan: dict, blueprints: dict) -> dict:
                 )
                 if flow_bp:
                     enhanced_items = [
-                        {**i, "source_name": flow_bp.get("name"), "source_type": "flow", "flow_tasks": flow_bp.get("tasks", [])}
+                        {**i, "source_name": flow_bp.get("name"), "source_type": "flow", "flow_tasks": flow_bp.get("tasks", []), "flow_bp_id": flow_bp.get("id")}
                         for i in flow_bp.get("items", [])
                     ]
                     choices_per_item.append([enhanced_items])
@@ -255,6 +267,8 @@ def _convert_plan_to_orchestrator_format(plan: dict, blueprints: dict) -> dict:
             return []
 
         generated_flows = []
+        all_combo_scenario_lists = []
+
         for i, combo in enumerate(itertools.product(*choices_per_item)):
             flattened: list = []
             for block in combo:
@@ -264,16 +278,10 @@ def _convert_plan_to_orchestrator_format(plan: dict, blueprints: dict) -> dict:
             for s_idx, s in enumerate(flattened):
                 scenario_instance_id = f"set-{c_ref_id}-{ref_id}-{i}-{s_idx}-{s.get('id', str(uuid.uuid4()))}"
                 p_tasks = plan.get("tasks", [])
-                c_tasks = cycle_bp.get("tasks", [])
-                set_tasks = set_bp.get("tasks", [])
                 
-                f_tasks = set_tasks
                 s_tasks = []
                 if s.get("source_type") == "flow":
-                    f_tasks = f_tasks + s.get("flow_tasks", [])
                     s_tasks = s.get("tasks", [])
-                else:
-                    f_tasks = f_tasks + s.get("feature_tasks", [])
 
                 scenarios_list.append({
                     "id":            scenario_instance_id,
@@ -285,16 +293,54 @@ def _convert_plan_to_orchestrator_format(plan: dict, blueprints: dict) -> dict:
                     "set_detail":    s.get("source_name", "—"),
                     "source_type":   s.get("source_type", "flow"),
                     "userdata":      s.get("userdata", {}),
-                    "tasks":         merge_and_stamp_tasks(scenario_instance_id, s.get("scenarioName", ""), p_tasks, c_tasks, f_tasks, s_tasks),
+                    "tasks":         merge_and_stamp_tasks(scenario_instance_id, s.get("scenarioName", ""), p_tasks, None, None, s_tasks),
+                    "flow_bp_id":    s.get("flow_bp_id"),
+                    "flow_tasks":    s.get("flow_tasks"),
                 })
 
+            # Apply flow-level tasks for flows inside set combo
+            flow_groups = {}
+            for idx, s in enumerate(scenarios_list):
+                f_id = s.get("flow_bp_id")
+                if f_id:
+                    if f_id not in flow_groups:
+                        flow_groups[f_id] = []
+                    flow_groups[f_id].append(idx)
+
+            for f_id, indices in flow_groups.items():
+                first_idx = indices[0]
+                last_idx = indices[-1]
+                flow_tasks = scenarios_list[first_idx].get("flow_tasks") or []
+                before_flow_tasks = [t for t in flow_tasks if t.get("hook") == "before"]
+                after_flow_tasks = [t for t in flow_tasks if t.get("hook") == "after"]
+
+                scenarios_list[first_idx]["tasks"].extend(stamp_tasks_for_scenario(scenarios_list[first_idx]["id"], before_flow_tasks))
+                scenarios_list[last_idx]["tasks"].extend(stamp_tasks_for_scenario(scenarios_list[last_idx]["id"], after_flow_tasks))
+
+            all_combo_scenario_lists.append(scenarios_list)
             generated_flows.append({
                 "flow_id":   f"{set_bp.get('id')}-exp-{i}",
                 "flow_name": f"{set_bp.get('name')} (Caso {i + 1})",
                 "enabled":   True,
                 "scenarios": scenarios_list,
             })
+
+        # Apply set-level tasks ONCE across all combos:
+        # before → first scenario of first combo
+        # after  → last scenario of last combo
+        set_tasks = set_bp.get("tasks", []) or []
+        before_set_tasks = [t for t in set_tasks if t.get("hook") == "before"]
+        after_set_tasks = [t for t in set_tasks if t.get("hook") == "after"]
+        if all_combo_scenario_lists:
+            first_scenarios = all_combo_scenario_lists[0]
+            last_scenarios = all_combo_scenario_lists[-1]
+            if first_scenarios and before_set_tasks:
+                first_scenarios[0]["tasks"].extend(stamp_tasks_for_scenario(first_scenarios[0]["id"], before_set_tasks))
+            if last_scenarios and after_set_tasks:
+                last_scenarios[-1]["tasks"].extend(stamp_tasks_for_scenario(last_scenarios[-1]["id"], after_set_tasks))
+
         return generated_flows
+
 
     test_cycles = []
     for c_ref in plan.get("items", []):
@@ -319,8 +365,6 @@ def _convert_plan_to_orchestrator_format(plan: dict, blueprints: dict) -> dict:
                     for s in flow_bp.get("items", []):
                         scenario_instance_id = f"flow-{c_ref.get('id')}-{ref.get('id')}-{s.get('id', str(uuid.uuid4()))}"
                         p_tasks = plan.get("tasks", [])
-                        c_tasks = cycle_bp.get("tasks", [])
-                        f_tasks = flow_bp.get("tasks", [])
                         s_tasks = s.get("tasks", [])
 
                         scenarios_list.append({
@@ -333,8 +377,16 @@ def _convert_plan_to_orchestrator_format(plan: dict, blueprints: dict) -> dict:
                             "set_detail":    "—",
                             "source_type":   "flow",
                             "userdata":      s.get("userdata", {}),
-                            "tasks":         merge_and_stamp_tasks(scenario_instance_id, s.get("scenarioName", ""), p_tasks, c_tasks, f_tasks, s_tasks),
+                            "tasks":         merge_and_stamp_tasks(scenario_instance_id, s.get("scenarioName", ""), p_tasks, None, None, s_tasks),
                         })
+
+                    # Apply flow-level tasks
+                    flow_tasks = flow_bp.get("tasks", []) or []
+                    before_flow_tasks = [t for t in flow_tasks if t.get("hook") == "before"]
+                    after_flow_tasks = [t for t in flow_tasks if t.get("hook") == "after"]
+                    if scenarios_list:
+                        scenarios_list[0]["tasks"].extend(stamp_tasks_for_scenario(scenarios_list[0]["id"], before_flow_tasks))
+                        scenarios_list[-1]["tasks"].extend(stamp_tasks_for_scenario(scenarios_list[-1]["id"], after_flow_tasks))
 
                     test_flows.append({
                         "flow_id":   flow_bp.get("id"),
@@ -349,6 +401,23 @@ def _convert_plan_to_orchestrator_format(plan: dict, blueprints: dict) -> dict:
                 )
                 if set_bp:
                     test_flows.extend(expand_set(set_bp, c_ref.get("id"), ref.get("id")))
+
+        # Apply cycle-level tasks to the cycle's scenarios
+        cycle_tasks = cycle_bp.get("tasks", []) or []
+        before_cycle_tasks = [t for t in cycle_tasks if t.get("hook") == "before"]
+        after_cycle_tasks = [t for t in cycle_tasks if t.get("hook") == "after"]
+
+        if before_cycle_tasks or after_cycle_tasks:
+            # Flatten scenarios inside test_flows for this cycle
+            all_cycle_scenarios = []
+            for tf in test_flows:
+                all_cycle_scenarios.extend(tf.get("scenarios", []))
+            
+            if all_cycle_scenarios:
+                first_s = all_cycle_scenarios[0]
+                last_s = all_cycle_scenarios[-1]
+                first_s["tasks"].extend(stamp_tasks_for_scenario(first_s["id"], before_cycle_tasks))
+                last_s["tasks"].extend(stamp_tasks_for_scenario(last_s["id"], after_cycle_tasks))
 
         test_cycles.append({
             "cycle_id":   cycle_bp.get("id"),
