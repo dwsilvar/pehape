@@ -35,6 +35,7 @@ interface TaskAssociationDialogProps {
   nodeType?: string;
   scenarios?: string[];
   initialScope?: 'instance' | 'all';
+  nodeId?: string;
 }
 
 export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
@@ -45,7 +46,8 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
   onSave,
   nodeType,
   scenarios = [],
-  initialScope
+  initialScope,
+  nodeId
 }) => {
   const theme = useTheme();
   const isContainerLevel = nodeType === 'cycle' || nodeType === 'set' || nodeType === 'flow';
@@ -60,6 +62,42 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
       default: return 'Escenario elegido';
     }
   };
+
+  const getShortId = (id?: string) => {
+    if (!id) return '';
+    const parts = id.split('-');
+    
+    // Case: set combination scenario (set-cycleId-setId-comboSignature-sIdx-scenarioId)
+    // parts[0] is 'set' and contains at least cycleId (5 parts) + setId (5 parts) + comboSignature (1 part) + sIdx (1 part) + scenarioId (5 parts)
+    if (parts[0] === 'set' && parts.length >= 14) {
+      const cy = parts[1].substring(0, 2);
+      const se = parts[6].substring(0, 2);
+      const co = parts[11].substring(0, 2);
+      const idx = parts[12];
+      const sc = parts[13].substring(0, 3);
+      return `${cy}${se}${co}${idx}${sc}`; // 2 + 2 + 2 + 1 + 3 = 10 chars
+    }
+    
+    // Case: flow scenario (flow-cycleId-flowId-scenarioId)
+    // parts[0] is 'flow' and contains at least cycleId (5 parts) + flowId (5 parts) + scenarioId (5 parts)
+    if (parts[0] === 'flow' && parts.length >= 12) {
+      const cy = parts[1].substring(0, 2);
+      const fl = parts[6].substring(0, 2);
+      const sc = parts[11].substring(0, 6);
+      return `${cy}${fl}${sc}`; // 2 + 2 + 6 = 10 chars
+    }
+    
+    // Check if cleanId looks like a hex/UUID string (contains only hex chars and/or dashes)
+    const cleanId = id.replace(/^(flow|set|cycle|plan)-/, '');
+    const isHexOrUUID = /^[0-9a-fA-F-]+$/.test(cleanId);
+    if (isHexOrUUID) {
+      return cleanId.replace(/-/g, '').substring(0, 10);
+    }
+    
+    // Fallback: return original text (e.g., plain scenario names) as is
+    return id;
+  };
+
   const [availableTasks, setAvailableTasks] = useState<TaskDef[]>([]);
   const [associatedTasks, setAssociatedTasks] = useState<PlanTask[]>([]);
   const [selectedTaskName, setSelectedTaskName] = useState<string>('');
@@ -281,26 +319,42 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
           <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary', fontSize: '1.05rem', flexGrow: 1 }}>
             Configurar Tareas de Ejecución
           </Typography>
-          <Typography
-            variant="caption"
-            sx={{
-              bgcolor: 'primary.main',
-              px: 2,
-              py: 0.75,
-              borderRadius: '20px',
-              color: '#FFFFFF',
-              fontWeight: 700,
-              boxShadow: `0 2px 8px ${alpha(theme.palette.primary.main, 0.25)}`,
-              fontSize: '0.825rem',
-              letterSpacing: 0.5,
-              maxWidth: '300px',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap'
-            }}
-          >
-            {getNodeTypeLabel()}: {nodeName}
-          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5 }}>
+            <Typography
+              variant="caption"
+              sx={{
+                bgcolor: 'primary.main',
+                px: 2,
+                py: 0.75,
+                borderRadius: '20px',
+                color: '#FFFFFF',
+                fontWeight: 700,
+                boxShadow: `0 2px 8px ${alpha(theme.palette.primary.main, 0.25)}`,
+                fontSize: '0.825rem',
+                letterSpacing: 0.5,
+                maxWidth: '300px',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              {getNodeTypeLabel()}: {nodeName}
+            </Typography>
+            {nodeId && (
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'text.secondary',
+                  fontSize: '0.68rem',
+                  fontFamily: 'monospace',
+                  fontWeight: 500,
+                  pr: 1
+                }}
+              >
+                ID: {getShortId(nodeId)}
+              </Typography>
+            )}
+          </Box>
         </Box>
       </DialogTitle>
       <DialogContent
@@ -400,13 +454,9 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
                                 <>Ejecución <strong>{task.hook === 'before' ? 'Before' : 'After'}</strong> <strong>{task.scope === 'scenario' ? 'Escenario' : 'Paso'}</strong></>
                               )}
                             </Typography>
-                            {task.targetScenario && (
-                              <Typography variant="caption" color="primary.main" display="block" sx={{ fontWeight: 'bold', mt: 0.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={task.targetScenario}>
-                                Filtro: Solo en "{
-                                  task.targetScenario.startsWith('flow-') || task.targetScenario.startsWith('set-')
-                                    ? (task.targetScenario.length > 15 ? task.targetScenario.substring(0, 15) + '...' : task.targetScenario)
-                                    : task.targetScenario
-                                }"
+                            {(task.targetScenario || nodeId) && (
+                              <Typography variant="caption" color="primary.main" display="block" sx={{ fontWeight: 'bold', mt: 0.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={task.targetScenario || nodeId}>
+                                Filtro: Solo en "{getShortId(task.targetScenario || nodeId)}"
                               </Typography>
                             )}
                           </Box>

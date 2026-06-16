@@ -25,12 +25,24 @@ def _load_blueprints() -> dict:
         try:
             with open(BLUEPRINTS_DB_FILE, "r", encoding="utf-8") as fh:
                 data = json.load(fh)
-            return data if isinstance(data, dict) else dict(_EMPTY_BLUEPRINTS)
+            if not isinstance(data, dict):
+                return dict(_EMPTY_BLUEPRINTS)
+            
+            # Migrate old index-based targetScenario fields to stable FNV-1a hashes
+            from api.migration import migrate_blueprints_to_stable_ids
+            if migrate_blueprints_to_stable_ids(data):
+                with open(BLUEPRINTS_DB_FILE, "w", encoding="utf-8") as fh:
+                    json.dump(data, fh, indent=2, ensure_ascii=False)
+
+            return data
         except (json.JSONDecodeError, IOError):
             return dict(_EMPTY_BLUEPRINTS)
 
 
 def _save_blueprints(data: dict) -> None:
     with _blueprints_lock:
+        # Also run migration before saving just in case
+        from api.migration import migrate_blueprints_to_stable_ids
+        migrate_blueprints_to_stable_ids(data)
         with open(BLUEPRINTS_DB_FILE, "w", encoding="utf-8") as fh:
             json.dump(data, fh, indent=2, ensure_ascii=False)

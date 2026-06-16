@@ -270,13 +270,31 @@ def _convert_plan_to_orchestrator_format(plan: dict, blueprints: dict) -> dict:
         all_combo_scenario_lists = []
 
         for i, combo in enumerate(itertools.product(*choices_per_item)):
+            # Generate stable combo signature using FNV-1a 32-bit hash
+            parts = []
+            for block in combo:
+                if not block:
+                    continue
+                first_item = block[0]
+                if first_item.get("source_type") == "flow":
+                    parts.append(f"flow:{first_item.get('flow_bp_id')}")
+                else:
+                    parts.append(f"scenario:{first_item.get('id')}")
+            
+            combined = "|".join(parts)
+            hash_val = 2166136261
+            for char in combined:
+                hash_val ^= ord(char)
+                hash_val = (hash_val * 16777619) & 0xffffffff
+            combo_signature = f"{hash_val:x}"
+
             flattened: list = []
             for block in combo:
                 flattened.extend(block)
             
             scenarios_list = []
             for s_idx, s in enumerate(flattened):
-                scenario_instance_id = f"set-{c_ref_id}-{ref_id}-{i}-{s_idx}-{s.get('id', str(uuid.uuid4()))}"
+                scenario_instance_id = f"set-{c_ref_id}-{ref_id}-{combo_signature}-{s_idx}-{s.get('id', str(uuid.uuid4()))}"
                 p_tasks = plan.get("tasks", [])
                 
                 s_tasks = []

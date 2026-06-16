@@ -49,7 +49,18 @@ interface FlatScenario {
   featureRefId?: string;
   featureScenarios?: string[];
   scenarioRefId?: string;
+  cycleIndex?: number;
+  setIndex?: number;
 }
+
+const fnv1a32 = (str: string): string => {
+  let hash = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    hash ^= str.charCodeAt(i);
+    hash = Math.imul(hash, 16777619) >>> 0;
+  }
+  return hash.toString(16);
+};
 
 interface ExecutionMonitorProps {
   blueprints: BlueprintsData;
@@ -273,6 +284,58 @@ const TaskBadge: React.FC<{
   );
 };
 
+const getCycleBgColor = (cycleIndex: number, isDark: boolean) => {
+  const index = cycleIndex % 6; // 6 distinct colors
+
+  if (isDark) {
+    const darkColors = [
+      '#0d3331', // Teal
+      '#3b2314', // Amber/Copper
+      '#14351a', // Green
+      '#38132d', // Plum/Magenta
+      '#112a4d', // Indigo/Blue
+      '#2d3748', // Slate Grey
+    ];
+    return darkColors[index];
+  } else {
+    const lightColors = [
+      '#ccfbf1', // Light Teal
+      '#ffedd5', // Light Amber/Orange
+      '#dcfce7', // Light Green
+      '#f3e8ff', // Light Violet
+      '#fce7f3', // Light Pink
+      '#e0e7ff', // Light Indigo/Blue
+    ];
+    return lightColors[index];
+  }
+};
+
+const getSetBgColor = (setIndex: number, isDark: boolean) => {
+  const index = setIndex % 6; // 6 distinct colors
+
+  if (isDark) {
+    const darkColors = [
+      '#1b1c36', // Purple-blue
+      '#102c38', // Deep teal
+      '#233a20', // Sage/Olive green
+      '#3a1a2f', // Dark orchid
+      '#161e38', // Slate indigo
+      '#2a2b2d', // Warm slate
+    ];
+    return darkColors[index];
+  } else {
+    const lightColors = [
+      '#f5f3ff', // Soft Purple/Lavender (purple-50)
+      '#ecfeff', // Soft Cyan (cyan-50)
+      '#f0fdf4', // Soft Emerald (emerald-50)
+      '#fdf2f8', // Soft Pink (pink-50)
+      '#f8fafc', // Soft Slate (slate-50)
+      '#eff6ff', // Soft Blue (blue-50)
+    ];
+    return lightColors[index];
+  }
+};
+
 // ── Main component ─────────────────────────────────────────────────────────────────────────────────────
 
 const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
@@ -406,6 +469,8 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
       return result;
     };
 
+    let cycleIdx = 0;
+    let setIdx = 0;
     for (const cRef of plan.items ?? []) {
       if (cRef.type !== 'cycle') continue;
       const cycle = blueprints.cycles.find(c => c.id === cRef.refId);
@@ -443,6 +508,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                 cycleName: cycle.name,
                 cycleId: cycle.id,
                 cycleRefId: cRef.id,
+                cycleIndex: cycleIdx,
                 setName: '—',
                 flowName: flow.name,
                 flowId: flow.id,
@@ -533,7 +599,24 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
               const allComboScenarios: FlatScenario[][] = [];
 
               combinations.forEach((combo, idx) => {
-                const groupId = `set-${cRef.id}-${ref.id}-combo-${idx}`;
+                // Generate stable combo signature using FNV-1a
+                const parts: string[] = [];
+                let lastFlowId = '';
+                combo.forEach((s: any) => {
+                  if (s.sourceType === 'flow') {
+                    if (s.flowId && s.flowId !== lastFlowId) {
+                      parts.push(`flow:${s.flowId}`);
+                      lastFlowId = s.flowId;
+                    }
+                  } else {
+                    parts.push(`scenario:${s.id}`);
+                    lastFlowId = '';
+                  }
+                });
+                const combined = parts.join('|');
+                const comboSignature = fnv1a32(combined);
+
+                const groupId = `set-${cRef.id}-${ref.id}-combo-${comboSignature}`;
                 const translatedCase = t('common.case', 'case');
                 const capitalizedCase = translatedCase.charAt(0).toUpperCase() + translatedCase.slice(1);
                 const groupName = `${capitalizedCase} ${idx + 1}`;
@@ -541,7 +624,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                 const comboScenarios: FlatScenario[] = [];
 
                 combo.forEach((s, sIdx) => {
-                  const scenarioId = `set-${cRef.id}-${ref.id}-${idx}-${sIdx}-${s.id}`;
+                  const scenarioId = `set-${cRef.id}-${ref.id}-${comboSignature}-${sIdx}-${s.id}`;
                   const pTasks = plan.tasks ?? [];
                   const sTasks = s.sourceType === 'flow' ? (s.tasks ?? []) : [];
 
@@ -568,6 +651,8 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                     cycleName: cycle.name,
                     cycleId: cycle.id,
                     cycleRefId: cRef.id,
+                    cycleIndex: cycleIdx,
+                    setIndex: setIdx,
                     setName: set.name,
                     setId: set.id,
                     flowName: s.sourceType === 'flow' ? s.sourceName : `${s.sourceName || set.name} (${capitalizedCase} ${idx + 1})`,
@@ -670,8 +755,10 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
               allComboScenarios.forEach(comboScenarios => flat.push(...comboScenarios));
             }
           }
+          setIdx++;
         }
       }
+      cycleIdx++;
     }
 
     // Apply cycle-level tasks to flat array
@@ -738,6 +825,56 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
 
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
+  const { cycleSpans, setSpans } = useMemo(() => {
+    const cySpans: Record<string, number> = {};
+    const sSpans: Record<string, number> = {};
+    let tempCurrentSetId: string | null = null;
+    let tempCurrentGroupId: string | null = null;
+    
+    flatScenarios.forEach((fs) => {
+      const isFirstOfSet = fs.parentGroupId && fs.parentGroupId !== tempCurrentSetId;
+      const isSetCollapsed = fs.parentGroupId ? collapsedGroups.has(fs.parentGroupId) : false;
+      
+      if (isSetCollapsed && !isFirstOfSet) {
+        tempCurrentGroupId = fs.groupId;
+        return;
+      }
+      
+      if (isFirstOfSet) {
+        tempCurrentSetId = fs.parentGroupId ?? null;
+      } else if (!fs.parentGroupId && tempCurrentSetId !== null) {
+        tempCurrentSetId = null;
+      }
+      
+      const cycleKey = fs.cycleRefId || 'default';
+      if (!cySpans[cycleKey]) {
+        cySpans[cycleKey] = 0;
+      }
+      
+      const setKey = fs.parentGroupId;
+      if (setKey && !sSpans[setKey]) {
+        sSpans[setKey] = 0;
+      }
+      
+      if (fs.groupId !== tempCurrentGroupId) {
+        tempCurrentGroupId = fs.groupId;
+        cySpans[cycleKey] += 1; // For the group header row
+        if (setKey) {
+          sSpans[setKey] += 1;
+        }
+      }
+      
+      if (!collapsedGroups.has(fs.groupId) && !isSetCollapsed) {
+        cySpans[cycleKey] += 1; // For the scenario row
+        if (setKey) {
+          sSpans[setKey] += 1;
+        }
+      }
+    });
+    
+    return { cycleSpans: cySpans, setSpans: sSpans };
+  }, [flatScenarios, collapsedGroups]);
+
   // State for the Task Association Dialog
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [dialogNodeName, setDialogNodeName] = useState('');
@@ -765,7 +902,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
     let initialScope: 'instance' | 'all' = 'instance';
 
     if (level === 'cycle') {
-      initialTasks = blueprints.cycles.find(c => c.id === targetId)?.tasks || [];
+      initialTasks = (blueprints.cycles.find(c => c.id === targetId)?.tasks || []).filter(t => !t.targetScenario);
     } else if (level === 'set') {
       initialTasks = blueprints.sets.find(s => s.id === targetId)?.tasks || [];
     } else if (level === 'flow') {
@@ -1204,6 +1341,8 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
               let currentSetId: string | null = null;
               let currentGroupId: string | null = null;
               const rows: React.ReactNode[] = [];
+              const renderedCycles = new Set<string>();
+              const renderedSets = new Set<string>();
 
               flatScenarios.forEach((fs, idx) => {
                 const statusColors: Record<string, string> = {
@@ -1256,7 +1395,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
 
                   // Calculate tasks per entity level in group row
                   const cycle = blueprints.cycles.find(c => c.id === fs.cycleId);
-                  const hasCycleTasks = !!(cycle && cycle.tasks && cycle.tasks.filter(t => t.name !== '__none__').length > 0);
+                  const hasCycleTasks = !!(cycle && cycle.tasks && cycle.tasks.filter(t => t.name !== '__none__' && !t.targetScenario).length > 0);
 
                   const set = blueprints.sets.find(s => s.id === fs.setId);
                   const hasSetTasks = !!(set && set.tasks && set.tasks.filter(t => t.name !== '__none__').length > 0);
@@ -1278,179 +1417,265 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                   rows.push(
                     <TableRow key={`group-${fs.groupId}`} sx={{ bgcolor: groupBgColor }}>
                       {/* Test Cycle */}
-                      <TableCell
-                        sx={{
-                          width: colWidths.cycle,
-                          minWidth: colWidths.cycle,
-                          maxWidth: colWidths.cycle,
-                          py: 0,
-                          fontWeight: 600,
-                          color: 'text.secondary',
-                          overflow: 'hidden',
-                          borderLeft: groupBorderLeft,
-                        }}
-                      >
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, width: '100%', overflow: 'hidden' }}>
-                          <Tooltip title={fs.parentGroupId ? (isFirstOfSet ? fs.cycleName : '') : fs.cycleName} placement="top-start" arrow enterDelay={200}>
-                            <Typography variant="body2" sx={{ fontSize: '0.75rem', fontWeight: 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>
-                              {fs.parentGroupId ? (isFirstOfSet ? fs.cycleName : '') : fs.cycleName}
-                            </Typography>
-                          </Tooltip>
-                          {((fs.parentGroupId && isFirstOfSet) || !fs.parentGroupId) && fs.cycleId && (
-                            <>
-                              {hasCycleTasks ? (() => {
-                                const cycleTasks = (blueprints.cycles.find(c => c.id === fs.cycleId)?.tasks || []).filter(t => t.name !== '__none__');
-                                return (
-                                  <TaskBadge
-                                    count={cycleTasks.length}
-                                    label={`${cycleTasks.length} tarea${cycleTasks.length !== 1 ? 's' : ''} de Ciclo — clic para configurar/ver`}
-                                    onClick={() => handleOpenTaskDialog('cycle', fs.cycleId!, fs.cycleName, 'cycle')}
-                                  />
-                                );
-                              })() : (
-                                <Tooltip title="Asociar Tarea al Ciclo">
-                                  <IconButton
-                                    size="small"
-                                    onClick={() => handleOpenTaskDialog('cycle', fs.cycleId!, fs.cycleName, 'cycle')}
-                                    sx={{ 
-                                      p: 0.25, 
-                                      opacity: 0.7, 
-                                      color: 'text.secondary',
-                                      bgcolor: '#ffffff',
-                                      boxShadow: '0 2px 5px rgba(0,0,0,0.18)',
-                                      border: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
-                                      transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
-                                      '&:hover': { 
-                                        opacity: 1,
-                                        bgcolor: '#ffffff',
-                                        borderColor: theme.palette.primary.main,
-                                        boxShadow: `0 4px 10px ${alpha(theme.palette.primary.main, 0.28)}`,
-                                        transform: 'translateY(-1.5px)',
-                                      },
-                                      '&:active': {
-                                        transform: 'translateY(1px)',
-                                        boxShadow: 'none',
-                                      },
-                                      flexShrink: 0 
-                                    }}
-                                  >
-                                    <TaskIconWithAdd hasTasks={false} />
-                                  </IconButton>
-                                </Tooltip>
-                              )}
-                            </>
-                          )}
-                        </Box>
-                      </TableCell>
-                      {/* Test Set */}
-                      <TableCell
-                        sx={{
-                          width: colWidths.set,
-                          minWidth: colWidths.set,
-                          maxWidth: colWidths.set,
-                          py: 0,
-                          fontWeight: 600,
-                          color: 'text.secondary',
-                          overflow: 'hidden'
-                        }}
-                      >
-                        {isFirstOfSet ? (
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, width: '100%', overflow: 'hidden' }}>
-                            <Box
-                              onClick={() => toggleGroup(fs.parentGroupId!)}
-                              sx={{ display: 'flex', alignItems: 'center', py: 0.8, cursor: 'pointer', userSelect: 'none', gap: 0.5, overflow: 'hidden', flex: 1 }}
+                      {!renderedCycles.has(fs.cycleRefId || '') && (
+                        (() => {
+                          const cycleKey = fs.cycleRefId || '';
+                          renderedCycles.add(cycleKey);
+                          const cycleTasks = (blueprints.cycles.find(c => c.id === fs.cycleId)?.tasks || []).filter(t => t.name !== '__none__' && !t.targetScenario);
+                          return (
+                            <TableCell
+                              rowSpan={cycleSpans[cycleKey] || 1}
+                              sx={{
+                                width: colWidths.cycle,
+                                minWidth: colWidths.cycle,
+                                maxWidth: colWidths.cycle,
+                                py: 1,
+                                fontWeight: 600,
+                                color: 'text.secondary',
+                                overflow: 'hidden',
+                                borderLeft: groupBorderLeft,
+                                borderBottom: `1px solid ${theme.palette.divider}`,
+                                bgcolor: `${getCycleBgColor(fs.cycleIndex || 0, isDark)} !important`,
+                                verticalAlign: 'middle',
+                              }}
                             >
-                              {isSetCollapsed ? <KeyboardArrowRightRoundedIcon sx={{ fontSize: 16, color: 'text.secondary', flexShrink: 0 }} /> : <KeyboardArrowDownRoundedIcon sx={{ fontSize: 16, color: 'text.secondary', flexShrink: 0 }} />}
-                              <LibraryBooksRoundedIcon sx={{ fontSize: 14, color: 'text.secondary', flexShrink: 0 }} />
-                              <Tooltip title={fs.parentGroupName} placement="top-start" arrow enterDelay={200}>
-                                <Typography sx={{ fontWeight: 400, fontSize: '0.75rem', color: 'text.secondary', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                  {fs.parentGroupName}
-                                </Typography>
-                              </Tooltip>
-                            </Box>
-                            {fs.setId && (
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
-                                <Tooltip title="Ejecutar Suite (Set)">
-                                  <span>
-                                    <IconButton
-                                      size="small"
-                                      disabled={isExecuting}
-                                      onClick={() => onExecute?.('set', fs.parentGroupId!)}
-                                      sx={{ 
-                                        p: 0.25, 
-                                        color: isExecuting ? 'text.disabled' : theme.palette.success.main,
-                                        bgcolor: '#ffffff',
-                                        boxShadow: isExecuting ? 'none' : '0 2px 5px rgba(0,0,0,0.18)',
-                                        border: `1px solid ${alpha(theme.palette.success.main, 0.35)}`,
-                                        transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
-                                        '&:hover': { 
-                                          bgcolor: '#ffffff',
-                                          borderColor: theme.palette.success.main,
-                                          boxShadow: `0 4px 10px ${alpha(theme.palette.success.main, 0.38)}`,
-                                          transform: 'translateY(-1.5px)',
-                                        },
-                                        '&:active': {
-                                          transform: 'translateY(1px)',
-                                          boxShadow: 'none',
-                                        },
-                                        '&.Mui-disabled': {
-                                          bgcolor: '#f5f5f5',
-                                          color: '#bdbdbd',
-                                          border: '1px solid #e0e0e0',
-                                        },
-                                        flexShrink: 0 
-                                      }}
-                                    >
-                                      <PlayArrowRoundedIcon sx={{ fontSize: 16 }} />
-                                    </IconButton>
-                                  </span>
+                              <Box 
+                                sx={{ 
+                                  display: 'flex', 
+                                  flexDirection: 'column',
+                                  alignItems: 'center', 
+                                  justifyContent: 'center',
+                                  gap: 0.75, 
+                                  width: '100%', 
+                                  overflow: 'hidden', 
+                                  textAlign: 'center',
+                                  px: 1 
+                                }}
+                              >
+                                <Tooltip title={fs.cycleName} placement="top" arrow enterDelay={200}>
+                                  <Typography variant="body2" sx={{ fontSize: '0.75rem', fontWeight: 800, whiteSpace: 'normal', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'center', width: '100%', color: isDark ? '#ffffff' : '#0f172a' }}>
+                                    {fs.cycleName}
+                                  </Typography>
                                 </Tooltip>
-
-                                {hasSetTasks ? (() => {
-                                  const setTasksFiltered = (blueprints.sets.find(s => s.id === fs.setId)?.tasks || []).filter(t => t.name !== '__none__');
-                                  return (
-                                    <TaskBadge
-                                      count={setTasksFiltered.length}
-                                      label={`${setTasksFiltered.length} tarea${setTasksFiltered.length !== 1 ? 's' : ''} de Suite — clic para configurar/ver`}
-                                      onClick={() => handleOpenTaskDialog('set', fs.setId!, fs.parentGroupName!, 'set')}
-                                    />
-                                  );
-                                })() : (
-                                  <Tooltip title="Asociar Tarea a la Suite">
-                                    <IconButton
-                                      size="small"
-                                      onClick={() => handleOpenTaskDialog('set', fs.setId!, fs.parentGroupName!, 'set')}
-                                      sx={{ 
-                                        p: 0.25, 
-                                        opacity: 0.7, 
-                                        color: 'text.secondary',
-                                        bgcolor: '#ffffff',
-                                        boxShadow: '0 2px 5px rgba(0,0,0,0.18)',
-                                        border: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
-                                        transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
-                                        '&:hover': { 
-                                          opacity: 1,
-                                          bgcolor: '#ffffff',
-                                          borderColor: theme.palette.primary.main,
-                                          boxShadow: `0 4px 10px ${alpha(theme.palette.primary.main, 0.25)}`,
-                                          transform: 'translateY(-1.5px)',
-                                        },
-                                        '&:active': {
-                                          transform: 'translateY(0.5px)',
-                                          boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
-                                        },
-                                        flexShrink: 0 
-                                      }}
-                                    >
-                                      <TaskIconWithAdd hasTasks={false} />
-                                    </IconButton>
-                                  </Tooltip>
+                                {fs.cycleId && (
+                                  <Box sx={{ mt: 0.5 }}>
+                                    {cycleTasks.length > 0 ? (
+                                      <TaskBadge
+                                        count={cycleTasks.length}
+                                        label={`${cycleTasks.length} tarea${cycleTasks.length !== 1 ? 's' : ''} de Ciclo — clic para configurar/ver`}
+                                        onClick={() => handleOpenTaskDialog('cycle', fs.cycleId!, fs.cycleName, 'cycle')}
+                                      />
+                                    ) : (
+                                      <Tooltip title="Asociar Tarea al Ciclo">
+                                        <IconButton
+                                          size="small"
+                                          onClick={() => handleOpenTaskDialog('cycle', fs.cycleId!, fs.cycleName, 'cycle')}
+                                          sx={{ 
+                                            p: 0.25, 
+                                            opacity: 0.7, 
+                                            color: 'text.secondary',
+                                            bgcolor: '#ffffff',
+                                            boxShadow: '0 2px 5px rgba(0,0,0,0.18)',
+                                            border: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
+                                            transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+                                            '&:hover': { 
+                                              opacity: 1,
+                                              bgcolor: '#ffffff',
+                                              borderColor: theme.palette.primary.main,
+                                              boxShadow: `0 4px 10px ${alpha(theme.palette.primary.main, 0.28)}`,
+                                              transform: 'translateY(-1.5px)',
+                                            },
+                                            '&:active': {
+                                              transform: 'translateY(1px)',
+                                              boxShadow: 'none',
+                                            },
+                                            flexShrink: 0 
+                                          }}
+                                        >
+                                          <TaskIconWithAdd hasTasks={false} />
+                                        </IconButton>
+                                      </Tooltip>
+                                    )}
+                                  </Box>
                                 )}
                               </Box>
-                            )}
-                          </Box>
-                        ) : (fs.parentGroupId ? '' : '—')}
-                      </TableCell>
+                            </TableCell>
+                          );
+                        })()
+                      )}
+                      {/* Test Set */}
+                      {(() => {
+                        if (fs.parentGroupId) {
+                          if (renderedSets.has(fs.parentGroupId)) {
+                            return null;
+                          }
+                          renderedSets.add(fs.parentGroupId);
+                          return (
+                            <TableCell
+                              rowSpan={setSpans[fs.parentGroupId] || 1}
+                              sx={{
+                                width: colWidths.set,
+                                minWidth: colWidths.set,
+                                maxWidth: colWidths.set,
+                                py: 1,
+                                fontWeight: 600,
+                                color: 'text.secondary',
+                                overflow: 'hidden',
+                                bgcolor: `${getSetBgColor(fs.setIndex || 0, isDark)} !important`,
+                                verticalAlign: 'middle',
+                                borderBottom: `1px solid ${theme.palette.divider}`,
+                              }}
+                            >
+                              <Box
+                                sx={{
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  gap: 0.75,
+                                  width: '100%',
+                                  overflow: 'hidden',
+                                  textAlign: 'center',
+                                  px: 1
+                                }}
+                              >
+                                <Box
+                                  onClick={() => toggleGroup(fs.parentGroupId!)}
+                                  sx={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer',
+                                    userSelect: 'none',
+                                    gap: 0.5,
+                                    width: '100%',
+                                  }}
+                                >
+                                  {isSetCollapsed ? (
+                                    <KeyboardArrowRightRoundedIcon sx={{ fontSize: 16, color: 'text.secondary', flexShrink: 0 }} />
+                                  ) : (
+                                    <KeyboardArrowDownRoundedIcon sx={{ fontSize: 16, color: 'text.secondary', flexShrink: 0 }} />
+                                  )}
+                                  <LibraryBooksRoundedIcon sx={{ fontSize: 14, color: 'text.secondary', flexShrink: 0 }} />
+                                  <Tooltip title={fs.parentGroupName} placement="top" arrow enterDelay={200}>
+                                    <Typography
+                                      sx={{
+                                        fontWeight: 800,
+                                        fontSize: '0.75rem',
+                                        color: isDark ? '#ffffff' : '#0f172a',
+                                        whiteSpace: 'normal',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        textAlign: 'center',
+                                      }}
+                                    >
+                                      {fs.parentGroupName}
+                                    </Typography>
+                                  </Tooltip>
+                                </Box>
+                                {fs.setId && (
+                                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.75, mt: 0.5, flexShrink: 0 }}>
+                                    <Tooltip title="Ejecutar Suite (Set)">
+                                      <span>
+                                        <IconButton
+                                          size="small"
+                                          disabled={isExecuting}
+                                          onClick={() => onExecute?.('set', fs.parentGroupId!)}
+                                          sx={{ 
+                                            p: 0.25, 
+                                            color: isExecuting ? 'text.disabled' : theme.palette.success.main,
+                                            bgcolor: '#ffffff',
+                                            boxShadow: isExecuting ? 'none' : '0 2px 5px rgba(0,0,0,0.18)',
+                                            border: `1px solid ${alpha(theme.palette.success.main, 0.35)}`,
+                                            transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+                                            '&:hover': { 
+                                              bgcolor: '#ffffff',
+                                              borderColor: theme.palette.success.main,
+                                              boxShadow: `0 4px 10px ${alpha(theme.palette.success.main, 0.38)}`,
+                                              transform: 'translateY(-1.5px)',
+                                            },
+                                            '&:active': {
+                                              transform: 'translateY(1px)',
+                                              boxShadow: 'none',
+                                            },
+                                            '&.Mui-disabled': {
+                                              bgcolor: '#f5f5f5',
+                                              color: '#bdbdbd',
+                                              border: '1px solid #e0e0e0',
+                                            },
+                                            flexShrink: 0 
+                                          }}
+                                        >
+                                          <PlayArrowRoundedIcon sx={{ fontSize: 16 }} />
+                                        </IconButton>
+                                      </span>
+                                    </Tooltip>
+
+                                    {hasSetTasks ? (() => {
+                                      const setTasksFiltered = (blueprints.sets.find(s => s.id === fs.setId)?.tasks || []).filter(t => t.name !== '__none__');
+                                      return (
+                                        <TaskBadge
+                                          count={setTasksFiltered.length}
+                                          label={`${setTasksFiltered.length} tarea${setTasksFiltered.length !== 1 ? 's' : ''} de Suite — clic para configurar/ver`}
+                                          onClick={() => handleOpenTaskDialog('set', fs.setId!, fs.parentGroupName!, 'set')}
+                                        />
+                                      );
+                                    })() : (
+                                      <Tooltip title="Asociar Tarea a la Suite">
+                                        <IconButton
+                                          size="small"
+                                          onClick={() => handleOpenTaskDialog('set', fs.setId!, fs.parentGroupName!, 'set')}
+                                          sx={{ 
+                                            p: 0.25, 
+                                            opacity: 0.7, 
+                                            color: 'text.secondary',
+                                            bgcolor: '#ffffff',
+                                            boxShadow: '0 2px 5px rgba(0,0,0,0.18)',
+                                            border: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
+                                            transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+                                            '&:hover': { 
+                                              opacity: 1,
+                                              bgcolor: '#ffffff',
+                                              borderColor: theme.palette.primary.main,
+                                              boxShadow: `0 4px 10px ${alpha(theme.palette.primary.main, 0.25)}`,
+                                              transform: 'translateY(-1.5px)',
+                                            },
+                                            '&:active': {
+                                              transform: 'translateY(0.5px)',
+                                              boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+                                            },
+                                            flexShrink: 0 
+                                          }}
+                                        >
+                                          <TaskIconWithAdd hasTasks={false} />
+                                        </IconButton>
+                                      </Tooltip>
+                                    )}
+                                  </Box>
+                                )}
+                              </Box>
+                            </TableCell>
+                          );
+                        } else {
+                          return (
+                            <TableCell
+                              sx={{
+                                width: colWidths.set,
+                                minWidth: colWidths.set,
+                                maxWidth: colWidths.set,
+                                py: 1,
+                                fontWeight: 600,
+                                color: 'text.secondary',
+                                overflow: 'hidden',
+                                verticalAlign: 'middle',
+                                borderBottom: `1px solid ${theme.palette.divider}`,
+                              }}
+                            >
+                              —
+                            </TableCell>
+                          );
+                        }
+                      })()}
                       {/* Test Flow / Combo Group */}
                       <TableCell
                         sx={{
@@ -1685,24 +1910,30 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                     }}
                   >
                     {/* Tree guides: Cycle, Set and Flow to create a gorgeous visual hierarchy */}
-                    <TableCell
-                      sx={{
-                        width: colWidths.cycle,
-                        minWidth: colWidths.cycle,
-                        maxWidth: colWidths.cycle,
-                        borderLeft: `3px solid ${isRunning ? theme.palette.warning.main : isFailed ? theme.palette.error.main : alpha(theme.palette.text.disabled, 0.15)}`,
-                        overflow: 'hidden'
-                      }}
-                    ></TableCell>
-                    <TableCell
-                      sx={{
-                        width: colWidths.set,
-                        minWidth: colWidths.set,
-                        maxWidth: colWidths.set,
-                        borderLeft: fs.parentGroupId ? (isDark ? '2px solid #5d3f8c' : '2px solid #b388ff') : 'none',
-                        overflow: 'hidden'
-                      }}
-                    ></TableCell>
+                    {!renderedCycles.has(fs.cycleRefId || '') && (
+                      <TableCell
+                        sx={{
+                          width: colWidths.cycle,
+                          minWidth: colWidths.cycle,
+                          maxWidth: colWidths.cycle,
+                          borderLeft: isSetGroup
+                            ? `4px solid ${theme.palette.secondary.main}`
+                            : `4px solid ${theme.palette.primary.main}`,
+                          overflow: 'hidden'
+                        }}
+                      />
+                    )}
+                    {(!fs.parentGroupId || !renderedSets.has(fs.parentGroupId)) && (
+                      <TableCell
+                        sx={{
+                          width: colWidths.set,
+                          minWidth: colWidths.set,
+                          maxWidth: colWidths.set,
+                          borderLeft: fs.parentGroupId ? (isDark ? '2px solid #5d3f8c' : '2px solid #b388ff') : 'none',
+                          overflow: 'hidden'
+                        }}
+                      />
+                    )}
                     <TableCell
                       sx={{
                         width: colWidths.flow,
@@ -1729,7 +1960,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                         minWidth: colWidths.scenario,
                         maxWidth: colWidths.scenario,
                         overflow: 'hidden',
-                        bgcolor: scenarioColBg, // Resaltar columna
+                        bgcolor: `${scenarioColBg} !important`, // Resaltar columna
                       }}
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, width: '100%', overflow: 'hidden' }}>
@@ -1932,7 +2163,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                 >
                   — Sistema —
                 </TableCell>
-                <TableCell colSpan={4}>
+                <TableCell colSpan={3}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                     <CircularProgress
                       size={11}
@@ -1977,6 +2208,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
           nodeType={dialogNodeType}
           scenarios={dialogScenarios}
           initialScope={dialogInitialScope}
+          nodeId={dialogTargetId}
         />
       )}
 

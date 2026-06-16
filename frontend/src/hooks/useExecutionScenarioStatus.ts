@@ -32,7 +32,7 @@ export function useExecutionScenarioStatus(
 
   // ── Reset map only when a NEW task starts ──────────────────────────────────
   useEffect(() => {
-    if (!taskId) return; // taskId → null after execution: keep existing states
+    if (!taskId || !scenarioIds || scenarioIds.length === 0) return; // Wait for scenarios to load
     if (taskId === lastTaskId.current) return; // same task, no reset
 
     lastTaskId.current = taskId;
@@ -48,12 +48,11 @@ export function useExecutionScenarioStatus(
 
     currentRunningId.current  = null;
     currentRunningName.current = null;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskId]);
+  }, [taskId, scenarioIds]);
 
   // ── SSE subscription ────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!taskId) return;
+    if (!taskId || !scenarioIds || scenarioIds.length === 0) return;
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -224,8 +223,7 @@ export function useExecutionScenarioStatus(
       es.close();
       esRef.current = null;
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskId]);
+  }, [taskId, scenarioIds, scenarioNames]);
 
   return { statusMap, taskStatusMap };
 }

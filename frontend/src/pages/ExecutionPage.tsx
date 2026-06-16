@@ -89,8 +89,85 @@ const ExecutionPage: React.FC = () => {
   }, [fetchBlueprints]);
 
   useEffect(() => {
-    fetchBlueprints();
+    const init = async () => {
+      setIsBlueprintsLoading(true);
+      
+      // 1. Fetch blueprints
+      let bps: BlueprintsData = { plans: [], cycles: [], sets: [], flows: [] };
+      try {
+        const r = await fetch('/api/blueprints');
+        if (r.ok) bps = await r.json();
+      } catch (e) {
+        console.error('Failed to load blueprints', e);
+      }
+      setBlueprints(bps);
+      setIsBlueprintsLoading(false);
+
+      // 2. Fetch executions and determine which plan to show (the most recently executed one)
+      let initialPlanId = bps.plans.length > 0 ? bps.plans[0].id : null;
+      try {
+        const r = await fetch('/api/executions');
+        if (r.ok) {
+          const executions = await r.json();
+          if (executions && executions.length > 0) {
+            executions.sort((a: any, b: any) => {
+              const timeA = new Date(a.started_at || a.scheduled_at || 0).getTime();
+              const timeB = new Date(b.started_at || b.scheduled_at || 0).getTime();
+              return timeB - timeA;
+            });
+            const latest = executions[0];
+            if (bps.plans.some(p => p.id === latest.plan_id)) {
+              initialPlanId = latest.plan_id;
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Failed to fetch executions on init', e);
+      }
+
+      if (initialPlanId) {
+        setSelectedPlanId(initialPlanId);
+      }
+    };
+
+    init();
   }, []);
+
+  // ── Restore execution state for the selected plan ─────────────────────
+  useEffect(() => {
+    if (!selectedPlanId) return;
+
+    fetch('/api/executions')
+      .then(r => r.ok ? r.json() : [])
+      .then(executions => {
+        if (executions && executions.length > 0) {
+          // Filter executions for the currently selected plan
+          const planExecutions = executions.filter((e: any) => e.plan_id === selectedPlanId);
+          if (planExecutions.length > 0) {
+            // Sort by started_at/scheduled_at descending to get the most recent run of this plan
+            planExecutions.sort((a: any, b: any) => {
+              const timeA = new Date(a.started_at || a.scheduled_at || 0).getTime();
+              const timeB = new Date(b.started_at || b.scheduled_at || 0).getTime();
+              return timeB - timeA;
+            });
+            const latest = planExecutions[0];
+            setCurrentTaskId(latest.task_id);
+            setExecutionStatus(latest.status);
+            const running = ['running', 'pending', 'scheduled'].includes(latest.status);
+            setIsExecuting(running);
+            if (running) {
+              setIsDrawerOpen(true);
+            }
+          } else {
+            // No executions for this plan
+            setCurrentTaskId(null);
+            setExecutionStatus('idle');
+            setIsExecuting(false);
+          }
+        }
+      })
+      .catch(err => console.error('Failed to restore execution state for plan', err));
+  }, [selectedPlanId]);
 
   const markDirty = useCallback(() => {
     setIsSaved(false);
@@ -201,7 +278,13 @@ const ExecutionPage: React.FC = () => {
       const next = { ...prev };
       
       if (level === 'cycle') {
-        next.cycles = next.cycles.map(c => c.id === targetId ? { ...c, tasks } : c);
+        next.cycles = next.cycles.map(c => {
+          if (c.id === targetId) {
+            const scenarioTasks = (c.tasks || []).filter(t => t.targetScenario);
+            return { ...c, tasks: [...scenarioTasks, ...tasks] };
+          }
+          return c;
+        });
       } else if (level === 'set') {
         next.sets = next.sets.map(s => s.id === targetId ? { ...s, tasks } : s);
       } else if (level === 'flow') {

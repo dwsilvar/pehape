@@ -220,6 +220,7 @@ const CompositionNode: React.FC<CompositionNodeProps> = ({
         onSave={(updatedTasks) => onUpdateTasks(item.id, updatedTasks)}
         nodeType={item.type}
         scenarios={item.steps}
+        nodeId={item.id}
       />
     </Box>
   );

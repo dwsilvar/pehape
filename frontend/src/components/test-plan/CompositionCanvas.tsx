@@ -155,6 +155,7 @@ const CompositionCanvas: React.FC<CompositionCanvasProps> = ({
           initialTasks={tasks}
           onSave={onUpdateTasks}
           nodeType={category.slice(0, -1)}
+          nodeId={blueprintId || undefined}
         />
       )}
     </Box>
