@@ -38,6 +38,7 @@ def execute_plan(
     plan_id: str,
     background_tasks: BackgroundTasks,
     scheduled_at: Optional[str] = None,
+    cycle_instance_id: Optional[str] = None,
     set_instance_id: Optional[str] = None,
     flow_instance_id: Optional[str] = None,
     scenario_instance_id: Optional[str] = None,
@@ -51,7 +52,7 @@ def execute_plan(
     orchestrator_input = _convert_plan_to_orchestrator_format(plan, blueprints)
 
     # Filter the orchestrator input if execution level parameters are provided
-    if set_instance_id or flow_instance_id or scenario_instance_id:
+    if cycle_instance_id or set_instance_id or flow_instance_id or scenario_instance_id:
         filtered_cycles = []
         for cycle in orchestrator_input.get("test_cycles", []):
             filtered_flows = []
@@ -71,6 +72,8 @@ def execute_plan(
                             match = scen_id.startswith(prefix)
                     elif set_instance_id:
                         match = scen_id.startswith(set_instance_id + "-")
+                    elif cycle_instance_id:
+                        match = scen_id.startswith(f"flow-{cycle_instance_id}-") or scen_id.startswith(f"set-{cycle_instance_id}-")
                     
                     if match:
                         filtered_scenarios.append(scenario)
@@ -86,7 +89,7 @@ def execute_plan(
         if not filtered_cycles:
             raise HTTPException(
                 status_code=400,
-                detail=f"No scenarios found matching the filter (set_instance_id={set_instance_id}, flow_instance_id={flow_instance_id}, scenario_instance_id={scenario_instance_id})"
+                detail=f"No scenarios found matching the filter (cycle_instance_id={cycle_instance_id}, set_instance_id={set_instance_id}, flow_instance_id={flow_instance_id}, scenario_instance_id={scenario_instance_id})"
             )
         orchestrator_input["test_cycles"] = filtered_cycles
 

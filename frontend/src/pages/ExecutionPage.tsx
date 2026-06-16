@@ -209,7 +209,8 @@ const ExecutionPage: React.FC = () => {
     scheduledAt?: string,
     setInstanceId?: string,
     flowInstanceId?: string,
-    scenarioInstanceId?: string
+    scenarioInstanceId?: string,
+    cycleInstanceId?: string
   ) => {
     if (!selectedPlanId) return;
     setIsExecuting(true);
@@ -219,6 +220,7 @@ const ExecutionPage: React.FC = () => {
     try {
       const params = new URLSearchParams();
       if (scheduledAt) params.append('scheduled_at', scheduledAt);
+      if (cycleInstanceId) params.append('cycle_instance_id', cycleInstanceId);
       if (setInstanceId) params.append('set_instance_id', setInstanceId);
       if (flowInstanceId) params.append('flow_instance_id', flowInstanceId);
       if (scenarioInstanceId) params.append('scenario_instance_id', scenarioInstanceId);
@@ -241,13 +243,15 @@ const ExecutionPage: React.FC = () => {
     }
   }, [selectedPlanId]);
 
-  const handleExecuteAtLevel = useCallback((level: 'set' | 'flow' | 'scenario', instanceId: string) => {
-    if (level === 'set') {
-      handleExecute(undefined, instanceId, undefined, undefined);
+  const handleExecuteAtLevel = useCallback((level: 'cycle' | 'set' | 'flow' | 'scenario', instanceId: string) => {
+    if (level === 'cycle') {
+      handleExecute(undefined, undefined, undefined, undefined, instanceId);
+    } else if (level === 'set') {
+      handleExecute(undefined, instanceId, undefined, undefined, undefined);
     } else if (level === 'flow') {
-      handleExecute(undefined, undefined, instanceId, undefined);
+      handleExecute(undefined, undefined, instanceId, undefined, undefined);
     } else if (level === 'scenario') {
-      handleExecute(undefined, undefined, undefined, instanceId);
+      handleExecute(undefined, undefined, undefined, instanceId, undefined);
     }
   }, [handleExecute]);
 

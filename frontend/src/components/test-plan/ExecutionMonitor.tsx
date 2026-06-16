@@ -76,7 +76,7 @@ interface ExecutionMonitorProps {
     cycleId?: string,
     blueprintId?: string
   ) => void;
-  onExecute?: (level: 'set' | 'flow' | 'scenario', instanceId: string) => void;
+  onExecute?: (level: 'cycle' | 'set' | 'flow' | 'scenario', instanceId: string) => void;
 }
 
 // ── Status badge ──────────────────────────────────────────────────────────────
@@ -1458,7 +1458,43 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                                   </Typography>
                                 </Tooltip>
                                 {fs.cycleId && (
-                                  <Box sx={{ mt: 0.5 }}>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.75, mt: 0.5, flexShrink: 0 }}>
+                                    <Tooltip title="Ejecutar Ciclo">
+                                      <span>
+                                        <IconButton
+                                          size="small"
+                                          disabled={isExecuting}
+                                          onClick={() => onExecute?.('cycle', fs.cycleRefId!)}
+                                          sx={{ 
+                                            p: 0.25, 
+                                            color: isExecuting ? 'text.disabled' : theme.palette.success.main,
+                                            bgcolor: '#ffffff',
+                                            boxShadow: isExecuting ? 'none' : '0 2px 5px rgba(0,0,0,0.18)',
+                                            border: `1px solid ${alpha(theme.palette.success.main, 0.35)}`,
+                                            transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+                                            '&:hover': { 
+                                              bgcolor: '#ffffff',
+                                              borderColor: theme.palette.success.main,
+                                              boxShadow: `0 4px 10px ${alpha(theme.palette.success.main, 0.38)}`,
+                                              transform: 'translateY(-1.5px)',
+                                            },
+                                            '&:active': {
+                                              transform: 'translateY(1px)',
+                                              boxShadow: 'none',
+                                            },
+                                            '&.Mui-disabled': {
+                                              bgcolor: '#f5f5f5',
+                                              color: '#bdbdbd',
+                                              border: '1px solid #e0e0e0',
+                                            },
+                                            flexShrink: 0 
+                                          }}
+                                        >
+                                          <PlayArrowRoundedIcon sx={{ fontSize: 16 }} />
+                                        </IconButton>
+                                      </span>
+                                    </Tooltip>
+
                                     {cycleTasks.length > 0 ? (
                                       <TaskBadge
                                         count={cycleTasks.length}
