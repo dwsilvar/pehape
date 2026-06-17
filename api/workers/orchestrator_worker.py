@@ -228,7 +228,7 @@ def _convert_plan_to_orchestrator_format(plan: dict, blueprints: dict) -> dict:
                 stamped.append({**t, "id": task_id, "scenario_id": scenario_id})
         return stamped
 
-    def expand_set(set_bp: dict, c_ref_id: str, ref_id: str) -> list:
+    def expand_set(set_bp: dict, c_ref_id: str, ref_id: str, cycle_bp: dict) -> list:
         choices_per_item = []
         for ref in set_bp.get("items", []):
             if ref.get("type") == "flow":
@@ -311,29 +311,45 @@ def _convert_plan_to_orchestrator_format(plan: dict, blueprints: dict) -> dict:
                     "set_detail":    s.get("source_name", "—"),
                     "source_type":   s.get("source_type", "flow"),
                     "userdata":      s.get("userdata", {}),
-                    "tasks":         merge_and_stamp_tasks(scenario_instance_id, s.get("scenarioName", ""), p_tasks, None, None, s_tasks),
+                    "tasks":         merge_and_stamp_tasks(scenario_instance_id, s.get("scenarioName", ""), p_tasks, cycle_bp.get("tasks", []), None, s_tasks),
                     "flow_bp_id":    s.get("flow_bp_id"),
                     "flow_tasks":    s.get("flow_tasks"),
                 })
 
-            # Apply flow-level tasks for flows inside set combo
-            flow_groups = {}
-            for idx, s in enumerate(scenarios_list):
-                f_id = s.get("flow_bp_id")
-                if f_id:
-                    if f_id not in flow_groups:
-                        flow_groups[f_id] = []
-                    flow_groups[f_id].append(idx)
+            # Apply flow-level tasks for flows inside set combo (checking for combo-instance overrides first)
+            combo_instance_id = f"set-{c_ref_id}-{ref_id}-combo-{combo_signature}"
+            cycle_tasks = cycle_bp.get("tasks", []) if cycle_bp else []
+            instance_flow_tasks = [t for t in cycle_tasks if isinstance(t, dict) and t.get("targetScenario") == combo_instance_id]
+            has_instance_flow_tasks = len(instance_flow_tasks) > 0
 
-            for f_id, indices in flow_groups.items():
-                first_idx = indices[0]
-                last_idx = indices[-1]
-                flow_tasks = scenarios_list[first_idx].get("flow_tasks") or []
+            if has_instance_flow_tasks:
+                flow_tasks = [t for t in instance_flow_tasks if t.get("name") != "__none__"]
                 before_flow_tasks = [t for t in flow_tasks if t.get("hook") == "before"]
                 after_flow_tasks = [t for t in flow_tasks if t.get("hook") == "after"]
 
-                scenarios_list[first_idx]["tasks"].extend(stamp_tasks_for_scenario(scenarios_list[first_idx]["id"], before_flow_tasks))
-                scenarios_list[last_idx]["tasks"].extend(stamp_tasks_for_scenario(scenarios_list[last_idx]["id"], after_flow_tasks))
+                if before_flow_tasks and scenarios_list:
+                    scenarios_list[0]["tasks"].extend(stamp_tasks_for_scenario(scenarios_list[0]["id"], before_flow_tasks))
+                if after_flow_tasks and scenarios_list:
+                    scenarios_list[-1]["tasks"].extend(stamp_tasks_for_scenario(scenarios_list[-1]["id"], after_flow_tasks))
+            else:
+                # Fallback to flow-level blueprint tasks
+                flow_groups = {}
+                for idx, s in enumerate(scenarios_list):
+                    f_id = s.get("flow_bp_id")
+                    if f_id:
+                        if f_id not in flow_groups:
+                            flow_groups[f_id] = []
+                        flow_groups[f_id].append(idx)
+
+                for f_id, indices in flow_groups.items():
+                    first_idx = indices[0]
+                    last_idx = indices[-1]
+                    flow_tasks = scenarios_list[first_idx].get("flow_tasks") or []
+                    before_flow_tasks = [t for t in flow_tasks if t.get("hook") == "before"]
+                    after_flow_tasks = [t for t in flow_tasks if t.get("hook") == "after"]
+
+                    scenarios_list[first_idx]["tasks"].extend(stamp_tasks_for_scenario(scenarios_list[first_idx]["id"], before_flow_tasks))
+                    scenarios_list[last_idx]["tasks"].extend(stamp_tasks_for_scenario(scenarios_list[last_idx]["id"], after_flow_tasks))
 
             all_combo_scenario_lists.append(scenarios_list)
             generated_flows.append({
@@ -395,11 +411,19 @@ def _convert_plan_to_orchestrator_format(plan: dict, blueprints: dict) -> dict:
                             "set_detail":    "—",
                             "source_type":   "flow",
                             "userdata":      s.get("userdata", {}),
-                            "tasks":         merge_and_stamp_tasks(scenario_instance_id, s.get("scenarioName", ""), p_tasks, None, None, s_tasks),
+                            "tasks":         merge_and_stamp_tasks(scenario_instance_id, s.get("scenarioName", ""), p_tasks, cycle_bp.get("tasks", []), None, s_tasks),
                         })
 
-                    # Apply flow-level tasks
-                    flow_tasks = flow_bp.get("tasks", []) or []
+                    # Apply flow-level tasks (checking for instance override first)
+                    flow_instance_id = f"flow-{c_ref.get('id')}-{ref.get('id')}"
+                    cycle_tasks = cycle_bp.get("tasks", []) or []
+                    instance_flow_tasks = [t for t in cycle_tasks if isinstance(t, dict) and t.get("targetScenario") == flow_instance_id]
+
+                    if instance_flow_tasks:
+                        flow_tasks = [t for t in instance_flow_tasks if t.get("name") != "__none__"]
+                    else:
+                        flow_tasks = flow_bp.get("tasks", []) or []
+
                     before_flow_tasks = [t for t in flow_tasks if t.get("hook") == "before"]
                     after_flow_tasks = [t for t in flow_tasks if t.get("hook") == "after"]
                     if scenarios_list:
@@ -418,12 +442,12 @@ def _convert_plan_to_orchestrator_format(plan: dict, blueprints: dict) -> dict:
                     None,
                 )
                 if set_bp:
-                    test_flows.extend(expand_set(set_bp, c_ref.get("id"), ref.get("id")))
+                    test_flows.extend(expand_set(set_bp, c_ref.get("id"), ref.get("id"), cycle_bp))
 
-        # Apply cycle-level tasks to the cycle's scenarios
+        # Apply cycle-level tasks to the cycle's scenarios (only tasks that do not target a specific scenario or flow)
         cycle_tasks = cycle_bp.get("tasks", []) or []
-        before_cycle_tasks = [t for t in cycle_tasks if t.get("hook") == "before"]
-        after_cycle_tasks = [t for t in cycle_tasks if t.get("hook") == "after"]
+        before_cycle_tasks = [t for t in cycle_tasks if isinstance(t, dict) and t.get("hook") == "before" and not t.get("targetScenario")]
+        after_cycle_tasks = [t for t in cycle_tasks if isinstance(t, dict) and t.get("hook") == "after" and not t.get("targetScenario")]
 
         if before_cycle_tasks or after_cycle_tasks:
             # Flatten scenarios inside test_flows for this cycle

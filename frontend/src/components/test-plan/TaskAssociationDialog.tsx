@@ -549,7 +549,7 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
             >
               <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5, color: 'text.secondary', fontSize: '0.8rem', letterSpacing: 0.5, textTransform: 'uppercase' }}>
                 {editingTaskId ? 'Editar Tarea Seleccionada' : 'Asociar Nueva Tarea'}
-              </Typography>              {nodeType === 'scenario' || nodeType === 'feature' ? (
+              </Typography>              {nodeType === 'scenario' || nodeType === 'feature' || nodeType === 'flow' ? (
                 <Box
                   sx={{
                     mb: 1.5,
@@ -573,11 +573,11 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
                   >
                     {applyScope === 'all' ? (
                       <>
-                        <strong>Nota de Escenario Global:</strong> Esta tarea se aplicará a <strong>todos los escenarios</strong> de esta plantilla en el plan de pruebas, guardándose en la definición del blueprint original.
+                        <strong>Nota de {nodeType === 'flow' ? 'Flujo' : 'Escenario'} Global:</strong> Esta tarea se aplicará a <strong>todos los {nodeType === 'flow' ? 'flujos' : 'escenarios'}</strong> de esta plantilla en el plan de pruebas, guardándose en la definición del blueprint original.
                       </>
                     ) : (
                       <>
-                        <strong>Nota de Escenario Específico:</strong> Esta tarea se asocia a <strong>este escenario elegido ("{nodeName}")</strong> y se ejecutará únicamente en su ciclo de vida local.
+                        <strong>Nota de {nodeType === 'flow' ? 'Flujo' : 'Escenario'} Específico:</strong> Esta tarea se asocia a <strong>este {nodeType === 'flow' ? 'flujo/caso' : 'escenario'} elegido ("{nodeName}")</strong> y se ejecutará únicamente en su ciclo de vida local (instancia).
                       </>
                     )}
                   </Alert>
@@ -596,7 +596,7 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
                         control={<Radio size="small" sx={{ p: 0.5 }} />}
                         label={
                           <Typography variant="body2" sx={{ fontSize: '0.78rem', color: 'text.primary', fontWeight: applyScope === 'instance' ? 600 : 400 }}>
-                            Solo para esta instancia del escenario
+                            Solo para esta instancia del {nodeType === 'flow' ? 'flujo/caso' : 'escenario'}
                           </Typography>
                         }
                         sx={{ ml: -0.75 }}
@@ -606,7 +606,7 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
                         control={<Radio size="small" sx={{ p: 0.5 }} />}
                         label={
                           <Typography variant="body2" sx={{ fontSize: '0.78rem', color: 'text.primary', fontWeight: applyScope === 'all' ? 600 : 400 }}>
-                            Todas las instancias de este escenario en el plan
+                            Todas las instancias de este {nodeType === 'flow' ? 'flujo/caso' : 'escenario'} en el plan
                           </Typography>
                         }
                         sx={{ ml: -0.75 }}

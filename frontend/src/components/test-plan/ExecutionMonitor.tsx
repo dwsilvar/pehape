@@ -524,7 +524,14 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
 
             // Apply flow-level tasks
             if (flowScenarios.length > 0) {
-              const flowTasks = flow.tasks ?? [];
+              const groupId = `flow-${cRef.id}-${ref.id}`;
+              const cycleTasks = cycle.tasks ?? [];
+              const instanceFlowTasks = cycleTasks.filter(t => t.targetScenario === groupId);
+              const hasInstanceFlowTasks = instanceFlowTasks.length > 0;
+              const flowTasks = hasInstanceFlowTasks
+                ? instanceFlowTasks.filter(t => t.name !== '__none__')
+                : (flow.tasks ?? []);
+
               const beforeTasks = flowTasks.filter(t => t.hook === 'before' && t.name !== '__none__');
               const afterTasks = flowTasks.filter(t => t.hook === 'after' && t.name !== '__none__');
 
@@ -535,7 +542,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                     ...t,
                     id: t.id || `${flowScenarios[0].id}-${t.name}`,
                     originLevel: 'flow',
-                    originId: flow.id
+                    originId: hasInstanceFlowTasks ? groupId : flow.id
                   }))
                 ];
               }
@@ -546,7 +553,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                     ...t,
                     id: t.id || `${flowScenarios[flowScenarios.length - 1].id}-${t.name}`,
                     originLevel: 'flow',
-                    originId: flow.id
+                    originId: hasInstanceFlowTasks ? groupId : flow.id
                   }))
                 ];
               }
@@ -674,45 +681,80 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                   } as any);
                 });
 
-                // Apply flow-level tasks for flows inside this set combo
-                const flowGroups: Record<string, number[]> = {};
-                comboScenarios.forEach((s: any, sIdx) => {
-                  if (s.flow_bp_id) {
-                    if (!flowGroups[s.flow_bp_id]) flowGroups[s.flow_bp_id] = [];
-                    flowGroups[s.flow_bp_id].push(sIdx);
-                  }
-                });
+                // Apply flow-level tasks for flows inside this set combo (checking for combo-instance overrides first)
+                const cycleTasks = cycle.tasks ?? [];
+                const instanceFlowTasks = cycleTasks.filter(t => t.targetScenario === groupId);
+                const hasInstanceFlowTasks = instanceFlowTasks.length > 0;
 
-                Object.entries(flowGroups).forEach(([flowBpId, indices]) => {
-                  const firstIdx = indices[0];
-                  const lastIdx = indices[indices.length - 1];
-                  const flowTasks = (comboScenarios[firstIdx] as any).flow_tasks ?? [];
-                  const beforeFlowTasks = flowTasks.filter((t: any) => t.hook === 'before' && t.name !== '__none__');
-                  const afterFlowTasks = flowTasks.filter((t: any) => t.hook === 'after' && t.name !== '__none__');
+                if (hasInstanceFlowTasks) {
+                  const flowTasks = instanceFlowTasks.filter(t => t.name !== '__none__');
+                  const beforeTasks = flowTasks.filter(t => t.hook === 'before');
+                  const afterTasks = flowTasks.filter(t => t.hook === 'after');
 
-                  if (beforeFlowTasks.length > 0) {
-                    comboScenarios[firstIdx].tasks = [
-                      ...comboScenarios[firstIdx].tasks,
-                      ...beforeFlowTasks.map((t: any) => ({
+                  if (beforeTasks.length > 0 && comboScenarios.length > 0) {
+                    comboScenarios[0].tasks = [
+                      ...comboScenarios[0].tasks,
+                      ...beforeTasks.map(t => ({
                         ...t,
-                        id: t.id || `${comboScenarios[firstIdx].id}-${t.name}`,
+                        id: t.id || `${comboScenarios[0].id}-${t.name}`,
                         originLevel: 'flow',
-                        originId: flowBpId
+                        originId: groupId
                       }))
                     ];
                   }
-                  if (afterFlowTasks.length > 0) {
-                    comboScenarios[lastIdx].tasks = [
-                      ...comboScenarios[lastIdx].tasks,
-                      ...afterFlowTasks.map((t: any) => ({
+                  if (afterTasks.length > 0 && comboScenarios.length > 0) {
+                    const lastScenario = comboScenarios[comboScenarios.length - 1];
+                    lastScenario.tasks = [
+                      ...lastScenario.tasks,
+                      ...afterTasks.map(t => ({
                         ...t,
-                        id: t.id || `${comboScenarios[lastIdx].id}-${t.name}`,
+                        id: t.id || `${lastScenario.id}-${t.name}`,
                         originLevel: 'flow',
-                        originId: flowBpId
+                        originId: groupId
                       }))
                     ];
                   }
-                });
+                } else {
+                  // Fallback to flow-level blueprint tasks inside the combo
+                  const flowGroups: Record<string, number[]> = {};
+                  comboScenarios.forEach((s: any, sIdx) => {
+                    if (s.flow_bp_id) {
+                      if (!flowGroups[s.flow_bp_id]) flowGroups[s.flow_bp_id] = [];
+                      flowGroups[s.flow_bp_id].push(sIdx);
+                    }
+                  });
+
+                  Object.entries(flowGroups).forEach(([flowBpId, indices]) => {
+                    const firstIdx = indices[0];
+                    const lastIdx = indices[indices.length - 1];
+                    const flowTasks = (comboScenarios[firstIdx] as any).flow_tasks ?? [];
+                    const beforeFlowTasks = flowTasks.filter((t: any) => t.hook === 'before' && t.name !== '__none__');
+                    const afterFlowTasks = flowTasks.filter((t: any) => t.hook === 'after' && t.name !== '__none__');
+
+                    if (beforeFlowTasks.length > 0) {
+                      comboScenarios[firstIdx].tasks = [
+                        ...comboScenarios[firstIdx].tasks,
+                        ...beforeFlowTasks.map((t: any) => ({
+                          ...t,
+                          id: t.id || `${comboScenarios[firstIdx].id}-${t.name}`,
+                          originLevel: 'flow',
+                          originId: flowBpId
+                        }))
+                      ];
+                    }
+                    if (afterFlowTasks.length > 0) {
+                      comboScenarios[lastIdx].tasks = [
+                        ...comboScenarios[lastIdx].tasks,
+                        ...afterFlowTasks.map((t: any) => ({
+                          ...t,
+                          id: t.id || `${comboScenarios[lastIdx].id}-${t.name}`,
+                          originLevel: 'flow',
+                          originId: flowBpId
+                        }))
+                      ];
+                    }
+                  });
+                }
 
                 allComboScenarios.push(comboScenarios);
               });
@@ -906,7 +948,23 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
     } else if (level === 'set') {
       initialTasks = blueprints.sets.find(s => s.id === targetId)?.tasks || [];
     } else if (level === 'flow') {
-      initialTasks = blueprints.flows.find(f => f.id === targetId)?.tasks || [];
+      // 1. Check if there are cycle-level tasks targeting this unique flow instance ID (groupId)
+      const cycle = blueprints.cycles.find(c => c.id === cycleId);
+      const cycleTasks = cycle?.tasks || [];
+      const instanceTasks = cycleTasks.filter(t => t.targetScenario === targetId);
+
+      if (instanceTasks.length > 0) {
+        initialTasks = instanceTasks.filter(t => t.name !== '__none__');
+        initialScope = 'instance';
+      } else {
+        // 2. Fallback to flow blueprint level tasks
+        if (blueprintId) {
+          initialTasks = blueprints.flows.find(f => f.id === blueprintId)?.tasks || [];
+        } else {
+          initialTasks = blueprints.flows.find(f => f.id === targetId)?.tasks || [];
+        }
+        initialScope = 'instance';
+      }
     } else if (level === 'scenario') {
       // 1. Check if there are cycle-level tasks targeting this unique instance ID
       const cycle = blueprints.cycles.find(c => c.id === cycleId);
@@ -1401,7 +1459,11 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                   const hasSetTasks = !!(set && set.tasks && set.tasks.filter(t => t.name !== '__none__').length > 0);
 
                   const flow = blueprints.flows.find(f => f.id === fs.flowId);
-                  const hasFlowTasks = !!(flow && flow.tasks && flow.tasks.filter(t => t.name !== '__none__').length > 0);
+                  const instanceFlowTasks = (cycle?.tasks || []).filter(t => t.targetScenario === fs.groupId);
+                  const hasInstanceFlowTasks = instanceFlowTasks.length > 0;
+                  const hasFlowTasks = hasInstanceFlowTasks
+                    ? !instanceFlowTasks.some(t => t.name === '__none__')
+                    : !!(flow && flow.tasks && flow.tasks.filter(t => t.name !== '__none__').length > 0);
 
                   // Define beautiful hierarchial backgrounds based on grouping type
                   const isSetGroup = !!fs.parentGroupId;
@@ -1774,19 +1836,21 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                                 </Tooltip>
 
                                 {hasFlowTasks ? (() => {
-                                  const flowTasksFiltered = (blueprints.flows.find(f => f.id === fs.flowId)?.tasks || []).filter(t => t.name !== '__none__');
+                                  const flowTasksFiltered = hasInstanceFlowTasks
+                                    ? instanceFlowTasks.filter(t => t.name !== '__none__')
+                                    : (blueprints.flows.find(f => f.id === fs.flowId)?.tasks || []).filter(t => t.name !== '__none__');
                                   return (
                                     <TaskBadge
                                       count={flowTasksFiltered.length}
                                       label={`${flowTasksFiltered.length} tarea${flowTasksFiltered.length !== 1 ? 's' : ''} de Flujo — clic para configurar/ver`}
-                                      onClick={() => handleOpenTaskDialog('flow', fs.flowId!, fs.groupName, 'flow')}
+                                      onClick={() => handleOpenTaskDialog('flow', fs.groupId, fs.groupName, 'flow', undefined, fs.cycleId, fs.flowId)}
                                     />
                                   );
                                 })() : (
                                   <Tooltip title="Asociar Tarea al Flujo">
                                     <IconButton
                                       size="small"
-                                      onClick={() => handleOpenTaskDialog('flow', fs.flowId!, fs.groupName, 'flow')}
+                                      onClick={() => handleOpenTaskDialog('flow', fs.groupId, fs.groupName, 'flow', undefined, fs.cycleId, fs.flowId)}
                                       sx={{ 
                                         p: 0.25, 
                                         opacity: 0.7, 

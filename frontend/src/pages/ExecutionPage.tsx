@@ -292,7 +292,56 @@ const ExecutionPage: React.FC = () => {
       } else if (level === 'set') {
         next.sets = next.sets.map(s => s.id === targetId ? { ...s, tasks } : s);
       } else if (level === 'flow') {
-        next.flows = next.flows.map(f => f.id === targetId ? { ...f, tasks } : f);
+        if (!applyToAllScenarios) {
+          // Solo esta instancia -> Guardar en el ciclo padre
+          if (cycleId) {
+            next.cycles = next.cycles.map(c => {
+              if (c.id === cycleId) {
+                // Filtrar tareas anteriores para esta misma instancia
+                const baseTasks = (c.tasks || []).filter(t => t.targetScenario !== targetId);
+                
+                // Mapear nuevas tareas a esta instancia de flujo (usando targetScenario como id de instancia del flujo/caso)
+                let newTasksToAppend = tasks.map(t => ({
+                  ...t,
+                  targetScenario: targetId
+                }));
+
+                // Si no hay tareas, agregar marcador dummy
+                if (newTasksToAppend.length === 0) {
+                  newTasksToAppend = [{
+                    id: `dummy-override-${targetId}`,
+                    name: '__none__',
+                    hook: 'before',
+                    scope: 'scenario',
+                    targetScenario: targetId,
+                    args: {}
+                  }];
+                }
+
+                return {
+                  ...c,
+                  tasks: [...baseTasks, ...newTasksToAppend]
+                };
+              }
+              return c;
+            });
+          }
+        } else {
+          // Todas las instancias -> Guardar en el blueprint del flujo
+          const flowIdToUpdate = blueprintId || targetId;
+          next.flows = next.flows.map(f => f.id === flowIdToUpdate ? { ...f, tasks } : f);
+
+          // Limpiar override de instancia si existiera en el ciclo
+          if (cycleId) {
+            next.cycles = next.cycles.map(c => {
+              if (c.id === cycleId) {
+                const cleanedTasks = (c.tasks || []).filter(t => t.targetScenario !== targetId);
+                return { ...c, tasks: cleanedTasks };
+              }
+              return c;
+            });
+          }
+        }
       } else if (level === 'scenario') {
         if (!applyToAllScenarios) {
           // Solo esta instancia -> Guardar en el ciclo padre
