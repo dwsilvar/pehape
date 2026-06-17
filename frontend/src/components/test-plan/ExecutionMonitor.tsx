@@ -1,9 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import {
   Box, Typography, alpha, useTheme, Chip, Tooltip,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  CircularProgress, IconButton, Popover,
+  CircularProgress, IconButton, Popover, Menu, MenuItem, ListItemIcon, ListItemText,
 } from '@mui/material';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import CancelRoundedIcon from '@mui/icons-material/CancelRounded';
@@ -342,6 +343,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
   blueprints, selectedPlanId, taskId, isExecuting, isGeneratingReport = false, onUpdateTasksAtLevel, onExecute,
 }) => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const headerBg = theme.palette.custom?.tableHeaderBg || theme.palette.custom?.bgCanvas || (isDark ? '#0b1120' : '#f1f5f9');
@@ -866,6 +868,29 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
   const { statusMap, taskStatusMap } = useExecutionScenarioStatus(taskId, scenarioIds, scenarioNames);
 
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+
+  // State for Scenario Cell Context Menu
+  const [contextMenu, setContextMenu] = useState<{ mouseX: number; mouseY: number; scenario: FlatScenario } | null>(null);
+
+  const handleContextMenu = (event: React.MouseEvent, scenario: FlatScenario) => {
+    event.preventDefault();
+    setContextMenu({
+      mouseX: event.clientX,
+      mouseY: event.clientY,
+      scenario,
+    });
+  };
+
+  const handleCloseContextMenu = () => {
+    setContextMenu(null);
+  };
+
+  const handleViewScenario = () => {
+    if (contextMenu?.scenario?.featurePath) {
+      navigate(`/feature-editor?file=${encodeURIComponent(contextMenu.scenario.featurePath)}`);
+    }
+    handleCloseContextMenu();
+  };
 
   const { cycleSpans, setSpans } = useMemo(() => {
     const cySpans: Record<string, number> = {};
@@ -2055,12 +2080,14 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                       </Tooltip>
                     </TableCell>
                     <TableCell
+                      onContextMenu={(e) => handleContextMenu(e, fs)}
                       sx={{
                         width: colWidths.scenario,
                         minWidth: colWidths.scenario,
                         maxWidth: colWidths.scenario,
                         overflow: 'hidden',
                         bgcolor: `${scenarioColBg} !important`, // Resaltar columna
+                        cursor: 'context-menu',
                       }}
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, width: '100%', overflow: 'hidden' }}>
@@ -2312,6 +2339,39 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
         />
       )}
 
+      {/* Scenario Cell Context Menu */}
+      <Menu
+        open={contextMenu !== null}
+        onClose={handleCloseContextMenu}
+        anchorReference="anchorPosition"
+        anchorPosition={contextMenu !== null ? { top: contextMenu.mouseY, left: contextMenu.mouseX } : undefined}
+        slotProps={{
+          paper: {
+            elevation: 8,
+            sx: {
+              minWidth: 200,
+              borderRadius: '8px',
+              border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`,
+              bgcolor: isDark ? '#1e293b' : '#ffffff',
+              '& .MuiMenuItem-root': {
+                py: 1, px: 1.5,
+                fontSize: '0.8rem',
+                fontFamily: 'inherit',
+              },
+            },
+          },
+        }}
+      >
+        <MenuItem onClick={handleViewScenario}>
+          <ListItemIcon>
+            <VisibilityIcon sx={{ fontSize: 16, color: theme.palette.primary.main }} />
+          </ListItemIcon>
+          <ListItemText
+            primary="Ver Escenario"
+            primaryTypographyProps={{ fontSize: '0.8rem', fontWeight: 600 }}
+          />
+        </MenuItem>
+      </Menu>
 
     </Box>
   );

@@ -101,6 +101,9 @@ const FeatureEditorPage: React.FC = () => {
   const [tabs, setTabs] = useState<EditorTab[]>([]);
   const [activeTabPath, setActiveTabPath] = useState<string | null>(null);
 
+  // ── Opened files ref to prevent double opening race conditions ──
+  const openedFilesRef = useRef<Set<string>>(new Set());
+
   // ── Explorer key state (for force refreshing explorer) ──────────
   const [explorerKey, setExplorerKey] = useState(0);
 
@@ -146,44 +149,55 @@ const FeatureEditorPage: React.FC = () => {
 
   // ── File selection ───────────────────────────────────────────────
   const handleFileSelect = useCallback(async (path: string) => {
-    const exists = tabs.find(tab => tab.file.path === path);
-    if (exists) { setActiveTabPath(path); return; }
+    // Normalizar la ruta del archivo (eliminar el prefijo 'features/' si existe)
+    let normalizedPath = path.replace(/\\/g, '/');
+    if (normalizedPath.startsWith('features/')) {
+      normalizedPath = normalizedPath.substring(9);
+    }
 
-    const name = path.split('/').pop() || path;
+    if (openedFilesRef.current.has(normalizedPath)) {
+      setActiveTabPath(normalizedPath);
+      return;
+    }
+    openedFilesRef.current.add(normalizedPath);
+
+    const name = normalizedPath.split('/').pop() || normalizedPath;
     const loadingTab: EditorTab = {
-      file: { name, path, type: 'file' },
-      content: t('editor.loading_file', { path }),
+      file: { name, path: normalizedPath, type: 'file' },
+      content: t('editor.loading_file', { path: normalizedPath }),
       isDirty: false, validationTexts: [], isLoading: true,
     };
-    setTabs(prev => [...prev, loadingTab]);
-    setActiveTabPath(path);
+    setTabs(prev => {
+      if (prev.some(tab => tab.file.path === normalizedPath)) return prev;
+      return [...prev, loadingTab];
+    });
+    setActiveTabPath(normalizedPath);
 
     try {
-      const res = await fetch(`/api/features/${encodeURIComponent(path)}`);
+      const res = await fetch(`/api/features/${encodeURIComponent(normalizedPath)}`);
       if (!res.ok) throw new Error('Failed to fetch');
       const data = await res.json();
       setTabs(prev => prev.map(tab =>
-        tab.file.path === path ? { ...tab, content: data.content, isLoading: false } : tab
+        tab.file.path === normalizedPath ? { ...tab, content: data.content, isLoading: false } : tab
       ));
     } catch {
       setTabs(prev => prev.map(tab =>
-        tab.file.path === path
-          ? { ...tab, content: t('editor.error_loading', { path }), isLoading: false }
+        tab.file.path === normalizedPath
+          ? { ...tab, content: t('editor.error_loading', { path: normalizedPath }), isLoading: false }
           : tab
       ));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tabs, t]);
+  }, [t]);
 
   // ── Initial Param Load ──────────────────────────────────────────
-  const lastOpenedFile = useRef<string | null>(null);
+  const fileToOpen = searchParams.get('file');
   React.useEffect(() => {
-    const fileToOpen = searchParams.get('file');
-    if (fileToOpen && fileToOpen !== lastOpenedFile.current) {
-      lastOpenedFile.current = fileToOpen;
+    if (fileToOpen) {
       handleFileSelect(fileToOpen);
     }
-  }, [searchParams, handleFileSelect]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fileToOpen]);
 
   // ── Editor change ────────────────────────────────────────────────
   const handleEditorChange = useCallback((value: string | undefined) => {
@@ -212,6 +226,7 @@ const FeatureEditorPage: React.FC = () => {
   // ── Close tab ────────────────────────────────────────────────────
   const handleCloseTab = useCallback((e: React.MouseEvent, path: string) => {
     e.stopPropagation();
+    openedFilesRef.current.delete(path);
     setTabs(prev => {
       const remaining = prev.filter(tab => tab.file.path !== path);
       if (path === activeTabPath) {
@@ -221,7 +236,13 @@ const FeatureEditorPage: React.FC = () => {
       return remaining;
     });
 
-    if (searchParams.get('file') === path) {
+    const currentParam = searchParams.get('file');
+    let normalizedParam = currentParam ? currentParam.replace(/\\/g, '/') : null;
+    if (normalizedParam && normalizedParam.startsWith('features/')) {
+      normalizedParam = normalizedParam.substring(9);
+    }
+
+    if (normalizedParam === path) {
       searchParams.delete('file');
       setSearchParams(searchParams, { replace: true });
     }
