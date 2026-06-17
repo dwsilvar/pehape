@@ -6,17 +6,18 @@ Este directorio contiene la aplicación frontend desarrollada con React y Vite.
 
 ## Configuración ⚙️
 
-El puerto de desarrollo y la conexión con el backend se pueden configurar en el archivo `app_config.json`.
+El puerto de desarrollo y la conexión con el backend se cargan desde el archivo compartido `config/network_config.json`:
 
 ```json
 {
-  "port": 3000,
-  "api_url": "http://localhost:5000"
+  "backend_host": "0.0.0.0",
+  "backend_port": 5001,
+  "frontend_port": 3000
 }
 ```
 
-- **port**: Puerto donde se ejecutará la interfaz web.
-- **api_url**: URL del servidor Backend (para el proxy de API).
+- **frontend_port**: Puerto donde se ejecutará la interfaz web de desarrollo (usando Vite).
+- **backend_port** y **backend_host**: Puerto y host del servidor Backend (para redirigir las llamadas del proxy de API).
 
 
 ## Ejecución

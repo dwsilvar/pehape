@@ -1,0 +1,6 @@
+{
+  "version": "1.3.0-dev",
+  "build_date": "2026-06-17",
+  "changelog": "Editor de features con syntax highlighting y explorer de archivos. Monitor de ejecucion en tiempo real. Fix SSE sin buffering. Matching de IDs en Test Sets. Monitor de ejecucion en tiempo real. Fix para evitar doble click.",
+  "min_base_version": "1.0.0"
+}

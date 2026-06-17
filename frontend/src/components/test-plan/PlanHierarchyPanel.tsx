@@ -1,19 +1,17 @@
 import React, { useState } from 'react';
 import {
   Box, Typography, TextField, IconButton, Tooltip, Collapse,
-  List, ListItemButton, ListItemIcon, ListItemText, ListItemSecondaryAction,
-  Paper, alpha, useTheme, Chip,
+  List, ListItemButton, ListItemIcon, ListItemText,
+  alpha, useTheme,
 } from '@mui/material';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
-import FolderRoundedIcon from '@mui/icons-material/FolderRounded';
-import FolderOpenRoundedIcon from '@mui/icons-material/FolderOpenRounded';
-import AccountTreeRoundedIcon from '@mui/icons-material/AccountTreeRounded';
 import ExpandLessRoundedIcon from '@mui/icons-material/ExpandLessRounded';
 import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
 import PlaylistAddRoundedIcon from '@mui/icons-material/PlaylistAddRounded';
 import { useTranslation } from 'react-i18next';
 import { TestPlan, TestCycle, TestFlow } from '../../types';
+import { PlanIcon, CycleIcon, FlowIcon } from '../PehapeIcons';
 
 interface PlanHierarchyPanelProps {
   plans: TestPlan[];
@@ -53,9 +51,15 @@ const PlanHierarchyPanel: React.FC<PlanHierarchyPanelProps> = ({
 
   const toggleExpand = (planId: string) => {
     setExpandedPlans(prev => {
-      const next = new Set(prev);
-      next.has(planId) ? next.delete(planId) : next.add(planId);
-      return next;
+      const isOpen = prev.has(planId);
+      // Accordion: collapse all others; toggle current
+      if (isOpen) {
+        return new Set<string>();
+      } else {
+        // Collapse cycles that belong to other plans when switching
+        setExpandedCycles(new Set<string>());
+        return new Set<string>([planId]);
+      }
     });
   };
 
@@ -118,7 +122,7 @@ const PlanHierarchyPanel: React.FC<PlanHierarchyPanelProps> = ({
           flexShrink: 0,
         }}
       >
-        <AccountTreeRoundedIcon sx={{ fontSize: 15, color: 'text.secondary' }} />
+        <PlanIcon size={15} color={theme.palette.text.secondary} />
         <Typography
           variant="overline"
           sx={{ flex: 1, fontSize: '0.62rem', letterSpacing: 1, color: 'text.secondary', fontWeight: 700 }}
@@ -182,9 +186,10 @@ const PlanHierarchyPanel: React.FC<PlanHierarchyPanelProps> = ({
                     }}
                   >
                     <ListItemIcon sx={{ minWidth: 24 }}>
-                      {isExpanded
-                        ? <FolderOpenRoundedIcon sx={{ fontSize: 16, color: 'primary.main' }} />
-                        : <FolderRoundedIcon sx={{ fontSize: 16, color: 'text.secondary' }} />}
+                      <PlanIcon
+                        size={20}
+                        color={isExpanded ? theme.palette.primary.main : theme.palette.text.secondary}
+                      />
                     </ListItemIcon>
                     <ListItemText
                       primary={`TP: ${plan.name}`}
@@ -277,7 +282,8 @@ const PlanHierarchyPanel: React.FC<PlanHierarchyPanelProps> = ({
                           <ListItemButton
                             dense
                             selected={isCycleSelected}
-                            onClick={() => {
+                            onClick={(e) => {
+                              toggleExpandCycle(cycle.id, e);
                               onSelectNode(plan.id, cycle.id, null);
                             }}
                             sx={{
@@ -289,16 +295,20 @@ const PlanHierarchyPanel: React.FC<PlanHierarchyPanelProps> = ({
                               },
                             }}
                           >
-                            <ListItemIcon sx={{ minWidth: 20 }}>
-                              <IconButton size="small" onClick={(e) => toggleExpandCycle(cycle.id, e)} sx={{ p: 0 }}>
-                                {isCycleExpanded ? <ExpandLessRoundedIcon sx={{ fontSize: 14, color: 'text.secondary' }} /> : <ExpandMoreRoundedIcon sx={{ fontSize: 14, color: 'text.secondary' }} />}
-                              </IconButton>
+                            <ListItemIcon sx={{ minWidth: 22, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                              <CycleIcon
+                                size={16}
+                                color={isCycleSelected ? theme.palette.primary.main : theme.palette.text.secondary}
+                              />
+                              {isCycleExpanded
+                                ? <ExpandLessRoundedIcon sx={{ fontSize: 12, color: 'text.disabled' }} />
+                                : <ExpandMoreRoundedIcon sx={{ fontSize: 12, color: 'text.disabled' }} />}
                             </ListItemIcon>
                             <ListItemText
                               primary={`TC: ${cycle.name}`}
                               primaryTypographyProps={{ sx: { fontSize: '0.75rem', fontWeight: isCycleSelected ? 600 : 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }}
                             />
-                            
+
                             <Box sx={{ display: 'flex', opacity: 0, '.MuiListItemButton-root:hover &': { opacity: 1 }, ml: 1, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
                               <Tooltip title={t('pages.testPlan.newFlow')}>
                                 <IconButton
@@ -370,7 +380,10 @@ const PlanHierarchyPanel: React.FC<PlanHierarchyPanelProps> = ({
                                   }}
                                 >
                                   <ListItemIcon sx={{ minWidth: 20 }}>
-                                    <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: isFlowSelected ? 'primary.main' : 'text.disabled', ml: 0.5 }} />
+                                    <FlowIcon
+                                      size={14}
+                                      color={isFlowSelected ? theme.palette.primary.main : theme.palette.text.disabled}
+                                    />
                                   </ListItemIcon>
                                   <ListItemText
                                     primary={`TF: ${flow.name}`}

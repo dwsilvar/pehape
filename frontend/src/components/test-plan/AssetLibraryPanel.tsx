@@ -6,11 +6,11 @@ import {
 } from '@mui/material';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
-import InsertDriveFileRoundedIcon from '@mui/icons-material/InsertDriveFileRounded';
 import LibraryBooksRoundedIcon from '@mui/icons-material/LibraryBooksRounded';
 import { useTranslation } from 'react-i18next';
 import { FeatureWithScenarios } from '../../types';
 import ScenarioLibraryCard from './ScenarioLibraryCard';
+import { FeatureIcon } from '../PehapeIcons';
 
 interface AssetLibraryPanelProps {
   features: FeatureWithScenarios[];
@@ -182,17 +182,18 @@ const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({ features, isLoadi
                   py: 0,
                   minHeight: 38,
                   '& .MuiAccordionSummary-content': { my: 0.5, alignItems: 'center', gap: 0.75 },
-                  bgcolor: alpha(theme.palette.action.hover, 0.5),
-                  '&:hover': { bgcolor: alpha(theme.palette.action.hover, 0.8) },
+                  bgcolor: alpha(theme.palette.primary.main, 0.06),
+                  '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.12) },
                 }}
               >
-                <InsertDriveFileRoundedIcon sx={{ fontSize: 14, color: 'primary.main', flexShrink: 0 }} />
+                <FeatureIcon size={15} color={theme.palette.primary.main} sx={{ flexShrink: 0 }} />
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography
                     variant="body2"
                     sx={{
                       fontSize: '0.73rem',
-                      fontWeight: 600,
+                      fontWeight: 700,
+                      color: 'primary.main',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
@@ -201,7 +202,7 @@ const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({ features, isLoadi
                     {feature.name}
                   </Typography>
                   {feature.featureTitle && feature.featureTitle !== feature.name.replace('.feature', '') && (
-                    <Typography variant="caption" sx={{ fontSize: '0.62rem', color: 'text.secondary', display: 'block' }}>
+                    <Typography variant="caption" sx={{ fontSize: '0.62rem', color: 'text.primary', opacity: 0.65, display: 'block' }}>
                       {feature.featureTitle}
                     </Typography>
                   )}

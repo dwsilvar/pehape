@@ -1,4 +1,5 @@
 @echo off
+set "PEHAPE_LAUNCHER=startall-standalone.bat"
 REM Script independiente para iniciar backend y frontend en modo standalone sin usar PowerShell
 REM Permite especificar una ruta personalizada de Node.js
 REM No requiere permisos de administrador
@@ -84,7 +85,7 @@ echo ========================================
 echo Ambos servidores se estan iniciando en ventanas separadas.
 echo Usando Node.js desde: %NODE_DIR%
 echo.
-echo Backend: http://localhost:5000
+echo Backend: http://localhost:5001
 echo Frontend: http://localhost:3000
 echo.
 echo Cierra las ventanas de los servidores para detenerlos.

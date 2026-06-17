@@ -20,7 +20,7 @@
  *   primary: #38BDF8  success: #22C55E  error: #EF4444  warning: #F59E0B
  */
 import React, { useState, useCallback, useRef } from 'react';
-import { Box, useTheme, Typography, IconButton, Tooltip } from '@mui/material';
+import { Box, useTheme, Typography, IconButton, Tooltip, Snackbar, Alert } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import FileExplorer from '../components/FileExplorer';
@@ -30,6 +30,8 @@ import CloseIcon from '@mui/icons-material/Close';
 import CircleIcon from '@mui/icons-material/Circle';
 import FolderOpenRoundedIcon from '@mui/icons-material/FolderOpenRounded';
 import CodeRoundedIcon from '@mui/icons-material/CodeRounded';
+import FileDownloadRoundedIcon from '@mui/icons-material/FileDownloadRounded';
+import FileUploadRoundedIcon from '@mui/icons-material/FileUploadRounded';
 
 // ── Shared accents (theme-invariant) ──────────────────────────────────────────
 const ACCENT = {
@@ -99,6 +101,22 @@ const FeatureEditorPage: React.FC = () => {
   const [tabs, setTabs] = useState<EditorTab[]>([]);
   const [activeTabPath, setActiveTabPath] = useState<string | null>(null);
 
+  // ── Opened files ref to prevent double opening race conditions ──
+  const openedFilesRef = useRef<Set<string>>(new Set());
+
+  // ── Explorer key state (for force refreshing explorer) ──────────
+  const [explorerKey, setExplorerKey] = useState(0);
+
+  // ── Snackbar notification state ─────────────────────────────────
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'info' | 'warning' | 'error';
+  }>({ open: false, message: '', severity: 'info' });
+
+  // ── File input reference for ZIP import ─────────────────────────
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // ── Resize state ────────────────────────────────────────────────
   const [isSidebarResizing, setIsSidebarResizing] = useState(false);
   const [explorerWidth, setExplorerWidth] = useState(260);
@@ -131,44 +149,55 @@ const FeatureEditorPage: React.FC = () => {
 
   // ── File selection ───────────────────────────────────────────────
   const handleFileSelect = useCallback(async (path: string) => {
-    const exists = tabs.find(tab => tab.file.path === path);
-    if (exists) { setActiveTabPath(path); return; }
+    // Normalizar la ruta del archivo (eliminar el prefijo 'features/' si existe)
+    let normalizedPath = path.replace(/\\/g, '/');
+    if (normalizedPath.startsWith('features/')) {
+      normalizedPath = normalizedPath.substring(9);
+    }
 
-    const name = path.split('/').pop() || path;
+    if (openedFilesRef.current.has(normalizedPath)) {
+      setActiveTabPath(normalizedPath);
+      return;
+    }
+    openedFilesRef.current.add(normalizedPath);
+
+    const name = normalizedPath.split('/').pop() || normalizedPath;
     const loadingTab: EditorTab = {
-      file: { name, path, type: 'file' },
-      content: t('editor.loading_file', { path }),
+      file: { name, path: normalizedPath, type: 'file' },
+      content: t('editor.loading_file', { path: normalizedPath }),
       isDirty: false, validationTexts: [], isLoading: true,
     };
-    setTabs(prev => [...prev, loadingTab]);
-    setActiveTabPath(path);
+    setTabs(prev => {
+      if (prev.some(tab => tab.file.path === normalizedPath)) return prev;
+      return [...prev, loadingTab];
+    });
+    setActiveTabPath(normalizedPath);
 
     try {
-      const res = await fetch(`/api/features/${encodeURIComponent(path)}`);
+      const res = await fetch(`/api/features/${encodeURIComponent(normalizedPath)}`);
       if (!res.ok) throw new Error('Failed to fetch');
       const data = await res.json();
       setTabs(prev => prev.map(tab =>
-        tab.file.path === path ? { ...tab, content: data.content, isLoading: false } : tab
+        tab.file.path === normalizedPath ? { ...tab, content: data.content, isLoading: false } : tab
       ));
     } catch {
       setTabs(prev => prev.map(tab =>
-        tab.file.path === path
-          ? { ...tab, content: t('editor.error_loading', { path }), isLoading: false }
+        tab.file.path === normalizedPath
+          ? { ...tab, content: t('editor.error_loading', { path: normalizedPath }), isLoading: false }
           : tab
       ));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tabs, t]);
+  }, [t]);
 
   // ── Initial Param Load ──────────────────────────────────────────
-  const lastOpenedFile = useRef<string | null>(null);
+  const fileToOpen = searchParams.get('file');
   React.useEffect(() => {
-    const fileToOpen = searchParams.get('file');
-    if (fileToOpen && fileToOpen !== lastOpenedFile.current) {
-      lastOpenedFile.current = fileToOpen;
+    if (fileToOpen) {
       handleFileSelect(fileToOpen);
     }
-  }, [searchParams, handleFileSelect]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fileToOpen]);
 
   // ── Editor change ────────────────────────────────────────────────
   const handleEditorChange = useCallback((value: string | undefined) => {
@@ -197,6 +226,7 @@ const FeatureEditorPage: React.FC = () => {
   // ── Close tab ────────────────────────────────────────────────────
   const handleCloseTab = useCallback((e: React.MouseEvent, path: string) => {
     e.stopPropagation();
+    openedFilesRef.current.delete(path);
     setTabs(prev => {
       const remaining = prev.filter(tab => tab.file.path !== path);
       if (path === activeTabPath) {
@@ -206,11 +236,96 @@ const FeatureEditorPage: React.FC = () => {
       return remaining;
     });
 
-    if (searchParams.get('file') === path) {
+    const currentParam = searchParams.get('file');
+    let normalizedParam = currentParam ? currentParam.replace(/\\/g, '/') : null;
+    if (normalizedParam && normalizedParam.startsWith('features/')) {
+      normalizedParam = normalizedParam.substring(9);
+    }
+
+    if (normalizedParam === path) {
       searchParams.delete('file');
       setSearchParams(searchParams, { replace: true });
     }
   }, [activeTabPath, searchParams, setSearchParams]);
+
+  // ── Export all features ──────────────────────────────────────────
+  const handleExportAllFeatures = useCallback(async () => {
+    try {
+      const response = await fetch('/api/export-all-features');
+      if (!response.ok) throw new Error('Failed to export features');
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'all_features.zip');
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode?.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      setSnackbar({
+        open: true,
+        message: 'Features exportados exitosamente.',
+        severity: 'success'
+      });
+    } catch (err) {
+      console.error('Error exporting features:', err);
+      setSnackbar({
+        open: true,
+        message: 'Error al exportar features.',
+        severity: 'error'
+      });
+    }
+  }, []);
+
+  // ── Import features ──────────────────────────────────────────────
+  const handleImportFeatures = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const file = files[0];
+    
+    e.target.value = '';
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      setSnackbar({
+        open: true,
+        message: 'Importando features...',
+        severity: 'info'
+      });
+      
+      const res = await fetch('/api/import-features', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.detail || 'Failed to import features');
+      }
+
+      const result = await res.json();
+      setSnackbar({
+        open: true,
+        message: result.message || 'Features importados correctamente.',
+        severity: 'success'
+      });
+
+      setExplorerKey(prev => prev + 1);
+    } catch (err) {
+      console.error('Error importing features:', err);
+      setSnackbar({
+        open: true,
+        message: err instanceof Error ? err.message : 'Error al importar features.',
+        severity: 'error'
+      });
+    }
+  }, []);
 
   // ── Validation texts ─────────────────────────────────────────────
   const handleValidationTextsChange = useCallback(
@@ -280,10 +395,43 @@ const FeatureEditorPage: React.FC = () => {
           >
             {t('common.file_explorer')}
           </Typography>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            accept=".zip"
+            style={{ display: 'none' }}
+          />
+          <Tooltip title={t('editor.import_features') || "Importar features (.zip)"}>
+            <IconButton
+              size="small"
+              onClick={handleImportFeatures}
+              sx={{
+                p: 0.25,
+                color: T.TEXT_MUTED,
+                '&:hover': { color: ACCENT.PRIMARY },
+              }}
+            >
+              <FileUploadRoundedIcon sx={{ fontSize: 16 }} />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title={t('editor.export_all_features') || "Exportar todos los features"}>
+            <IconButton
+              size="small"
+              onClick={handleExportAllFeatures}
+              sx={{
+                p: 0.25,
+                color: T.TEXT_MUTED,
+                '&:hover': { color: ACCENT.PRIMARY },
+              }}
+            >
+              <FileDownloadRoundedIcon sx={{ fontSize: 16 }} />
+            </IconButton>
+          </Tooltip>
         </Box>
 
         <Box sx={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
-          <FileExplorer onFileSelect={handleFileSelect} fontSize={13} />
+          <FileExplorer key={explorerKey} onFileSelect={handleFileSelect} fontSize={13} />
         </Box>
       </Box>
 
@@ -519,6 +667,21 @@ const FeatureEditorPage: React.FC = () => {
           )}
         </Box>
       </Box>
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert
+          onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+          severity={snackbar.severity}
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

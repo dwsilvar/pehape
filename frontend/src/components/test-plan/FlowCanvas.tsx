@@ -1,12 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import {
-  Box, Typography, alpha, useTheme, InputBase
+  Box, Typography, alpha, useTheme, InputBase, IconButton, Tooltip,
 } from '@mui/material';
 import AccountTreeRoundedIcon from '@mui/icons-material/AccountTreeRounded';
 import DragIndicatorRoundedIcon from '@mui/icons-material/DragIndicatorRounded';
 import AutoFixHighRoundedIcon from '@mui/icons-material/AutoFixHighRounded';
+import ViewAgendaRoundedIcon from '@mui/icons-material/ViewAgendaRounded';
+import ViewListRoundedIcon from '@mui/icons-material/ViewListRounded';
 import { useTranslation } from 'react-i18next';
 import { ScenarioRef, TestFlow } from '../../types';
 import ScenarioFlowNode from './ScenarioFlowNode';
@@ -29,6 +31,16 @@ const FlowCanvas: React.FC<FlowCanvasProps> = ({
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
+
+  const [compact, setCompact] = useState<boolean>(() => {
+    try { return localStorage.getItem('flowCanvas.compact') === 'true'; } catch { return false; }
+  });
+
+  const toggleCompact = () => setCompact(prev => {
+    const next = !prev;
+    try { localStorage.setItem('flowCanvas.compact', String(next)); } catch {}
+    return next;
+  });
 
   const { setNodeRef, isOver } = useDroppable({ id: DROPPABLE_ID, data: { type: 'flow-canvas' } });
 
@@ -115,6 +127,24 @@ const FlowCanvas: React.FC<FlowCanvasProps> = ({
             {t('pages.testPlan.canvas.scenariosCount', { count: scenarios.length })}
           </Typography>
         )}
+        <Tooltip title={compact ? 'Vista expandida' : 'Vista compacta'} placement="bottom">
+          <IconButton
+            size="small"
+            onClick={toggleCompact}
+            sx={{
+              p: 0.5,
+              borderRadius: 1,
+              color: compact ? 'primary.main' : 'text.secondary',
+              bgcolor: compact ? alpha(theme.palette.primary.main, 0.1) : 'transparent',
+              '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.1) },
+            }}
+          >
+            {compact
+              ? <ViewAgendaRoundedIcon sx={{ fontSize: 16 }} />
+              : <ViewListRoundedIcon sx={{ fontSize: 16 }} />
+            }
+          </IconButton>
+        </Tooltip>
       </Box>
 
       {/* Drop zone */}
@@ -184,7 +214,6 @@ const FlowCanvas: React.FC<FlowCanvasProps> = ({
           <SortableContext items={scenarios.map(s => s.id)} strategy={verticalListSortingStrategy}>
             {scenarios.map((scenario, index) => (
               <React.Fragment key={scenario.id}>
-                {/* Scenario card — mb removed so spacing is owned by connector */}
                 <ScenarioFlowNode
                   scenario={scenario}
                   index={index}
@@ -193,11 +222,10 @@ const FlowCanvas: React.FC<FlowCanvasProps> = ({
                   onRemove={onRemoveScenario}
                   onMoveUp={onMoveUp}
                   onMoveDown={onMoveDown}
+                  compact={compact}
                 />
-
-                {/* FlowConnector between adjacent nodes (strict_sequence)
-                    Not rendered after the last node */}
-                {index < scenarios.length - 1 && (
+                {/* FlowConnector only in expanded mode */}
+                {!compact && index < scenarios.length - 1 && (
                   <FlowConnector
                     index={index}
                     isBroken={false}

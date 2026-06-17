@@ -59,7 +59,7 @@ const RunningAppsPage: React.FC = () => {
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-            <AppToolbar title={t('pages.runningApps.title')} icon={<WindowIcon sx={{ fontSize: 32 }} />} />
+            <AppToolbar title={t('pages.runningApps.title')} icon={<WindowIcon sx={{ fontSize: 32 }} />} showControls={false} />
             <Box sx={{ p: 3, flex: 1, overflow: 'auto' }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                     <Typography variant="subtitle1" sx={{ color: 'text.secondary' }}>

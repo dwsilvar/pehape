@@ -1,8 +1,7 @@
 import React, { useState, useCallback } from 'react';
-import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
-import { Box } from '@mui/material';
-import { DndContext, DragEndEvent, DragStartEvent, DragOverEvent, useSensor, useSensors, PointerSensor, TouchSensor } from '@dnd-kit/core';
-import { arrayMove } from '@dnd-kit/sortable';
+import { createBrowserRouter, RouterProvider, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { Box, Alert, Button } from '@mui/material';
+import { DndContext, DragEndEvent, DragStartEvent, useSensor, useSensors, PointerSensor, TouchSensor } from '@dnd-kit/core';
 import Sidebar from './components/Sidebar';
 import AppNavbar from './components/AppNavbar';
 import HomePage from './pages/HomePage';
@@ -13,7 +12,9 @@ import RunningAppsPage from './pages/RunningAppsPage';
 import ReportsPage from './pages/ReportsPage';
 import FeatureEditorPage from './pages/FeatureEditorPage';
 import TestPlanPage from './pages/TestPlanPage';
-import { useExecutionOrder } from './hooks/useExecutionOrder';
+import ExecutionPage from './pages/ExecutionPage';
+import ConceptsGuidePage from './pages/ConceptsGuidePage';
+import SettingsPage from './pages/SettingsPage';
 
 import { LayoutProvider, useLayout } from './context/LayoutContext';
 import { ThemeProvider, CssBaseline } from '@mui/material';
@@ -38,31 +39,40 @@ const ThemeWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 
 const AppLayout: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
-  const { modules, setModules } = useExecutionOrder();
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [updateVersion, setUpdateVersion] = useState('');
 
-  // Drag and Drop State (Lifted up because FileExplorer is in Sidebar and DropTarget is in HomePage)
+  // Drag and Drop State (File Explorer -> Editor)
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [draggedItemPath, setDraggedItemPath] = useState<string | null>(null);
-  const [, setIsOverExecutionOrder] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+  const isTestPlanVisible = location.pathname === '/';
+  const isExecutionVisible = location.pathname === '/execution';
+
+  React.useEffect(() => {
+    const checkUpdateStatus = async () => {
+      try {
+        const res = await fetch('/api/update/status');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.local_update_available) {
+            setUpdateAvailable(true);
+            setUpdateVersion(data.local_update_version);
+          } else {
+            setUpdateAvailable(false);
+          }
+        }
+      } catch (e) {
+        console.error("Error checking updates on mount:", e);
+      }
+    };
+    checkUpdateStatus();
+  }, [location.pathname]);
 
   const handleFileSelect = (path: string) => {
     setSelectedFile(path);
     navigate('/'); // Ensure we are looking at the editor
-  };
-
-  const onSaveModules = async (modulesToSave?: any) => {
-    const dataToSave = modulesToSave || modules;
-    if (modulesToSave) setModules(modulesToSave);
-    try {
-      await fetch('/api/modules', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(dataToSave)
-      });
-    } catch (e) {
-      console.error('Failed to save modules', e);
-    }
   };
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -73,110 +83,10 @@ const AppLayout: React.FC = () => {
     }
   };
 
-  const handleDragOver = (event: DragOverEvent) => {
-    const { over } = event;
-    const overId = over?.id;
-    const isOverModule = typeof overId === 'string' && overId.startsWith('module-drop-area-');
-    setIsOverExecutionOrder(overId === 'execution-order-droppable-area' || isOverModule);
-  };
-
   const handleDragEnd = useCallback(async (event: DragEndEvent) => {
-    const { active, over } = event;
-
-    if (!over) {
-      setActiveDragId(null);
-      setDraggedItemPath(null);
-      setIsOverExecutionOrder(false);
-      return;
-    }
-
-    // Logic 1: File Explorer -> Module (Add Feature)
-    if (active.data.current?.type === 'file-explorer-feature' && over?.data.current?.moduleName) {
-      const featurePath = active.data.current.path;
-      const moduleName = over.data.current.moduleName;
-
-      try {
-        const response = await fetch(`/api/modules/${encodeURIComponent(moduleName)}/features`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ path: featurePath }),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to add feature to module');
-        }
-
-        const updatedModules = await response.json();
-        setModules(updatedModules);
-
-      } catch (error) {
-        console.error('Error al agregar el feature:', error);
-      }
-    }
-
-    // Logic 2: Reordenar Módulos
-    if (active.data.current?.type === 'module' && over.data.current?.type === 'module' && active.id !== over.id) {
-      setModules((prev) => {
-        const oldIndex = prev.findIndex(m => m.module_name === active.id);
-        const newIndex = prev.findIndex(m => m.module_name === over.id);
-        if (oldIndex === -1 || newIndex === -1) return prev;
-
-        const newModules = arrayMove(prev, oldIndex, newIndex).map((m, i) => ({
-          ...m,
-          order: i + 1
-        }));
-
-        // Notificar al backend (disparar y olvidar o manejar error)
-        fetch('/api/modules', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(newModules)
-        }).catch(err => console.error('Error al guardar el nuevo orden de módulos:', err));
-
-        return newModules;
-      });
-    }
-
-    // Logic 3: Reordenar Features dentro de un módulo
-    if (active.data.current?.type === 'feature' && over.data.current?.type === 'feature' && active.id !== over.id) {
-      const activeContainer = active.data.current.sortable.containerId;
-      const overContainer = over.data.current.sortable.containerId;
-
-      if (activeContainer === overContainer) {
-        setModules((prev) => {
-          const moduleName = activeContainer;
-          return prev.map(m => {
-            if (m.module_name === moduleName) {
-              const oldIndex = m.features.findIndex(f => f.id === active.id);
-              const newIndex = m.features.findIndex(f => f.id === over.id);
-              if (oldIndex === -1 || newIndex === -1) return m;
-
-              const newFeatures = arrayMove(m.features, oldIndex, newIndex).map((f, i) => ({
-                ...f,
-                order: i + 1
-              }));
-
-              // Notificar al backend
-              const featuresToSave = newFeatures.map(({ display_tags, scenarios, color, ...rest }) => rest);
-              fetch(`/api/modules/${encodeURIComponent(moduleName)}/features/reorder`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(featuresToSave),
-              }).catch(err => console.error('Error al guardar el nuevo orden de features:', err));
-
-              return { ...m, features: newFeatures };
-            }
-            return m;
-          });
-        });
-      }
-    }
-
     setActiveDragId(null);
     setDraggedItemPath(null);
-    setIsOverExecutionOrder(false);
-  }, [setModules]);
+  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -184,21 +94,36 @@ const AppLayout: React.FC = () => {
   );
 
   return (
-    <DndContext sensors={sensors} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
+    <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
         <Sidebar />
         <Box sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          {updateAvailable && (
+            <Alert 
+              severity="info" 
+              action={
+                <Button color="inherit" size="small" onClick={() => navigate('/settings')}>
+                  Ver Detalles
+                </Button>
+              }
+              sx={{ borderRadius: 0 }}
+            >
+              Nueva versión de la aplicación disponible localmente (v{updateVersion}).
+            </Alert>
+          )}
           <AppNavbar />
+          <Box sx={{ display: isTestPlanVisible ? 'flex' : 'none', flex: 1, overflow: 'hidden', flexDirection: 'column' }}>
+            <TestPlanPage />
+          </Box>
+          <Box sx={{ display: isExecutionVisible ? 'flex' : 'none', flex: 1, overflow: 'hidden', flexDirection: 'column' }}>
+            <ExecutionPage />
+          </Box>
           <Routes>
-            <Route path="/" element={<TestPlanPage />} />
             <Route path="/editor" element={
               <HomePage
                 selectedFile={selectedFile}
                 draggedItemPath={draggedItemPath}
                 activeDragId={activeDragId}
-                modules={modules}
-                setModules={setModules}
-                onSaveModules={onSaveModules}
               />
             } />
             <Route path="/maintenance" element={<MaintenancePage />} />
@@ -207,6 +132,8 @@ const AppLayout: React.FC = () => {
             <Route path="/running-apps" element={<RunningAppsPage />} />
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/feature-editor" element={<FeatureEditorPage />} />
+            <Route path="/guide" element={<ConceptsGuidePage />} />
+            <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </Box>
       </Box>
@@ -214,15 +141,20 @@ const AppLayout: React.FC = () => {
   );
 };
 
+const router = createBrowserRouter([
+  {
+    path: '*',
+    element: <AppLayout />
+  }
+]);
+
 const App: React.FC = () => {
   return (
-    <BrowserRouter>
-      <LayoutProvider>
-        <ThemeWrapper>
-          <AppLayout />
-        </ThemeWrapper>
-      </LayoutProvider>
-    </BrowserRouter>
+    <LayoutProvider>
+      <ThemeWrapper>
+        <RouterProvider router={router} />
+      </ThemeWrapper>
+    </LayoutProvider>
   );
 };
 

@@ -1,27 +1,33 @@
 /**
  * FlowConnector — conforms to test-flow-connector-logic-v1
  *
- * visual_spec:
+ * modes:
+ *   sequential   → flecha animada hacia abajo (Fail-Fast real, solo en canvas de Flows)
+ *   independent  → separador neutro punteado (Cycles/Sets/Plans — sin dependencia de ejecución)
+ *
+ * visual_spec (sequential):
  *   type               → vertical-arrow-line (SVG line + arrowhead)
  *   thickness          → 2px stroke
- *   color              → #334155 (slate-700, adapts to light/dark)
  *   animation          → dash-flow-active (animated stroke-dashoffset, flowing downward)
- *   spacing_between_nodes → 20px (margin top/bottom handled by FlowCanvas)
  *
- * logic:
- *   execution_direction → downward (arrowhead at bottom)
- *   dependency_rule     → strict_sequence (label "NEXT →" below arrow)
- *   error_propagation   → break_flow_on_failure
- *                         (if isBroken=true: line turns red, dashes stop, shows ✕ badge)
+ * visual_spec (independent):
+ *   type               → vertical-dashed-separator (no arrow, no animation)
+ *   thickness          → 1px stroke, opacity 0.35
+ *   tooltip            → "Sin dependencia — ejecución independiente"
  */
 import React from 'react';
-import { Box, Tooltip, useTheme, alpha } from '@mui/material';
+import { Box, Tooltip, useTheme } from '@mui/material';
 
 interface FlowConnectorProps {
-  /** If true, renders in error/break state (break_flow_on_failure) */
+  /** If true, renders in error/break state (break_flow_on_failure). Only applies in sequential mode. */
   isBroken?: boolean;
   /** Index of the connector (between node[index] and node[index+1]) */
   index?: number;
+  /**
+   * sequential  → animated arrow (Fail-Fast dependency between Scenarios in a Flow)
+   * independent → neutral dashed separator (no execution dependency: Plan/Cycle/Set contexts)
+   */
+  mode?: 'sequential' | 'independent';
 }
 
 // Visual constants from schema
@@ -32,7 +38,7 @@ const THICKNESS        = 2;           // schema: thickness = 2px
 const CONNECTOR_HEIGHT = 48;          // total SVG height (includes arrowhead + spacing)
 const ARROW_HEAD_SIZE  = 7;
 
-const FlowConnector: React.FC<FlowConnectorProps> = ({ isBroken = false, index = 0 }) => {
+const FlowConnector: React.FC<FlowConnectorProps> = ({ isBroken = false, index = 0, mode = 'sequential' }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
 
@@ -42,19 +48,56 @@ const FlowConnector: React.FC<FlowConnectorProps> = ({ isBroken = false, index =
   const arrowId    = `arrow-head-${index}`;
 
   // SVG geometry
-  const cx = 50;          // center X (%)
-  const lineTop    = 4;
-  const lineBottom = CONNECTOR_HEIGHT - ARROW_HEAD_SIZE - 4;
-  const arrowTip   = CONNECTOR_HEIGHT - 4;
+  const cx = 20;          // center X (out of 40)
+  const lineTop    = 0;
+  const lineBottom = CONNECTOR_HEIGHT - ARROW_HEAD_SIZE;
+  const arrowTip   = CONNECTOR_HEIGHT;
   const dashLen    = 6;
   const gapLen     = 4;
 
+  // ── Independent mode: neutral dashed separator ────────────────────────────
+  if (mode === 'independent') {
+    const sepColor = isDark ? 'rgba(148,163,184,0.2)' : 'rgba(100,116,139,0.18)';
+    return (
+      <Tooltip
+        title="Sin dependencia — ejecución independiente"
+        placement="right"
+        arrow
+        enterDelay={700}
+      >
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            width: '40px',
+            mx: 'auto',
+            my: 0,
+            userSelect: 'none',
+          }}
+        >
+          <svg width="40" height="32" viewBox="0 0 40 32" aria-hidden="true">
+            <line
+              x1="20" y1="0"
+              x2="20" y2="32"
+              stroke={sepColor}
+              strokeWidth="1"
+              strokeDasharray="3 4"
+              strokeLinecap="round"
+            />
+          </svg>
+        </Box>
+      </Tooltip>
+    );
+  }
+
+  // ── Sequential mode: animated arrow (Fail-Fast) ───────────────────────────
   return (
     <Tooltip
       title={
         isBroken
           ? 'Flujo interrumpido — error_propagation: break_flow_on_failure'
-          : 'Secuencia estricta — strict_sequence (execution_direction: downward)'
+          : 'Fail-Fast — un fallo aquí omite los Scenarios siguientes del Flow'
       }
       placement="right"
       arrow
@@ -66,8 +109,7 @@ const FlowConnector: React.FC<FlowConnectorProps> = ({ isBroken = false, index =
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          width: '320px',    // matches node width so connector centers under the card
-          maxWidth: '400px',
+          width: '40px',     // narrow width to keep SVG centered
           mx: 'auto',        // centered_in_sequence
           my: 0,             // vertical spacing handled by ScenarioFlowNode mb + this svg height
           position: 'relative',
@@ -77,8 +119,8 @@ const FlowConnector: React.FC<FlowConnectorProps> = ({ isBroken = false, index =
         <svg
           width="100%"
           height={CONNECTOR_HEIGHT}
-          viewBox={`0 0 100 ${CONNECTOR_HEIGHT}`}
-          preserveAspectRatio="xMidYMid meet"
+          viewBox={`0 0 40 ${CONNECTOR_HEIGHT}`}
+          preserveAspectRatio="none"
           aria-hidden="true"
         >
           <defs>

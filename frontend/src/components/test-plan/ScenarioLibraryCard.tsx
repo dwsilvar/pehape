@@ -7,6 +7,7 @@ import {
 import DragIndicatorRoundedIcon from '@mui/icons-material/DragIndicatorRounded';
 import { useTranslation } from 'react-i18next';
 import { ScenarioMeta } from '../../types';
+import { ScenarioIcon } from '../PehapeIcons';
 
 interface ScenarioLibraryCardProps {
   featurePath: string;
@@ -76,7 +77,32 @@ const ScenarioLibraryCard: React.FC<ScenarioLibraryCardProps> = ({
   );
 
   return (
-    <Tooltip title={tooltipContent} placement="left" arrow enterDelay={400}>
+    <Tooltip
+      title={tooltipContent}
+      placement="left"
+      arrow
+      enterDelay={400}
+      slotProps={{
+        tooltip: {
+          sx: {
+            bgcolor: 'background.paper',
+            color: 'text.primary',
+            border: '1px solid',
+            borderColor: 'divider',
+            boxShadow: theme.shadows[4],
+            borderRadius: '8px',
+            p: 1.25,
+            '& .MuiTooltip-arrow': {
+              color: 'background.paper',
+              '&::before': {
+                border: '1px solid',
+                borderColor: 'divider',
+              },
+            },
+          },
+        },
+      }}
+    >
       <Paper
         ref={setNodeRef}
         style={style}
@@ -113,20 +139,27 @@ const ScenarioLibraryCard: React.FC<ScenarioLibraryCardProps> = ({
         />
 
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          {/* Scenario name */}
-          <Typography
-            variant="body2"
-            sx={{
-              fontSize: '0.75rem',
-              fontWeight: 600,
-              color: 'text.primary',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {scenario.name}
-          </Typography>
+          {/* Scenario name with L5 icon */}
+          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
+            <ScenarioIcon
+              size={13}
+              color={theme.palette.text.secondary}
+              sx={{ flexShrink: 0, mt: '2px', opacity: 0.75 }}
+            />
+            <Typography
+              variant="body2"
+              sx={{
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                color: 'text.primary',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {scenario.name}
+            </Typography>
+          </Box>
 
           {/* Tags */}
           {scenario.tags.length > 0 && (

@@ -1,7 +1,7 @@
 import { FC, useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import i18n from '../i18n';
-import { Box, Typography, Button, List, ListItem, ListItemText, IconButton, Chip, Paper, CircularProgress, Snackbar, Alert } from '@mui/material';
+import { Box, Typography, Button, List, ListItem, ListItemText, IconButton, Chip, Paper, CircularProgress, Snackbar, Alert, Menu, MenuItem } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import DeleteIcon from '@mui/icons-material/Delete';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -48,6 +48,10 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
   const [detectedTag, setDetectedTag] = useState<string | null>(null);
   const [localValidationTexts, setLocalValidationTexts] = useState<string[]>(validationTexts);
 
+  // States for Keyword Association Menu
+  const [associationAnchorEl, setAssociationAnchorEl] = useState<null | HTMLElement>(null);
+  const [selectedStepForAssociation, setSelectedStepForAssociation] = useState<{ pattern: string; location: string } | null>(null);
+
   // States for Gherkin Validation and Suggestions
   const [stepCatalog, setStepCatalog] = useState<{ type: string; pattern: string; location: string }[]>([]);
   const [isValidating, setIsValidating] = useState(false);
@@ -58,6 +62,7 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
     valid: boolean;
     undefined_steps: { keyword: string; name: string; note?: string }[];
     snippets: string[];
+    error?: string | null;
   } | null>(null);
   const [monacoInstance, setMonacoInstance] = useState<any>(null);
   const [editorInstance, setEditorInstance] = useState<any>(null);
@@ -715,6 +720,44 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
     }
   };
 
+  const handleAssociateKeyword = async (targetKeyword: string) => {
+    if (!selectedStepForAssociation) return;
+    try {
+      const response = await fetch('/api/steps/associate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pattern: selectedStepForAssociation.pattern,
+          location: selectedStepForAssociation.location,
+          keyword: targetKeyword
+        })
+      });
+      if (response.ok) {
+        // Refresh catalog
+        const catRes = await fetch('/api/steps/catalog');
+        if (catRes.ok) {
+          const freshCatalog = await catRes.json();
+          setStepCatalog(freshCatalog);
+        }
+        setSnackbarSeverity('success');
+        setSnackbarMessage(`Paso asociado correctamente como ${targetKeyword.toUpperCase()}`);
+        setSnackbarOpen(true);
+      } else {
+        const errData = await response.json();
+        setSnackbarSeverity('error');
+        setSnackbarMessage(`Error al asociar: ${errData.detail || 'Fallo desconocido'}`);
+        setSnackbarOpen(true);
+      }
+    } catch (err: any) {
+      setSnackbarSeverity('error');
+      setSnackbarMessage(`Error de conexión: ${err.message}`);
+      setSnackbarOpen(true);
+    } finally {
+      setAssociationAnchorEl(null);
+      setSelectedStepForAssociation(null);
+    }
+  };
+
   const handleValidate = async () => {
     if (!selectedFile || !monacoInstance || !editorInstance) return;
 
@@ -967,15 +1010,38 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
           {/* Error Alert */}
           {selectedFile && validationResult && !validationResult.valid && (
             <Paper elevation={3} sx={{ p: 1.5, borderTop: 1, borderColor: 'error.main', bgcolor: 'error.dark', color: 'white' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <ErrorOutlineIcon sx={{ mr: 1 }} />
-                <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
-                  {t('editor.validation_failed', { count: validationResult.undefined_steps.length })}
-                </Typography>
-                <Box sx={{ flexGrow: 1 }} />
-                <IconButton size="small" color="inherit" onClick={() => setValidationResult(null)}>
-                  <CloseIcon fontSize="small" />
-                </IconButton>
+              <Box sx={{ display: 'flex', alignItems: 'flex-start', flexDirection: 'column', gap: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                  <ErrorOutlineIcon sx={{ mr: 1 }} />
+                  <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                    {validationResult.error 
+                      ? "Error de ejecución al validar el feature"
+                      : t('editor.validation_failed', { count: validationResult.undefined_steps.length })}
+                  </Typography>
+                  <Box sx={{ flexGrow: 1 }} />
+                  <IconButton size="small" color="inherit" onClick={() => setValidationResult(null)}>
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
+                </Box>
+                {validationResult.error && (
+                  <Typography
+                    variant="caption"
+                    component="pre"
+                    sx={{
+                      width: '100%',
+                      p: 1,
+                      bgcolor: 'rgba(0,0,0,0.2)',
+                      borderRadius: 1,
+                      fontFamily: 'monospace',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-all',
+                      maxHeight: 120,
+                      overflowY: 'auto'
+                    }}
+                  >
+                    {validationResult.error}
+                  </Typography>
+                )}
               </Box>
             </Paper>
           )}
@@ -1228,6 +1294,12 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
                         }}>
                           <ContentCopyIcon fontSize="small" />
                         </IconButton>
+                        <IconButton size="small" title="Asociar a otro keyword" onClick={(e) => {
+                          setAssociationAnchorEl(e.currentTarget);
+                          setSelectedStepForAssociation(step);
+                        }}>
+                          <LinkIcon fontSize="small" />
+                        </IconButton>
                       </ListItem>
                     );
                   })}
@@ -1236,6 +1308,19 @@ export const FeatureEditor: FC<FeatureEditorProps> = ({ selectedFile, editorCont
           </Box>
         </Paper>
       )}
+
+      <Menu
+        anchorEl={associationAnchorEl}
+        open={Boolean(associationAnchorEl)}
+        onClose={() => {
+          setAssociationAnchorEl(null);
+          setSelectedStepForAssociation(null);
+        }}
+      >
+        <MenuItem onClick={() => handleAssociateKeyword('given')}>Asociar como GIVEN (Dado)</MenuItem>
+        <MenuItem onClick={() => handleAssociateKeyword('when')}>Asociar como WHEN (Cuando)</MenuItem>
+        <MenuItem onClick={() => handleAssociateKeyword('then')}>Asociar como THEN (Entonces)</MenuItem>
+      </Menu>
 
       <ImageUploadDialog
         open={uploadDialogOpen}

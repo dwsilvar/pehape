@@ -52,8 +52,7 @@ def step_impl_click_element_in_app(context, app_name, element_name):
     folder_step_path =get_image_path_from_feature_and_tag(dirpath, scenario_tags, element_name, None)
     success = executor.driver.click_on_element_by_text_in_app(element_name, app_name, folder_step_path)
     assert success, f"Could not click on the element '{element_name}' in the application '{app_name}'."
-
-
+@then('escribo "{text_to_type}" en el campo "{field_name}"')
 @when('escribo "{text_to_type}" en el campo "{field_name}"')
 def step_impl_type_in_field(context, text_to_type, field_name):
     """

@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import {
-  Box, Typography, IconButton, Tooltip, alpha, useTheme, Button
+  Box, Typography, IconButton, Tooltip, alpha, useTheme, Button, CircularProgress
 } from '@mui/material';
 import ExpandLessRoundedIcon from '@mui/icons-material/ExpandLessRounded';
 import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
@@ -16,21 +16,26 @@ interface ExecutionDrawerProps {
   taskId: string | null;
   onExecutionFinished: () => void;
   onStatusChange?: (status: string) => void;
+  onReportGenerating?: (generating: boolean) => void;
 }
 
 const DRAWER_HEIGHT = 220;
 const HANDLE_HEIGHT = 36;
 
-const ExecutionDrawer: React.FC<ExecutionDrawerProps> = ({ isOpen, onToggle, taskId, onExecutionFinished, onStatusChange }) => {
+const ExecutionDrawer: React.FC<ExecutionDrawerProps> = ({ isOpen, onToggle, taskId, onExecutionFinished, onStatusChange, onReportGenerating }) => {
   const { t } = useTranslation();
   const theme = useTheme();
   const navigate = useNavigate();
   const logRef = useRef<HTMLDivElement>(null);
+  const onExecutionFinishedRef = useRef(onExecutionFinished);
+  useEffect(() => { onExecutionFinishedRef.current = onExecutionFinished; }, [onExecutionFinished]);
+
   const [logs, setLogs] = useState<string[]>([]);
   const [isDone, setIsDone] = useState<boolean>(false);
   const [execStatus, setExecStatus] = useState<string>('pending');
   const [scheduledAt, setScheduledAt] = useState<string | null>(null);
   const [countdown, setCountdown] = useState<string>('');
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
   useEffect(() => {
     if (!taskId) {
@@ -38,6 +43,8 @@ const ExecutionDrawer: React.FC<ExecutionDrawerProps> = ({ isOpen, onToggle, tas
       setIsDone(false);
       setExecStatus('pending');
       setScheduledAt(null);
+      setIsGeneratingReport(false);
+      onReportGenerating?.(false);
       onStatusChange?.('idle');
       return;
     }
@@ -71,11 +78,28 @@ const ExecutionDrawer: React.FC<ExecutionDrawerProps> = ({ isOpen, onToggle, tas
           onStatusChange?.(data.status);
         }
         if (data.line) {
+          // Detect structured allure_report events embedded in log lines
+          try {
+            const ev = JSON.parse(data.line);
+            if (ev.type === 'allure_report') {
+              if (ev.status === 'generating') {
+                setIsGeneratingReport(true);
+                onReportGenerating?.(true);
+              } else if (ev.status === 'ready') {
+                setIsGeneratingReport(false);
+                onReportGenerating?.(false);
+              }
+              return; // Don't add this JSON line to the visible log
+            }
+          } catch { /* not a structured event, render as plain log */ }
+
           setLogs(prev => [...prev, data.line]);
         }
         if (data.done) {
+          setIsGeneratingReport(false);
+          onReportGenerating?.(false);
           setIsDone(true);
-          onExecutionFinished();
+          onExecutionFinishedRef.current();
           es.close();
         }
       } catch (err) {
@@ -86,14 +110,16 @@ const ExecutionDrawer: React.FC<ExecutionDrawerProps> = ({ isOpen, onToggle, tas
     es.onerror = () => {
       setLogs(prev => [...prev, '> Error de conexión con el stream de logs.']);
       setIsDone(true);
-      onExecutionFinished();
+      onExecutionFinishedRef.current();
       es.close();
     };
 
     return () => {
       es.close();
     };
-  }, [taskId, onExecutionFinished]);
+  // onStatusChange is intentionally excluded: it comes from setState (stable)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskId]);
 
   // Countdown timer
   useEffect(() => {
@@ -253,6 +279,42 @@ const ExecutionDrawer: React.FC<ExecutionDrawerProps> = ({ isOpen, onToggle, tas
                 {log}
               </Typography>
             ))
+          )}
+
+          {/* ── Allure report generation indicator ── */}
+          {isGeneratingReport && (
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1.5,
+                mt: 1.5,
+                px: 1.5,
+                py: 1,
+                borderRadius: 1,
+                border: '1px solid',
+                borderColor: alpha('#818cf8', 0.35),
+                bgcolor: alpha('#818cf8', 0.08),
+                animation: 'pulse 1.8s ease-in-out infinite',
+                '@keyframes pulse': {
+                  '0%, 100%': { opacity: 1 },
+                  '50%': { opacity: 0.6 },
+                },
+              }}
+            >
+              <CircularProgress size={13} thickness={4} sx={{ color: '#818cf8', flexShrink: 0 }} />
+              <Typography
+                sx={{
+                  fontFamily: 'inherit',
+                  fontSize: 'inherit',
+                  color: '#818cf8',
+                  fontWeight: 600,
+                  letterSpacing: 0.3,
+                }}
+              >
+                Generando reporte Allure...
+              </Typography>
+            </Box>
           )}
 
           {isDone && (

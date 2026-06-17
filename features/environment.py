@@ -39,8 +39,45 @@ def before_scenario(context, scenario):
     """
     Este hook se ejecuta ANTES de cada escenario.
     Imprime un JSON para notificar al frontend que el escenario está "running".
+    También inyecta labels de Allure con el contexto del ciclo/flow del orquestador.
     """
-    feature_id = context.config.userdata.get("feature_id", "unknown_feature")
+    ud = context.config.userdata
+
+    # ── Allure labels: diferenciar por Cycle y Flow en la vista de matriz ────
+    cycle_name     = ud.get("orch_cycle_name",     "")
+    flow_name      = ud.get("orch_flow_name",      "")
+    cycle_id       = ud.get("orch_cycle_id",       "")
+    flow_id        = ud.get("orch_flow_id",        "")
+    scenario_id    = ud.get("orch_scenario_id",    "")
+    instance_index = int(ud.get("orch_instance_index", "1"))
+
+    if cycle_name:
+        allure.dynamic.epic(cycle_name)        # Nivel 1: Test Cycle
+    if flow_name:
+        allure.dynamic.story(flow_name)        # Nivel 2: Test Flow
+    if cycle_name or flow_name:
+        # Parámetro visible en la vista de Matriz/Tabla de Allure
+        context_label = " › ".join(filter(None, [cycle_name, flow_name]))
+        allure.dynamic.parameter("Ejecución", context_label)
+        # Tag adicional para trazabilidad en los filtros
+        allure.dynamic.tag(f"cycle:{cycle_id or cycle_name}")
+        allure.dynamic.tag(f"flow:{flow_id or flow_name}")
+
+    # ── Instancia: cuando el mismo escenario aparece más de una vez en el plan ──
+    # El parámetro "Instancia" se añade SIEMPRE que el escenario venga del orquestador
+    # (es decir, cuando scenario_id está presente). Esto asegura que Allure calcule
+    # un historyId distinto por slot del plan, evitando que dos ejecuciones del mismo
+    # escenario sean agrupadas como "retries" en lugar de tests independientes.
+    if scenario_id:
+        # Únicamente modifica el título en Allure si hay repetición (evita noise en caso único)
+        if instance_index > 1:
+            allure.dynamic.title(f"{scenario.name} (Instancia #{instance_index})")
+        # El parámetro siempre se añade → afecta historyId → tests son independientes en Allure
+        allure.dynamic.parameter("Instancia", str(instance_index))
+        allure.dynamic.parameter("scenario_id", scenario_id[:8])  # Prefijo UUID (brevedad)
+        allure.dynamic.tag(f"instance:{scenario_id[:8]}")
+
+    feature_id = ud.get("feature_id", "unknown_feature")
     status_report = {
         "type": "scenario_status",
         "feature_id": feature_id,
@@ -48,6 +85,7 @@ def before_scenario(context, scenario):
         "status": "running"
     }
     print(json.dumps(status_report), flush=True)
+
 
     # Setup for GIF generation: Create a temp directory for this scenario run
     timestamp = int(time.time())
