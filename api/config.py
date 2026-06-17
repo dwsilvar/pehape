@@ -49,6 +49,7 @@ RESOURCES_DIR      = PROJECT_ROOT / "resources"
 IMAGES_DIR         = RESOURCES_DIR / "images"
 ALLURE_RESULTS     = PROJECT_ROOT / "reports" / "allure_results"
 ALLURE_REPORT      = PROJECT_ROOT / "reports" / "allure-report"
+EXECUTIONS_DIR     = PROJECT_ROOT / "reports" / "executions"
 ORCHESTRATOR       = PROJECT_ROOT / "orchestrator.py"
 
 
@@ -57,6 +58,7 @@ FEATURES_DIR.mkdir(parents=True, exist_ok=True)
 IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 ALLURE_RESULTS.mkdir(parents=True, exist_ok=True)
 ALLURE_REPORT.mkdir(parents=True, exist_ok=True)
+EXECUTIONS_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── FastAPI application ────────────────────────────────────────────────────────
 

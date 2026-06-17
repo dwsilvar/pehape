@@ -48,6 +48,7 @@ const AppLayout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const isTestPlanVisible = location.pathname === '/';
+  const isExecutionVisible = location.pathname === '/execution';
 
   React.useEffect(() => {
     const checkUpdateStatus = async () => {
@@ -114,6 +115,9 @@ const AppLayout: React.FC = () => {
           <Box sx={{ display: isTestPlanVisible ? 'flex' : 'none', flex: 1, overflow: 'hidden', flexDirection: 'column' }}>
             <TestPlanPage />
           </Box>
+          <Box sx={{ display: isExecutionVisible ? 'flex' : 'none', flex: 1, overflow: 'hidden', flexDirection: 'column' }}>
+            <ExecutionPage />
+          </Box>
           <Routes>
             <Route path="/editor" element={
               <HomePage
@@ -122,7 +126,6 @@ const AppLayout: React.FC = () => {
                 activeDragId={activeDragId}
               />
             } />
-            <Route path="/execution" element={<ExecutionPage />} />
             <Route path="/maintenance" element={<MaintenancePage />} />
             <Route path="/tasks" element={<TasksPage />} />
             <Route path="/ocr-resources" element={<OCRResourcesPage />} />

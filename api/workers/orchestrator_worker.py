@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from threading import Lock
 from typing import Dict, List, Optional
 
-from api.config import ALLURE_REPORT, ALLURE_RESULTS, ORCHESTRATOR, PROJECT_ROOT
+from api.config import ALLURE_REPORT, ALLURE_RESULTS, EXECUTIONS_DIR, ORCHESTRATOR, PROJECT_ROOT
 
 # ── In-memory execution state ──────────────────────────────────────────────────
 
@@ -61,6 +61,55 @@ class ExecutionState:
             }
 
 
+def save_execution_state(state: ExecutionState) -> None:
+    """Saves the given ExecutionState to reports/executions/{task_id}.json."""
+    with state._lock:
+        data = {
+            "task_id": state.task_id,
+            "plan_id": state.plan_id,
+            "status": state.status,
+            "started_at": state.started_at,
+            "ended_at": state.ended_at,
+            "scheduled_at": state.scheduled_at,
+            "is_cancelled": state.is_cancelled,
+            "exit_code": state.exit_code,
+            "logs": state.logs,
+            "report_url": state.report_url,
+        }
+    file_path = EXECUTIONS_DIR / f"{state.task_id}.json"
+    try:
+        with open(file_path, "w", encoding="utf-8") as fh:
+            json.dump(data, fh, ensure_ascii=False, indent=2)
+    except Exception as exc:
+        print(f"[ERROR] Failed to save execution state to {file_path}: {exc}", file=sys.stderr)
+
+
+def load_executions() -> None:
+    """Loads all persisted ExecutionStates from reports/executions/."""
+    if not EXECUTIONS_DIR.exists():
+        return
+    for file_path in EXECUTIONS_DIR.glob("*.json"):
+        try:
+            with open(file_path, "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+            state = ExecutionState(task_id=data["task_id"], plan_id=data["plan_id"])
+            state.status = data.get("status", "pending")
+            state.started_at = data.get("started_at")
+            state.ended_at = data.get("ended_at")
+            state.scheduled_at = data.get("scheduled_at")
+            state.is_cancelled = data.get("is_cancelled", False)
+            state.exit_code = data.get("exit_code")
+            state.logs = data.get("logs", [])
+            state.report_url = data.get("report_url")
+            _executions[state.task_id] = state
+        except Exception as exc:
+            print(f"[ERROR] Failed to load execution state from {file_path}: {exc}", file=sys.stderr)
+
+
+# Load all persisted executions on startup
+load_executions()
+
+
 # ── Subprocess runner ──────────────────────────────────────────────────────────
 
 def _run_orchestrator(task_id: str, plan_id: str, plan_json: str) -> None:
@@ -71,6 +120,7 @@ def _run_orchestrator(task_id: str, plan_id: str, plan_json: str) -> None:
     state = _executions[task_id]
     state.status     = "running"
     state.started_at = datetime.now(timezone.utc).isoformat()
+    save_execution_state(state)
 
     cmd = [
         sys.executable,
@@ -128,6 +178,7 @@ def _run_orchestrator(task_id: str, plan_id: str, plan_json: str) -> None:
         state.append_log(f"[ERROR] Unexpected error: {exc}")
     finally:
         state.ended_at = datetime.now(timezone.utc).isoformat()
+        save_execution_state(state)
 
 
 def _schedule_and_run_orchestrator(
@@ -150,6 +201,7 @@ def _schedule_and_run_orchestrator(
                 state.status   = "cancelled"
                 state.ended_at = datetime.now(timezone.utc).isoformat()
                 state.append_log("[ORCHESTRATOR] Execution cancelled before start.")
+                save_execution_state(state)
                 return
             if datetime.now(timezone.utc) >= target_time:
                 break
@@ -159,6 +211,7 @@ def _schedule_and_run_orchestrator(
         state.status   = "cancelled"
         state.ended_at = datetime.now(timezone.utc).isoformat()
         state.append_log("[ORCHESTRATOR] Execution cancelled before start.")
+        save_execution_state(state)
         return
 
     _run_orchestrator(task_id, plan_id, plan_json)

@@ -28,6 +28,7 @@ from api.workers.orchestrator_worker import (
     _executions,
     _schedule_and_run_orchestrator,
     _state_lock,
+    save_execution_state,
 )
 
 router = APIRouter(tags=["Execution"])
@@ -103,6 +104,7 @@ def execute_plan(
 
     with _state_lock:
         _executions[task_id] = state
+        save_execution_state(state)
 
     background_tasks.add_task(
         _schedule_and_run_orchestrator, task_id, plan_id, plan_json_str, scheduled_at
@@ -126,6 +128,7 @@ def cancel_execution(task_id: str):
         raise HTTPException(status_code=404, detail=f"Task '{task_id}' not found.")
     if state.status == "scheduled":
         state.is_cancelled = True
+        save_execution_state(state)
         return {"message": "Execution cancelled."}
     raise HTTPException(status_code=400, detail=f"Cannot cancel task in status '{state.status}'.")
 

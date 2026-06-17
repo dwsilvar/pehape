@@ -54,6 +54,9 @@ export function useExecutionScenarioStatus(
   useEffect(() => {
     if (!taskId || !scenarioIds || scenarioIds.length === 0) return;
 
+    let active = true;
+    let es: EventSource | null = null;
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     /** Resolve scenario ID from an emitted scenario_id or by name fallback. */
@@ -168,59 +171,170 @@ export function useExecutionScenarioStatus(
     };
 
     // ── Connect EventSource ───────────────────────────────────────────────────
-    const es = new EventSource(`/api/execution-status/${taskId}/stream`);
-    esRef.current = es;
+    const connectStream = () => {
+      if (!active) return;
+      es = new EventSource(`/api/execution-status/${taskId}/stream`);
+      esRef.current = es;
 
-    es.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
+      es.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
 
-        if (data.line) {
-          const line: string = data.line;
+          if (data.line) {
+            const line: string = data.line;
 
-          // JSON event from orchestrator.py
-          try {
-            // Remove the "    │ " prefix if present from Behave output
-            let cleanLine = line.trim();
-            if (cleanLine.startsWith('│')) {
-              cleanLine = cleanLine.substring(1).trim();
-            }
-            const ev = JSON.parse(cleanLine);
-            if (ev.type === 'scenario_status') {
-              const sid  = ev.scenario_id;
-              const name = ev.scenario_name;
-              if (ev.status === 'running') {
-                enqueue({ kind: 'running', sid, name });
-              } else if (['passed', 'failed', 'skipped'].includes(ev.status)) {
-                enqueue({ kind: 'terminal', status: ev.status as ScenarioExecStatus, sid, name });
+            // JSON event from orchestrator.py
+            try {
+              // Remove the "    │ " prefix if present from Behave output
+              let cleanLine = line.trim();
+              if (cleanLine.startsWith('│')) {
+                cleanLine = cleanLine.substring(1).trim();
               }
-            } else if (ev.type === 'task_status' && ev.scenario_id && ev.task?.id) {
-              const compositeKey = `${ev.scenario_id}::${ev.task.id}`;
-              const taskStatus = ev.task.status as 'running' | 'passed' | 'failed';
-              enqueue({ kind: 'task_status', key: compositeKey, status: taskStatus });
+              const ev = JSON.parse(cleanLine);
+              if (ev.type === 'scenario_status') {
+                const sid  = ev.scenario_id;
+                const name = ev.scenario_name;
+                if (ev.status === 'running') {
+                  enqueue({ kind: 'running', sid, name });
+                } else if (['passed', 'failed', 'skipped'].includes(ev.status)) {
+                  enqueue({ kind: 'terminal', status: ev.status as ScenarioExecStatus, sid, name });
+                }
+              } else if (ev.type === 'task_status' && ev.scenario_id && ev.task?.id) {
+                const compositeKey = `${ev.scenario_id}::${ev.task.id}`;
+                const taskStatus = ev.task.status as 'running' | 'passed' | 'failed';
+                enqueue({ kind: 'task_status', key: compositeKey, status: taskStatus });
+              }
+            } catch {
+              // non-JSON line — ignore
             }
-          } catch {
-            // non-JSON line — ignore
           }
-        }
 
-        // Execution finished signal
-        if (data.done || data.status === 'finished' || data.status === 'failed') {
-          enqueue({ kind: 'finalize' });
-          es.close();
+          // Execution finished signal
+          if (data.done || data.status === 'finished' || data.status === 'failed') {
+            enqueue({ kind: 'finalize' });
+            if (es) es.close();
+          }
+        } catch {
+          // ignore parse errors
         }
-      } catch {
-        // ignore parse errors
+      };
+
+      es.onerror = () => {
+        enqueue({ kind: 'finalize' });
+        if (es) es.close();
+      };
+    };
+
+    // Determine task status first
+    const determineStatusAndLoad = async () => {
+      try {
+        const res = await fetch(`/api/execution-status/${taskId}`);
+        if (!res.ok) {
+          connectStream();
+          return;
+        }
+        const taskInfo = await res.json();
+        if (!active) return;
+
+        const isTerminated = ['finished', 'failed', 'cancelled'].includes(taskInfo.status);
+        if (isTerminated) {
+          // Fetch logs and parse instantly
+          const resLogs = await fetch(`/api/execution-status/${taskId}/logs`);
+          if (!resLogs.ok) return;
+          const logsData = await resLogs.json();
+          if (!active) return;
+
+          const newStatusMap = new Map<string, ScenarioExecStatus>();
+          scenarioIds.forEach(id => newStatusMap.set(id, 'pending'));
+          const newGlobalTaskStatusMap = new Map<string, 'running' | 'passed' | 'failed'>();
+          let currentRunningScenarioId: string | null = null;
+
+          const resolveIdImmediate = (statusMapCurrent: Map<string, ScenarioExecStatus>, scenarioId?: string, name?: string): string | undefined => {
+            if (scenarioId && scenarioIds.includes(scenarioId)) return scenarioId;
+            if (name) {
+              const matchingIndices: number[] = [];
+              for (let i = 0; i < scenarioNames.length; i++) {
+                const n = scenarioNames[i];
+                if (n === name || name.includes(n) || n.includes(name)) {
+                  matchingIndices.push(i);
+                }
+              }
+              if (matchingIndices.length === 0) return undefined;
+              if (matchingIndices.length === 1) return scenarioIds[matchingIndices[0]];
+
+              for (const idx of matchingIndices) {
+                const id = scenarioIds[idx];
+                const currentStatus = statusMapCurrent.get(id);
+                if (!currentStatus || currentStatus === 'pending' || currentStatus === 'running') {
+                  return id;
+                }
+              }
+              return scenarioIds[matchingIndices[matchingIndices.length - 1]];
+            }
+            return undefined;
+          };
+
+          (logsData.lines || []).forEach((line: string) => {
+            try {
+              let cleanLine = line.trim();
+              if (cleanLine.startsWith('│')) {
+                cleanLine = cleanLine.substring(1).trim();
+              }
+              const ev = JSON.parse(cleanLine);
+              if (ev.type === 'scenario_status') {
+                const sid  = ev.scenario_id;
+                const name = ev.scenario_name;
+                if (ev.status === 'running') {
+                  if (currentRunningScenarioId && newStatusMap.get(currentRunningScenarioId) === 'running') {
+                    newStatusMap.set(currentRunningScenarioId, 'passed');
+                  }
+                  const id = resolveIdImmediate(newStatusMap, sid, name);
+                  if (id) {
+                    currentRunningScenarioId = id;
+                    newStatusMap.set(id, 'running');
+                  }
+                } else if (['passed', 'failed', 'skipped'].includes(ev.status)) {
+                  const id = resolveIdImmediate(newStatusMap, sid, name);
+                  if (id) {
+                    newStatusMap.set(id, ev.status as ScenarioExecStatus);
+                    if (currentRunningScenarioId === id) {
+                      currentRunningScenarioId = null;
+                    }
+                  }
+                }
+              } else if (ev.type === 'task_status' && ev.scenario_id && ev.task?.id) {
+                const compositeKey = `${ev.scenario_id}::${ev.task.id}`;
+                newGlobalTaskStatusMap.set(compositeKey, ev.task.status as 'running' | 'passed' | 'failed');
+              }
+            } catch {
+              // Ignore non-JSON lines
+            }
+          });
+
+          // Finalize left running scenario
+          if (currentRunningScenarioId && newStatusMap.get(currentRunningScenarioId) === 'running') {
+            newStatusMap.set(currentRunningScenarioId, 'passed');
+          }
+
+          statusMapRef.current = newStatusMap;
+          setStatusMap(new Map(newStatusMap));
+
+          taskStatusMapRef.current = newGlobalTaskStatusMap as any;
+          setTaskStatusMap(new Map(newGlobalTaskStatusMap as any));
+        } else {
+          connectStream();
+        }
+      } catch (err) {
+        console.error('Error loading execution info or logs', err);
+        connectStream();
       }
     };
 
-    es.onerror = () => {
-      enqueue({ kind: 'finalize' });
-      es.close();
-    };
+    determineStatusAndLoad();
 
     return () => {
-      es.close();
+      active = false;
+      if (es) es.close();
       esRef.current = null;
     };
   }, [taskId, scenarioIds, scenarioNames]);
