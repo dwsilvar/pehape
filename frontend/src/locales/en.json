@@ -477,7 +477,8 @@
             "scheduleTitle": "Schedule Execution",
             "scheduleDescription": "Select the exact date and time when you want the Test Plan to start executing.",
             "schedulePastError": "The selected time has already passed.",
-            "scheduleConfirmButton": "Schedule"
+            "scheduleConfirmButton": "Schedule",
+            "lastExecution": "Last execution: {{datetime}}"
         },
         "guide": {
             "title": "Concepts Guide",

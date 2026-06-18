@@ -483,7 +483,8 @@
             "scheduleTitle": "Programar Ejecución",
             "scheduleDescription": "Selecciona la fecha y hora exacta en la que deseas que el Test Plan comience a ejecutarse.",
             "schedulePastError": "La hora seleccionada ya pasó.",
-            "scheduleConfirmButton": "Programar"
+            "scheduleConfirmButton": "Programar",
+            "lastExecution": "Última ejecución: {{datetime}}"
         },
         "guide": {
             "title": "Guía de Conceptos",

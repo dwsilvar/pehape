@@ -40,6 +40,17 @@ const ExecutionPage: React.FC = () => {
   const [executionStatus, setExecutionStatus] = useState<string>('idle');
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [lastExecutionTime, setLastExecutionTime] = useState<string | null>(null);
+
+  const formatDateTime = (isoString: string) => {
+    try {
+      const date = new Date(isoString);
+      if (isNaN(date.getTime())) return '';
+      return date.toLocaleString();
+    } catch {
+      return '';
+    }
+  };
 
   // ── Dropdown and Schedule states ──────────────────────────────────────
   const [openScheduleMenu, setOpenScheduleMenu] = useState(false);
@@ -134,7 +145,7 @@ const ExecutionPage: React.FC = () => {
   }, []);
 
   // ── Restore execution state for the selected plan ─────────────────────
-  useEffect(() => {
+  const fetchExecutionsState = useCallback(() => {
     if (!selectedPlanId) return;
 
     fetch('/api/executions')
@@ -153,6 +164,10 @@ const ExecutionPage: React.FC = () => {
             const latest = planExecutions[0];
             setCurrentTaskId(latest.task_id);
             setExecutionStatus(latest.status);
+            
+            const timestamp = latest.started_at || latest.scheduled_at || null;
+            setLastExecutionTime(timestamp);
+
             const running = ['running', 'pending', 'scheduled'].includes(latest.status);
             setIsExecuting(running);
             if (running) {
@@ -163,11 +178,16 @@ const ExecutionPage: React.FC = () => {
             setCurrentTaskId(null);
             setExecutionStatus('idle');
             setIsExecuting(false);
+            setLastExecutionTime(null);
           }
         }
       })
       .catch(err => console.error('Failed to restore execution state for plan', err));
   }, [selectedPlanId]);
+
+  useEffect(() => {
+    fetchExecutionsState();
+  }, [selectedPlanId, fetchExecutionsState]);
 
   const markDirty = useCallback(() => {
     setIsSaved(false);
@@ -235,6 +255,7 @@ const ExecutionPage: React.FC = () => {
         const data = await res.json();
         setCurrentTaskId(data.task_id);
         setExecutionStatus(data.status || (scheduledAt ? 'scheduled' : 'pending'));
+        setLastExecutionTime(scheduledAt || new Date().toISOString());
       } else {
         setIsExecuting(false);
       }
@@ -267,7 +288,10 @@ const ExecutionPage: React.FC = () => {
   }, []);
 
   const handleToggleDrawer = useCallback(() => setIsDrawerOpen(v => !v), []);
-  const handleExecutionFinished = useCallback(() => setIsExecuting(false), []);
+  const handleExecutionFinished = useCallback(() => {
+    setIsExecuting(false);
+    fetchExecutionsState();
+  }, [fetchExecutionsState]);
 
   // ── Task Management from Matrix ───────────────────────────────────────
   const handleUpdateTasksAtLevel = useCallback((
@@ -628,6 +652,16 @@ const ExecutionPage: React.FC = () => {
               }}
             />
           </Box>
+          
+          {/* Last Execution Info */}
+          {lastExecutionTime && (
+            <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 0.5, color: 'text.secondary' }}>
+              <AccessTimeIcon sx={{ fontSize: 16 }} />
+              <Typography variant="body2" sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
+                {t('pages.execution.lastExecution', 'Última ejecución: {{datetime}}', { datetime: formatDateTime(lastExecutionTime) })}
+              </Typography>
+            </Box>
+          )}
         </Box>
       </AppToolbar>
 
