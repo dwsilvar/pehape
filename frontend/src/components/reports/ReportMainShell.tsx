@@ -126,7 +126,7 @@ const ReportMainShell: React.FC = () => {
         return (
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
                 <CircularProgress />
-                <Typography sx={{ mt: 2, color: 'text.secondary' }}>Cargando resultados de ejecución...</Typography>
+                <Typography sx={{ mt: 2, color: 'text.secondary' }}>{t('pages.reports.loadingResults')}</Typography>
             </Box>
         );
     }
@@ -136,10 +136,10 @@ const ReportMainShell: React.FC = () => {
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
                 <ScienceIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
                 <Typography variant="h6" color="text.secondary" gutterBottom>
-                    No hay resultados de ejecución aún.
+                    {t('pages.reports.noResultsYet')}
                 </Typography>
                 <Button variant="outlined" startIcon={<RefreshRoundedIcon />} onClick={fetchData} sx={{ mt: 2 }}>
-                    Refrescar
+                    {t('pages.reports.refresh')}
                 </Button>
             </Box>
         );
@@ -157,7 +157,7 @@ const ReportMainShell: React.FC = () => {
         const diff = Math.max(0, end - start);
         const mins = Math.floor(diff / 60000);
         const secs = Math.floor((diff % 60000) / 1000);
-        return ` • Duración Total: ${mins}m ${secs}s`;
+        return ` • ${t('pages.reports.totalDuration', { duration: `${mins}m ${secs}s` })}`;
     };
 
     return (
@@ -165,12 +165,12 @@ const ReportMainShell: React.FC = () => {
             {/* Header / View Selector */}
             <Box className="no-print" sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, pb: 3, borderBottom: 1, borderColor: 'divider' }}>
                 <Box>
-                    <Typography variant="h6" sx={{ fontWeight: 600 }}>Centro de Resultados</Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 600 }}>{t('pages.reports.resultsCenter')}</Typography>
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
                         Plan: {data.name || data.plan_id}
                     </Typography>
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                        Inicio: {formatTime(data.execution_start_time)} • Fin: {formatTime(data.execution_end_time)}
+                        {t('pages.reports.start')}: {formatTime(data.execution_start_time)} • {t('pages.reports.end')}: {formatTime(data.execution_end_time)}
                         {calculateDuration()}
                     </Typography>
                 </Box>
@@ -182,7 +182,7 @@ const ReportMainShell: React.FC = () => {
                         endIcon={<KeyboardArrowDownIcon />}
                         sx={{ textTransform: 'none', fontWeight: 600 }}
                     >
-                        Exportar Reporte
+                        {t('pages.reports.exportReport')}
                     </Button>
                     <Menu
                         anchorEl={anchorEl}
@@ -192,18 +192,18 @@ const ReportMainShell: React.FC = () => {
                         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
                     >
                         <MenuItem onClick={exportToPDF} sx={{ fontSize: '0.85rem' }}>
-                            <PictureAsPdfRoundedIcon sx={{ fontSize: 18, mr: 1, color: theme.palette.error.main }} /> PDF (Documento)
+                            <PictureAsPdfRoundedIcon sx={{ fontSize: 18, mr: 1, color: theme.palette.error.main }} /> {t('pages.reports.pdfDocument')}
                         </MenuItem>
                         <MenuItem onClick={exportToCSV} sx={{ fontSize: '0.85rem' }}>
-                            <DescriptionRoundedIcon sx={{ fontSize: 18, mr: 1, color: theme.palette.info.main }} /> CSV (Comas)
+                            <DescriptionRoundedIcon sx={{ fontSize: 18, mr: 1, color: theme.palette.info.main }} /> {t('pages.reports.csvComma')}
                         </MenuItem>
                         <MenuItem onClick={exportToXLSX} sx={{ fontSize: '0.85rem' }}>
-                            <TableChartRoundedIcon sx={{ fontSize: 18, mr: 1, color: theme.palette.success.main }} /> Excel (Tablas)
+                            <TableChartRoundedIcon sx={{ fontSize: 18, mr: 1, color: theme.palette.success.main }} /> {t('pages.reports.excelTable')}
                         </MenuItem>
                     </Menu>
 
                     <Button variant="outlined" size="small" startIcon={<RefreshRoundedIcon />} onClick={fetchData}>
-                        Refrescar
+                        {t('pages.reports.refresh')}
                     </Button>
                     <ToggleButtonGroup
                         value={view}
@@ -215,10 +215,10 @@ const ReportMainShell: React.FC = () => {
                         }}
                     >
                         <ToggleButton value="V_TIME" sx={{ px: 2, textTransform: 'none', fontWeight: 600 }}>
-                            <TimelineRoundedIcon sx={{ mr: 1, fontSize: 18 }} /> Timeline
+                            <TimelineRoundedIcon sx={{ mr: 1, fontSize: 18 }} /> {t('pages.reports.timeline')}
                         </ToggleButton>
                         <ToggleButton value="V_DASH" sx={{ px: 2, textTransform: 'none', fontWeight: 600 }}>
-                            <DashboardRoundedIcon sx={{ mr: 1, fontSize: 18 }} /> Ejecutivo
+                            <DashboardRoundedIcon sx={{ mr: 1, fontSize: 18 }} /> {t('pages.reports.executive')}
                         </ToggleButton>
                         <ToggleButton value="V_MATR" sx={{ px: 2, textTransform: 'none', fontWeight: 600 }}>
                             <TableViewRoundedIcon sx={{ mr: 1, fontSize: 18 }} /> {t('common.matrix', 'Matrix')}

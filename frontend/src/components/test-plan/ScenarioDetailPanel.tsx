@@ -21,6 +21,7 @@ import {
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import CodeRoundedIcon from '@mui/icons-material/CodeRounded';
 import { ScenarioRef } from '../../types';
+import { useTranslation } from 'react-i18next';
 
 interface ScenarioDetailPanelProps {
   scenario: ScenarioRef | null;
@@ -58,6 +59,7 @@ function colorLine(line: string): { color: string; isBold: boolean } {
 
 const ScenarioDetailPanel: React.FC<ScenarioDetailPanelProps> = ({ scenario, open, onClose }) => {
   const theme = useTheme();
+  const { t } = useTranslation();
   const [rawGherkin, setRawGherkin] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,9 +83,9 @@ const ScenarioDetailPanel: React.FC<ScenarioDetailPanelProps> = ({ scenario, ope
       .then(data => {
         setRawGherkin(data.content ?? '');
       })
-      .catch(e => setError(`No se pudo cargar el feature: ${e.message}`))
+      .catch(e => setError(t('pages.testPlan.detail.errorLoading', { error: e.message })))
       .finally(() => setIsLoading(false));
-  }, [open, scenario]);
+  }, [open, scenario, t]);
 
   const lines = rawGherkin?.split('\n') ?? [];
 
@@ -143,7 +145,7 @@ const ScenarioDetailPanel: React.FC<ScenarioDetailPanelProps> = ({ scenario, ope
         <Box sx={{ flex: 1, minWidth: 0 }}>
           {/* schema: title = "Full Feature Detail" */}
            <Typography sx={{ fontSize: '0.72rem', fontWeight: 700, color: theme.palette.text.secondary, letterSpacing: 1, textTransform: 'uppercase', fontFamily: theme.typography.fontFamily }}>
-            Full Feature Detail
+            {t('pages.testPlan.detail.title')}
           </Typography>
           {scenario && (
             <>
@@ -192,7 +194,7 @@ const ScenarioDetailPanel: React.FC<ScenarioDetailPanelProps> = ({ scenario, ope
           flex: 1,
           overflow: 'auto',
           bgcolor: codeAreaBg,
-           fontFamily: 'Fira Code, monospace',
+          fontFamily: 'Fira Code, monospace',
           '&::-webkit-scrollbar': { width: 5 },
           '&::-webkit-scrollbar-thumb': { bgcolor: isDark ? '#334155' : '#cbd5e1', borderRadius: 2 },
         }}
@@ -200,7 +202,7 @@ const ScenarioDetailPanel: React.FC<ScenarioDetailPanelProps> = ({ scenario, ope
         {isLoading && (
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 6, gap: 1.5 }}>
             <CircularProgress size={20} sx={{ color: '#7c3aed' }} />
-            <Typography sx={{ fontSize: '0.75rem', color: '#64748b' }}>Cargando Gherkin…</Typography>
+            <Typography sx={{ fontSize: '0.75rem', color: '#64748b' }}>{t('pages.testPlan.detail.loading')}</Typography>
           </Box>
         )}
 

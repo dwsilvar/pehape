@@ -1,12 +1,14 @@
 import React, { useEffect, useRef } from 'react';
 import { Box, Paper, Typography, IconButton, Tooltip } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import { useTranslation } from 'react-i18next';
 
 interface ConsoleViewProps {
   logs: string[];
 }
 
 const ConsoleView: React.FC<ConsoleViewProps> = React.memo(({ logs }) => {
+  const { t } = useTranslation();
   const logsEndRef = useRef<null | HTMLDivElement>(null);
 
   useEffect(() => {
@@ -24,7 +26,7 @@ const ConsoleView: React.FC<ConsoleViewProps> = React.memo(({ logs }) => {
 
   return (
     <Box sx={{ height: '100%', position: 'relative' }}>
-      <Tooltip title="Copiar todo al portapapeles">
+      <Tooltip title={t('common.copiar_portapapeles', 'Copiar todo al portapapeles')}>
         <IconButton 
           onClick={handleCopy}
           sx={{ 

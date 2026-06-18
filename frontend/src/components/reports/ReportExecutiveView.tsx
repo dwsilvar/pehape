@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { Box, Typography, Paper, Grid, useTheme } from '@mui/material';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from 'recharts';
+import { useTranslation } from 'react-i18next';
 
 interface ReportExecutiveViewProps {
     data: any;
@@ -8,6 +9,7 @@ interface ReportExecutiveViewProps {
 
 const ReportExecutiveView: React.FC<ReportExecutiveViewProps> = ({ data }) => {
     const theme = useTheme();
+    const { t } = useTranslation();
 
     const stats = useMemo(() => {
         let passed = 0;
@@ -40,14 +42,14 @@ const ReportExecutiveView: React.FC<ReportExecutiveViewProps> = ({ data }) => {
     }, [data]);
 
     const chartData = [
-        { name: 'Passed', value: stats.passed, color: '#10B981' },
-        { name: 'Failed', value: stats.failed, color: '#EF4444' },
-        { name: 'Skipped', value: stats.skipped, color: '#94A3B8' }
+        { name: t('pages.reports.passed'), value: stats.passed, color: '#10B981' },
+        { name: t('pages.reports.failed'), value: stats.failed, color: '#EF4444' },
+        { name: t('pages.reports.skipped'), value: stats.skipped, color: '#94A3B8' }
     ].filter(d => d.value > 0);
 
     return (
         <Box sx={{ p: 2 }}>
-            <Typography variant="h6" sx={{ mb: 3 }}>Dashboard Ejecutivo</Typography>
+            <Typography variant="h6" sx={{ mb: 3 }}>{t('pages.reports.dashboardExecutive')}</Typography>
 
             <Grid container spacing={3}>
                 <Grid size={{ xs: 12, md: 4 }}>
@@ -55,7 +57,7 @@ const ReportExecutiveView: React.FC<ReportExecutiveViewProps> = ({ data }) => {
                         <Typography variant="h3" sx={{ fontWeight: 700, color: theme.palette.primary.main }}>
                             {stats.total}
                         </Typography>
-                        <Typography variant="subtitle1" color="text.secondary">Total Escenarios</Typography>
+                        <Typography variant="subtitle1" color="text.secondary">{t('pages.reports.totalScenarios')}</Typography>
                     </Paper>
                 </Grid>
                 <Grid size={{ xs: 12, md: 4 }}>
@@ -63,7 +65,7 @@ const ReportExecutiveView: React.FC<ReportExecutiveViewProps> = ({ data }) => {
                         <Typography variant="h3" sx={{ fontWeight: 700, color: stats.failed > 0 ? '#EF4444' : '#10B981' }}>
                             {stats.total > 0 ? Math.round((stats.passed / stats.total) * 100) : 0}%
                         </Typography>
-                        <Typography variant="subtitle1" color="text.secondary">Tasa de Éxito Global</Typography>
+                        <Typography variant="subtitle1" color="text.secondary">{t('pages.reports.globalSuccessRate')}</Typography>
                     </Paper>
                 </Grid>
                 <Grid size={{ xs: 12, md: 4 }}>
@@ -71,14 +73,14 @@ const ReportExecutiveView: React.FC<ReportExecutiveViewProps> = ({ data }) => {
                         <Typography variant="h3" sx={{ fontWeight: 700 }}>
                             {stats.totalTimeSeconds}s
                         </Typography>
-                        <Typography variant="subtitle1" color="text.secondary">Tiempo Total de Ejecución</Typography>
+                        <Typography variant="subtitle1" color="text.secondary">{t('pages.reports.totalExecutionTime')}</Typography>
                     </Paper>
                 </Grid>
 
                 {/* Donut Chart */}
                 <Grid size={{ xs: 12, md: 6 }}>
                     <Paper elevation={1} sx={{ p: 3, height: 350 }}>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>Distribución de Resultados</Typography>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>{t('pages.reports.resultsDistribution')}</Typography>
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
                                 <Pie

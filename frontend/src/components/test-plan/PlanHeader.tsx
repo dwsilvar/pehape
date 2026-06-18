@@ -31,11 +31,6 @@ interface PlanHeaderProps {
   onImport?: (file: File) => void;
 }
 
-const statusColors: Record<string, 'default' | 'warning' | 'success' | 'info'> = {
-  draft: 'default',
-  running: 'warning',
-  completed: 'success',
-};
 
 const PlanHeader: React.FC<PlanHeaderProps> = ({ plan, cycle, flow, activeBlueprintName, targetPlanName, targetPlanId, isSaved, onSave, onExecute, isExecuting = false, executionStatus, canExecute = false, onImport }) => {
   const { t } = useTranslation();
@@ -72,8 +67,6 @@ const PlanHeader: React.FC<PlanHeaderProps> = ({ plan, cycle, flow, activeBluepr
     }
   };
 
-  const statusLabel = plan ? t(`pages.testPlan.status.draft`) : '';
-  const statusColor = plan ? statusColors['draft'] : 'default';
 
   return (
     <Box
@@ -113,16 +106,6 @@ const PlanHeader: React.FC<PlanHeaderProps> = ({ plan, cycle, flow, activeBluepr
         )}
       </Breadcrumbs>
 
-      {/* Status chip */}
-      {activeBlueprintName && (
-        <Chip
-          label="Borrador"
-          color="default"
-          size="small"
-          variant="outlined"
-          sx={{ fontSize: '0.7rem', fontWeight: 600, letterSpacing: 0.5 }}
-        />
-      )}
 
       {/* Save button */}
       <Tooltip title={isSaved ? t('pages.testPlan.saved') : t('pages.testPlan.save')}>
@@ -218,7 +201,7 @@ const PlanHeader: React.FC<PlanHeaderProps> = ({ plan, cycle, flow, activeBluepr
                 sx={{ fontSize: '0.75rem', textTransform: 'none' }}
               >
                 {executionStatus === 'scheduled' 
-                  ? 'Programado' 
+                  ? t('pages.execution.scheduledButton') 
                   : isExecuting ? t('pages.testPlan.executing') : t('pages.testPlan.executePlan')}
               </Button>
               <Button
@@ -250,16 +233,16 @@ const PlanHeader: React.FC<PlanHeaderProps> = ({ plan, cycle, flow, activeBluepr
                   <ClickAwayListener onClickAway={handleClose}>
                     <MenuList autoFocusItem sx={{ p: 0 }}>
                       <MenuItem onClick={() => handleScheduleOption('instant')} sx={{ fontSize: '0.8rem', py: 1 }}>
-                        ⚡ Ejecutar Ahora
+                        {t('pages.execution.runNow')}
                       </MenuItem>
                       <MenuItem onClick={() => handleScheduleOption('delay_short')} sx={{ fontSize: '0.8rem', py: 1 }}>
-                        ⏱️ En 1 minuto
+                        {t('pages.execution.run1m')}
                       </MenuItem>
                       <MenuItem onClick={() => handleScheduleOption('delay_medium')} sx={{ fontSize: '0.8rem', py: 1 }}>
-                        ⏱️ En 5 minutos
+                        {t('pages.execution.run5m')}
                       </MenuItem>
                       <MenuItem onClick={() => handleScheduleOption('custom')} sx={{ fontSize: '0.8rem', py: 1 }}>
-                        📅 Programar Fecha/Hora...
+                        {t('pages.execution.runCustom')}
                       </MenuItem>
                     </MenuList>
                   </ClickAwayListener>
@@ -272,7 +255,7 @@ const PlanHeader: React.FC<PlanHeaderProps> = ({ plan, cycle, flow, activeBluepr
 
       {/* Import/Export Buttons */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, borderLeft: onExecute ? 1 : 0, borderColor: 'divider', pl: onExecute ? 1 : 0, ml: onExecute ? 0.5 : 0 }}>
-        <Tooltip title="Exportar Plan (.desb)">
+        <Tooltip title={t('pages.testPlan.exportTooltip')}>
           <span>
             <IconButton
               size="small"
@@ -284,7 +267,7 @@ const PlanHeader: React.FC<PlanHeaderProps> = ({ plan, cycle, flow, activeBluepr
             </IconButton>
           </span>
         </Tooltip>
-        <Tooltip title="Importar Plan (.desb)">
+        <Tooltip title={t('pages.testPlan.importTooltip')}>
           <IconButton 
             size="small" 
             onClick={() => fileInputRef.current?.click()}

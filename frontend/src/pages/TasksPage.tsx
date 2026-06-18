@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Typography, Card, CardContent, Grid, Chip, Divider, CircularProgress, Tabs, Tab, TextField, Button, Paper, Alert } from '@mui/material';
 import { Assignment as AssignmentIcon, Build as BuildIcon, Search as SearchIcon } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
 import AppToolbar from '../components/AppToolbar';
 
 interface TaskDef {
@@ -24,6 +25,7 @@ interface LiteralCheckResult {
 }
 
 const TasksPage: React.FC = () => {
+    const { t } = useTranslation();
     const [tasks, setTasks] = useState<TaskDef[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
@@ -90,7 +92,7 @@ const TasksPage: React.FC = () => {
             const data = await response.json();
             setLiteralResult(data);
         } catch (err: any) {
-            setLiteralError(err.message);
+            setError(err.message);
         } finally {
             setLiteralLoading(false);
         }
@@ -106,29 +108,29 @@ const TasksPage: React.FC = () => {
     }, {} as Record<string, TaskDef[]>);
 
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}><CircularProgress /></Box>;
-    if (error) return <Box sx={{ p: 3 }}><Typography color="error">Error: {error}</Typography></Box>;
+    if (error) return <Box sx={{ p: 3 }}><Typography color="error">{t('pages.tasks.errorLabel', 'Error: ')} {error}</Typography></Box>;
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-            <AppToolbar title="Tareas y Herramientas" icon={<AssignmentIcon sx={{ fontSize: 32 }} />} showControls={false} />
+            <AppToolbar title={t('pages.tasks.title', 'Tareas y Herramientas')} icon={<AssignmentIcon sx={{ fontSize: 32 }} />} showControls={false} />
             <Box sx={{ p: 4, flex: 1, overflowY: 'auto' }}>
                 <Tabs value={tabValue} onChange={handleTabChange} sx={{ mb: 4, borderBottom: 1, borderColor: 'divider' }}>
-                    <Tab icon={<BuildIcon />} iconPosition="start" label="Ejecutar Tareas" />
-                    <Tab icon={<AssignmentIcon />} iconPosition="start" label="Documentación de Hooks" />
+                    <Tab icon={<BuildIcon />} iconPosition="start" label={t('pages.tasks.tabExecute', 'Ejecutar Tareas')} />
+                    <Tab icon={<AssignmentIcon />} iconPosition="start" label={t('pages.tasks.tabDocs', 'Documentación de Hooks')} />
                 </Tabs>
 
                 {/* TAB 0: EXECUTE TASKS */}
                 {tabValue === 0 && (
                     <Box>
                         <Typography variant="h6" gutterBottom color="primary">
-                            Comprobar Literal en Archivo
+                            {t('pages.tasks.literalSearch', 'Comprobar Literal en Archivo')}
                         </Typography>
                         <Paper elevation={2} sx={{ p: 3, maxWidth: 800 }}>
                             <Grid container spacing={2} alignItems="center">
                                 <Grid size={{ xs: 12, md: 6 }}>
                                     <TextField
                                         fullWidth
-                                        label="Ruta del Archivo (ej: requirements.txt)"
+                                        label={t('pages.tasks.filePathLabel', 'Ruta del Archivo (ej: requirements.txt)')}
                                         variant="outlined"
                                         value={literalPath}
                                         onChange={(e) => setLiteralPath(e.target.value)}
@@ -138,7 +140,7 @@ const TasksPage: React.FC = () => {
                                 <Grid size={{ xs: 12, md: 4 }}>
                                     <TextField
                                         fullWidth
-                                        label="Literal a buscar"
+                                        label={t('pages.tasks.searchPlaceholder', 'Literal a buscar')}
                                         variant="outlined"
                                         value={literalText}
                                         onChange={(e) => setLiteralText(e.target.value)}
@@ -153,7 +155,7 @@ const TasksPage: React.FC = () => {
                                         onClick={handleCheckLiteral}
                                         disabled={literalLoading || !literalPath || !literalText}
                                     >
-                                        Buscar
+                                        {t('pages.tasks.searchButton', 'Buscar')}
                                     </Button>
                                 </Grid>
                             </Grid>
@@ -166,8 +168,8 @@ const TasksPage: React.FC = () => {
                                 <Box sx={{ mt: 3 }}>
                                     <Alert severity={literalResult.found ? "success" : "warning"}>
                                         {literalResult.found
-                                            ? `Se encontraron ${literalResult.count} coincidencias.`
-                                            : "No se encontraron coincidencias."}
+                                            ? t('pages.tasks.resultsFound', 'Se encontraron {{count}} coincidencias.', { count: literalResult.count })
+                                            : t('pages.tasks.noResults', 'No se encontraron coincidencias.')}
                                     </Alert>
 
                                     {literalResult.matches.length > 0 && (
@@ -175,7 +177,7 @@ const TasksPage: React.FC = () => {
                                             {literalResult.matches.map((match, idx) => (
                                                 <Box key={idx} sx={{ p: 1, borderBottom: '1px solid #eee', fontFamily: 'monospace', fontSize: '0.9rem' }}>
                                                     <Typography component="span" color="primary" sx={{ mr: 2, fontWeight: 'bold' }}>
-                                                        Línea {match.line}:
+                                                        {t('pages.tasks.line', 'Línea')} {match.line}:
                                                     </Typography>
                                                     {match.content}
                                                 </Box>
@@ -192,13 +194,13 @@ const TasksPage: React.FC = () => {
                 {tabValue === 1 && (
                     <Box>
                         <Typography variant="body1" sx={{ mb: 4, color: 'text.secondary' }}>
-                            Referencia de tareas hooks disponibles. Agrúpalas por módulo.
+                            {t('pages.tasks.docsDescription', 'Referencia de tareas hooks disponibles. Agrúpalas por módulo.')}
                         </Typography>
 
                         {Object.entries(tasksByModule).map(([moduleName, moduleTasks]) => (
                             <Box key={moduleName} sx={{ mb: 6 }}>
                                 <Typography variant="h5" sx={{ mb: 2, borderBottom: '1px solid #eee', pb: 1, color: 'secondary.main' }}>
-                                    Módulo: {moduleName}
+                                    {t('pages.tasks.moduleLabel', 'Módulo: ')}{moduleName}
                                 </Typography>
                                 <Grid container spacing={3}>
                                     {moduleTasks.map((task) => (
@@ -218,6 +220,7 @@ const TasksPage: React.FC = () => {
                                                                 size="small"
                                                                 variant="outlined"
                                                                 color={getScopeColor(task.scope) as any}
+                                                                className=""
                                                             />
                                                         )}
                                                     </Box>
@@ -233,7 +236,7 @@ const TasksPage: React.FC = () => {
                                                         <Box sx={{ mt: 2 }}>
                                                             <Divider sx={{ mb: 1.5 }} />
                                                             <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, fontWeight: 'bold' }}>
-                                                                Parámetros Configurables:
+                                                                {t('pages.tasks.parameters', 'Parámetros Configurables:')}
                                                             </Typography>
                                                             {task.args_schema.map((arg, idx) => (
                                                                 <Box key={idx} sx={{ mb: 1, pl: 2, borderLeft: '3px solid', borderColor: 'primary.light' }}>
@@ -245,7 +248,7 @@ const TasksPage: React.FC = () => {
                                                                     </Typography>
                                                                     {arg.default !== undefined && (
                                                                         <Typography variant="caption" color="text.secondary" display="block" sx={{ fontStyle: 'italic' }}>
-                                                                            Por defecto: {String(arg.default)}
+                                                                            {t('pages.tasks.defaultVal', 'Por defecto: ')}{String(arg.default)}
                                                                         </Typography>
                                                                     )}
                                                                 </Box>

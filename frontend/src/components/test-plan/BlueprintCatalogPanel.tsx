@@ -269,19 +269,19 @@ const BlueprintCatalogPanel: React.FC<BlueprintCatalogPanelProps> = ({
           scrollButtons="auto"
           sx={{ minHeight: 40 }}
         >
-          <Tab value="plans" label="Plans" sx={{ minHeight: 40, py: 0, fontSize: '0.7rem', textTransform: 'none' }} />
-          <Tab value="cycles" label="Cycles" sx={{ minHeight: 40, py: 0, fontSize: '0.7rem', textTransform: 'none' }} />
-          <Tab value="sets" label="Sets" sx={{ minHeight: 40, py: 0, fontSize: '0.7rem', textTransform: 'none' }} />
-          <Tab value="flows" label="Flows" sx={{ minHeight: 40, py: 0, fontSize: '0.7rem', textTransform: 'none' }} />
+          <Tab value="plans" label={t('common.plans')} sx={{ minHeight: 40, py: 0, fontSize: '0.7rem', textTransform: 'none' }} />
+          <Tab value="cycles" label={t('common.cycles')} sx={{ minHeight: 40, py: 0, fontSize: '0.7rem', textTransform: 'none' }} />
+          <Tab value="sets" label={t('common.sets')} sx={{ minHeight: 40, py: 0, fontSize: '0.7rem', textTransform: 'none' }} />
+          <Tab value="flows" label={t('common.flows')} sx={{ minHeight: 40, py: 0, fontSize: '0.7rem', textTransform: 'none' }} />
         </Tabs>
       </Box>
 
       {/* Header action */}
       <Box sx={{ px: 1.5, py: 0.75, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: 1, borderColor: 'divider', bgcolor: 'action.hover' }}>
         <Typography variant="overline" sx={{ fontSize: '0.62rem', letterSpacing: 1, color: 'text.secondary', fontWeight: 700 }}>
-          {activeCategory.toUpperCase()} ({list.length})
+          {t(`common.${activeCategory}`).toUpperCase()} ({list.length})
         </Typography>
-        <Tooltip title="Crear nuevo">
+        <Tooltip title={t('common.createNew')}>
           <IconButton size="small" onClick={() => setShowNewInput(v => !v)} sx={{ p: 0.3 }}>
             <AddRoundedIcon sx={{ fontSize: 15 }} />
           </IconButton>
@@ -294,7 +294,7 @@ const BlueprintCatalogPanel: React.FC<BlueprintCatalogPanelProps> = ({
             size="small"
             fullWidth
             autoFocus
-            placeholder="Ingresar nombre..."
+            placeholder={t('common.enterName')}
             value={newName}
             onChange={e => setNewName(e.target.value)}
             onKeyDown={e => {
@@ -311,7 +311,7 @@ const BlueprintCatalogPanel: React.FC<BlueprintCatalogPanelProps> = ({
         {list.length === 0 ? (
           <Box sx={{ p: 2, textAlign: 'center' }}>
             <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.72rem' }}>
-              No hay elementos guardados.
+              {t('common.noSavedItems')}
             </Typography>
           </Box>
         ) : (
@@ -348,7 +348,7 @@ const BlueprintCatalogPanel: React.FC<BlueprintCatalogPanelProps> = ({
                     
                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
                       <Box sx={{ display: 'flex', opacity: 0, transition: 'opacity 0.2s', '.MuiListItemButton-root:hover &': { opacity: 1 } }}>
-                        <Tooltip title="Eliminar">
+                        <Tooltip title={t('common.delete')}>
                           <IconButton size="small" sx={{ p: 0.3, color: 'error.main', mr: 0.5 }} onClick={e => { e.stopPropagation(); onDeleteBlueprint(activeCategory, item.id); }}>
                             <DeleteOutlineRoundedIcon sx={{ fontSize: 14 }} />
                           </IconButton>

@@ -346,37 +346,37 @@ const ReportMatrixView: React.FC<ReportMatrixViewProps> = ({ data }) => {
                             <TableCell align="center" sx={{ fontWeight: 600, bgcolor: isDark ? '#1e293b' : '#f1f5f9', width: 100, minWidth: 100, maxWidth: 100 }}>
                                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.75 }}>
                                     <CycleIcon size={14} color={theme.palette.text.secondary} />
-                                    Test Cycle
+                                    {t('pages.reports.testCycle')}
                                 </Box>
                             </TableCell>
                             <TableCell align="center" sx={{ fontWeight: 600, bgcolor: isDark ? '#1e293b' : '#f1f5f9', width: 100, minWidth: 100, maxWidth: 100 }}>
                                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.75 }}>
                                     <LibraryBooksRoundedIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
-                                    Test Set
+                                    {t('pages.reports.testSet')}
                                 </Box>
                             </TableCell>
                             <TableCell align="center" sx={{ fontWeight: 600, bgcolor: isDark ? '#1e293b' : '#f1f5f9', width: 100, minWidth: 100, maxWidth: 100 }}>
                                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.75 }}>
                                     <FlowIcon size={14} color={theme.palette.text.secondary} />
-                                    Test Flow
+                                    {t('pages.reports.testFlow')}
                                 </Box>
                             </TableCell>
                             <TableCell align="center" sx={{ fontWeight: 600, bgcolor: isDark ? '#1e3a8a' : '#dbeafe', width: 300, minWidth: 300, maxWidth: 300 }}>
                                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.75 }}>
                                     <ScenarioIcon size={14} color={theme.palette.text.secondary} />
-                                    Scenario
+                                    {t('pages.reports.scenario')}
                                 </Box>
                             </TableCell>
                             <TableCell align="center" sx={{ fontWeight: 600, bgcolor: isDark ? '#1e293b' : '#f1f5f9', width: 80, minWidth: 80, maxWidth: 80 }}>
                                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.75 }}>
                                     <SettingsIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
-                                    Tareas
+                                    {t('pages.reports.tasks')}
                                 </Box>
                             </TableCell>
-                            <TableCell align="center" sx={{ fontWeight: 600, bgcolor: isDark ? '#1e293b' : '#f1f5f9', width: 100, minWidth: 100, maxWidth: 100 }}>Tags</TableCell>
-                            <TableCell align="center" sx={{ fontWeight: 600, bgcolor: isDark ? '#1e293b' : '#f1f5f9', width: 100, minWidth: 100, maxWidth: 100 }}>Resultado</TableCell>
-                            <TableCell align="center" sx={{ fontWeight: 600, bgcolor: isDark ? '#1e293b' : '#f1f5f9', width: 70, minWidth: 70, maxWidth: 70 }}>Duración</TableCell>
-                            <TableCell align="center" sx={{ fontWeight: 600, bgcolor: isDark ? '#1e293b' : '#f1f5f9', width: 130, minWidth: 130, maxWidth: 130 }}>Acciones</TableCell>
+                            <TableCell align="center" sx={{ fontWeight: 600, bgcolor: isDark ? '#1e293b' : '#f1f5f9', width: 100, minWidth: 100, maxWidth: 100 }}>{t('pages.reports.tags')}</TableCell>
+                            <TableCell align="center" sx={{ fontWeight: 600, bgcolor: isDark ? '#1e293b' : '#f1f5f9', width: 100, minWidth: 100, maxWidth: 100 }}>{t('pages.reports.status')}</TableCell>
+                            <TableCell align="center" sx={{ fontWeight: 600, bgcolor: isDark ? '#1e293b' : '#f1f5f9', width: 70, minWidth: 70, maxWidth: 70 }}>{t('pages.reports.duration')}</TableCell>
+                            <TableCell align="center" sx={{ fontWeight: 600, bgcolor: isDark ? '#1e293b' : '#f1f5f9', width: 130, minWidth: 130, maxWidth: 130 }}>{t('pages.reports.actions')}</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
@@ -477,12 +477,12 @@ const ReportMatrixView: React.FC<ReportMatrixViewProps> = ({ data }) => {
                                                 )}
                                             </TableCell>
                                             <TableCell sx={{ py: 1.5, borderBottom: borderStyle }}>
-                                                <Chip label={`${groupScenarios.length} scenarios`} size="small" sx={{ height: 16, fontSize: '0.6rem', bgcolor: alpha(theme.palette.text.secondary, 0.1), fontWeight: 500 }} />
+                                                <Chip label={t('pages.reports.scenariosCount', { count: groupScenarios.length })} size="small" sx={{ height: 16, fontSize: '0.6rem', bgcolor: alpha(theme.palette.text.secondary, 0.1), fontWeight: 500 }} />
                                             </TableCell>
                                             <TableCell sx={{ py: 1.5, borderBottom: borderStyle }}>
                                                 {totalGroupTasks > 0 && (
                                                     <Chip 
-                                                        label={`${totalGroupTasks} ${totalGroupTasks === 1 ? 'tarea' : 'tareas'}`} 
+                                                        label={t('pages.reports.tasksCount', { count: totalGroupTasks, label: totalGroupTasks === 1 ? (t('common.task') || 'tarea').toLowerCase() : (t('common.tasks') || 'tareas').toLowerCase() })} 
                                                         size="small" 
                                                         sx={{ 
                                                             height: 16, 
@@ -594,7 +594,7 @@ const ReportMatrixView: React.FC<ReportMatrixViewProps> = ({ data }) => {
                                         </TableCell>
                                         <TableCell align="center" sx={{ overflow: 'hidden' }}>
                                             {row.tasks && row.tasks.length > 0 ? (
-                                                <Tooltip title="Ver detalle de tareas" arrow placement="top">
+                                                <Tooltip title={t('pages.reports.viewTasksDetail')} arrow placement="top">
                                                     <IconButton
                                                         size="small"
                                                         onClick={() => {
@@ -614,7 +614,7 @@ const ReportMatrixView: React.FC<ReportMatrixViewProps> = ({ data }) => {
                                                 </Tooltip>
                                             ) : (
                                                 <Typography sx={{ fontSize: '0.65rem', color: 'text.disabled', fontStyle: 'italic' }}>
-                                                    Sin tareas
+                                                    {t('pages.reports.noTasks')}
                                                 </Typography>
                                             )}
                                         </TableCell>
@@ -654,28 +654,28 @@ const ReportMatrixView: React.FC<ReportMatrixViewProps> = ({ data }) => {
                                                     displayEmpty
                                                     onChange={(e) => handleActionChange(e, row)}
                                                     sx={{ fontSize: '0.75rem', height: 28 }}
-                                                    renderValue={() => "Acciones..."}
+                                                    renderValue={() => t('pages.reports.actionsPlaceholder')}
                                                 >
                                                     <MenuItem 
                                                         value="steps" 
                                                         disabled={row.status === 'skip' || !row.steps || row.steps.length === 0}
                                                         sx={{ fontSize: '0.75rem' }}
                                                     >
-                                                        Ver Steps
+                                                        {t('pages.reports.showSteps')}
                                                     </MenuItem>
                                                     <MenuItem 
                                                         value={row.gifExecutionId ? `/api/execution/${row.gifExecutionId}/gif` : ''} 
                                                         disabled={!row.gifExecutionId}
                                                         sx={{ fontSize: '0.75rem' }}
                                                     >
-                                                        Ver GIF Interactivo
+                                                        {t('pages.reports.showInteractiveGif')}
                                                     </MenuItem>
                                                     <MenuItem 
                                                         value={row.gifExecutionId ? `/api/execution/${row.gifExecutionId}/video` : ''} 
                                                         disabled={!row.gifExecutionId}
                                                         sx={{ fontSize: '0.75rem' }}
                                                     >
-                                                        Ver Video MP4
+                                                        {t('pages.reports.showMp4Video')}
                                                     </MenuItem>
                                                 </Select>
                                             </FormControl>
@@ -719,11 +719,11 @@ const ReportMatrixView: React.FC<ReportMatrixViewProps> = ({ data }) => {
                     <Box>
                         <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1rem', color: 'text.primary', display: 'flex', alignItems: 'center', gap: 1 }}>
                             <SettingsIcon sx={{ color: theme.palette.primary.main, fontSize: 20 }} />
-                            Tareas Asociadas
+                            {t('pages.reports.associatedTasks')}
                         </Typography>
                         {selectedTasksScenario && (
                             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                                Escenario: {selectedTasksScenario.scenarioName}
+                                {t('pages.reports.scenarioLabel', { name: selectedTasksScenario.scenarioName })}
                             </Typography>
                         )}
                     </Box>
@@ -780,7 +780,7 @@ const ReportMatrixView: React.FC<ReportMatrixViewProps> = ({ data }) => {
                                         <Grid container spacing={1} sx={{ mb: task.args && Object.keys(task.args).length > 0 ? 1.5 : 0 }}>
                                             <Grid size={{ xs: 6 }}>
                                                 <Typography variant="caption" color="text.secondary" display="block">
-                                                    Momento (Hook)
+                                                    {t('pages.reports.hook')}
                                                 </Typography>
                                                 <Chip 
                                                     size="small" 
@@ -796,7 +796,7 @@ const ReportMatrixView: React.FC<ReportMatrixViewProps> = ({ data }) => {
                                             </Grid>
                                             <Grid size={{ xs: 6 }}>
                                                 <Typography variant="caption" color="text.secondary" display="block">
-                                                    Alcance (Scope)
+                                                    {t('pages.reports.scope')}
                                                 </Typography>
                                                 <Chip 
                                                     size="small" 
@@ -815,7 +815,7 @@ const ReportMatrixView: React.FC<ReportMatrixViewProps> = ({ data }) => {
                                         {task.args && Object.keys(task.args).length > 0 && (
                                             <Box sx={{ mt: 1 }}>
                                                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                                                    Parámetros (Arguments)
+                                                    {t('pages.reports.arguments')}
                                                 </Typography>
                                                 <Box
                                                     component="pre"
@@ -842,7 +842,7 @@ const ReportMatrixView: React.FC<ReportMatrixViewProps> = ({ data }) => {
                     ) : (
                         <Box sx={{ py: 4, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                             <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                                Sin tareas asociadas
+                                {t('pages.reports.withoutAssociatedTasks')}
                             </Typography>
                         </Box>
                     )}
@@ -859,7 +859,7 @@ const ReportMatrixView: React.FC<ReportMatrixViewProps> = ({ data }) => {
                             fontWeight: 600
                         }}
                     >
-                        Cerrar
+                        {t('pages.reports.close')}
                     </Button>
                 </DialogActions>
             </Dialog>

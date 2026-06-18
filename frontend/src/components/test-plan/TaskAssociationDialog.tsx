@@ -11,6 +11,7 @@ import AssignmentIcon from '@mui/icons-material/Assignment';
 import SaveRoundedIcon from '@mui/icons-material/SaveRounded';
 import { PlanTask } from '../../types';
 import { v4 as uuidv4 } from 'uuid';
+import { useTranslation } from 'react-i18next';
 
 interface TaskDef {
   name: string;
@@ -50,17 +51,33 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
   nodeId
 }) => {
   const theme = useTheme();
+  const { t } = useTranslation();
   const isContainerLevel = nodeType === 'cycle' || nodeType === 'set' || nodeType === 'flow';
   
   const getNodeTypeLabel = () => {
     switch (nodeType) {
-      case 'cycle': return 'Ciclo';
-      case 'set': return 'Suite (Set)';
-      case 'flow': return 'Flujo';
-      case 'feature': return 'Escenario elegido';
-      case 'scenario': return 'Escenario elegido';
-      default: return 'Escenario elegido';
+      case 'cycle': return t('pages.reports.cycle');
+      case 'set': return t('pages.reports.testSet');
+      case 'flow': return t('pages.reports.flow');
+      case 'feature': return t('pages.reports.scenario');
+      case 'scenario': return t('pages.reports.scenario');
+      default: return t('pages.reports.scenario');
     }
+  };
+
+  const getMomentLabel = () => {
+    if (isContainerLevel) {
+      return currentHook === 'before' ? t('taskAssociation.atStartOf', { type: '' }).trim() : t('taskAssociation.atEndOf', { type: '' }).trim();
+    }
+    return currentHook === 'before' ? t('taskAssociation.before') : t('taskAssociation.after');
+  };
+
+  const getTargetLabel = () => {
+    if (isContainerLevel) {
+      return getNodeTypeLabel();
+    }
+    const scopeLabel = currentScope === 'scenario' ? t('taskAssociation.scenario') : t('taskAssociation.step');
+    return targetScenarioVal ? `"${targetScenarioVal}"` : scopeLabel;
   };
 
   const getShortId = (id?: string) => {
@@ -317,7 +334,7 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
         >
               <AssignmentIcon fontSize="small" />
           <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary', fontSize: '1.05rem', flexGrow: 1 }}>
-            Configurar Tareas de Ejecución
+            {t('taskAssociation.title')}
           </Typography>
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5 }}>
             <Typography
@@ -382,12 +399,12 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
               }}
             >
               <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.25, color: 'text.secondary', fontSize: '0.8rem', letterSpacing: 0.5, textTransform: 'uppercase' }}>
-                Tareas Configuradas ({associatedTasks.length})
+                {t('taskAssociation.configuredTasks', { count: associatedTasks.length })}
               </Typography>
               {associatedTasks.length === 0 ? (
                 <Box sx={{ p: 4, textAlign: 'center', bgcolor: alpha(theme.palette.action.hover, 0.5), borderRadius: '10px', border: '1px dashed', borderColor: alpha(theme.palette.divider, 0.8), flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Typography variant="body2" color="text.disabled">
-                    No hay tareas asociadas a este {nodeType === 'cycle' ? 'ciclo' : nodeType === 'set' ? 'set' : nodeType === 'flow' ? 'flujo' : 'escenario'}.
+                    {t('taskAssociation.noTasks', { type: getNodeTypeLabel().toLowerCase() })}
                   </Typography>
                 </Box>
               ) : (
@@ -449,14 +466,14 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
                             </Typography>
                             <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
                               {isContainerLevel ? (
-                                <>Ejecución <strong>{task.hook === 'before' ? 'Al Inicio' : 'Al Final'}</strong> del {getNodeTypeLabel()}</>
+                                <>{t(`taskAssociation.executionAt${task.hook === 'before' ? 'Start' : 'End'}`, { type: getNodeTypeLabel() })}</>
                               ) : (
-                                <>Ejecución <strong>{task.hook === 'before' ? 'Before' : 'After'}</strong> <strong>{task.scope === 'scenario' ? 'Escenario' : 'Paso'}</strong></>
+                                <>{t(`taskAssociation.execution${task.hook === 'before' ? 'Before' : 'After'}`, { scope: task.scope === 'scenario' ? t('taskAssociation.scenario') : t('taskAssociation.step') })}</>
                               )}
                             </Typography>
                             {(task.targetScenario || nodeId) && (
                               <Typography variant="caption" color="primary.main" display="block" sx={{ fontWeight: 'bold', mt: 0.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={task.targetScenario || nodeId}>
-                                Filtro: Solo en "{getShortId(task.targetScenario || nodeId)}"
+                                {t('taskAssociation.filterOnlyIn', { target: getShortId(task.targetScenario || nodeId) })}
                               </Typography>
                             )}
                           </Box>
@@ -464,7 +481,7 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
                             <IconButton
                               size="small"
                               onClick={() => handleEditClick(task)}
-                              title="Editar"
+                              title={t('taskAssociation.edit')}
                               sx={{
                                 color: editingTaskId === task.id ? 'primary.main' : 'text.secondary',
                                 '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.1) }
@@ -476,7 +493,7 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
                               size="small"
                               color="error"
                               onClick={() => handleDeleteTask(task.id)}
-                              title="Eliminar"
+                              title={t('taskAssociation.delete')}
                               sx={{
                                 color: 'error.main',
                                 '&:hover': { bgcolor: alpha(theme.palette.error.main, 0.1) }
@@ -508,7 +525,7 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
                       '&:hover': { backgroundColor: alpha(theme.palette.action.hover, 0.8), borderColor: 'text.secondary' },
                     }}
                   >
-                    Cancelar
+                    {t('common.cancel')}
                   </Button>
                   <Button
                     onClick={handleSaveClick}
@@ -525,7 +542,7 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
                     }}
                     startIcon={<SaveRoundedIcon />}
                   >
-                    Guardar Configuración
+                    {t('taskAssociation.saveConfig')}
                   </Button>
                 </Box>
               </Box>
@@ -548,7 +565,7 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
               }}
             >
               <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5, color: 'text.secondary', fontSize: '0.8rem', letterSpacing: 0.5, textTransform: 'uppercase' }}>
-                {editingTaskId ? 'Editar Tarea Seleccionada' : 'Asociar Nueva Tarea'}
+                {editingTaskId ? t('taskAssociation.editSelectedTask') : t('taskAssociation.associateNewTask')}
               </Typography>              {nodeType === 'scenario' || nodeType === 'feature' || nodeType === 'flow' ? (
                 <Box
                   sx={{
@@ -572,19 +589,15 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
                     }}
                   >
                     {applyScope === 'all' ? (
-                      <>
-                        <strong>Nota de {nodeType === 'flow' ? 'Flujo' : 'Escenario'} Global:</strong> Esta tarea se aplicará a <strong>todos los {nodeType === 'flow' ? 'flujos' : 'escenarios'}</strong> de esta plantilla en el plan de pruebas, guardándose en la definición del blueprint original.
-                      </>
+                      <span dangerouslySetInnerHTML={{ __html: t('taskAssociation.noteGlobal', { type: nodeType === 'flow' ? 'Flujo' : 'Escenario', plural: nodeType === 'flow' ? 'flujos' : 'escenarios' }) }} />
                     ) : (
-                      <>
-                        <strong>Nota de {nodeType === 'flow' ? 'Flujo' : 'Escenario'} Específico:</strong> Esta tarea se asocia a <strong>este {nodeType === 'flow' ? 'flujo/caso' : 'escenario'} elegido ("{nodeName}")</strong> y se ejecutará únicamente en su ciclo de vida local (instancia).
-                      </>
+                      <span dangerouslySetInnerHTML={{ __html: t('taskAssociation.noteSpecific', { type: nodeType === 'flow' ? 'Flujo' : 'Escenario', name: nodeName }) }} />
                     )}
                   </Alert>
 
                   <Box>
                     <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, fontSize: '0.75rem', color: 'text.secondary', letterSpacing: 0.5, textTransform: 'uppercase' }}>
-                      Ámbito de Aplicación del Guardado
+                      {t('taskAssociation.radioScope')}
                     </Typography>
                     <RadioGroup
                       value={applyScope}
@@ -596,7 +609,7 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
                         control={<Radio size="small" sx={{ p: 0.5 }} />}
                         label={
                           <Typography variant="body2" sx={{ fontSize: '0.78rem', color: 'text.primary', fontWeight: applyScope === 'instance' ? 600 : 400 }}>
-                            Solo para esta instancia del {nodeType === 'flow' ? 'flujo/caso' : 'escenario'}
+                            {t('taskAssociation.radioInstance', { type: nodeType === 'flow' ? t('pages.reports.flow') : t('taskAssociation.scenario') })}
                           </Typography>
                         }
                         sx={{ ml: -0.75 }}
@@ -606,7 +619,7 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
                         control={<Radio size="small" sx={{ p: 0.5 }} />}
                         label={
                           <Typography variant="body2" sx={{ fontSize: '0.78rem', color: 'text.primary', fontWeight: applyScope === 'all' ? 600 : 400 }}>
-                            Todas las instancias de este {nodeType === 'flow' ? 'flujo/caso' : 'escenario'} en el plan
+                            {t('taskAssociation.radioAll', { type: nodeType === 'flow' ? t('pages.reports.flow') : t('taskAssociation.scenario') })}
                           </Typography>
                         }
                         sx={{ ml: -0.75 }}
@@ -626,19 +639,19 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
                 >
                   {isContainerLevel ? (
                     <>
-                      <strong>Nota de Ejecución ({getNodeTypeLabel()}):</strong> Esta tarea se ejecutará únicamente al <strong>inicio</strong> o al <strong>final</strong> de este contenedor.
+                      <strong dangerouslySetInnerHTML={{ __html: t('taskAssociation.noteContainer', { type: getNodeTypeLabel() }) }} />
                       <br />
-                      • <em>Al inicio</em>: Se ejecutará antes del primer escenario de este {getNodeTypeLabel().toLowerCase()}.
+                      <span dangerouslySetInnerHTML={{ __html: t('taskAssociation.noteContainerStart', { type: getNodeTypeLabel().toLowerCase() }) }} />
                       <br />
-                      • <em>Al final</em>: Se ejecutará después del último escenario de este {getNodeTypeLabel().toLowerCase()}.
+                      <span dangerouslySetInnerHTML={{ __html: t('taskAssociation.noteContainerEnd', { type: getNodeTypeLabel().toLowerCase() }) }} />
                     </>
                   ) : (
                     <>
-                      <strong>Nota de Herencia ({nodeType === 'plans' || nodeType === 'plan' ? 'Plan' : nodeType}):</strong> Esta tarea se heredará en cascada y se ejecutará para <strong>cada escenario</strong> dentro de este contenedor.
+                      <strong dangerouslySetInnerHTML={{ __html: t('taskAssociation.noteInheritance', { type: nodeType === 'plans' || nodeType === 'plan' ? 'Plan' : nodeType }) }} />
                       <br />
-                      • <em>Escenario</em>: Se ejecuta antes/después de cada escenario.
+                      <span dangerouslySetInnerHTML={{ __html: t('taskAssociation.noteInheritanceScenario') }} />
                       <br />
-                      • <em>Paso</em>: Se ejecuta antes/después de cada paso de todos los escenarios.
+                      <span dangerouslySetInnerHTML={{ __html: t('taskAssociation.noteInheritanceStep') }} />
                     </>
                   )}
                 </Alert>
@@ -646,16 +659,16 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
 
               <Stack spacing={2.5} sx={{ flexGrow: 1 }}>
                 <FormControl fullWidth size="small">
-                  <InputLabel id="task-select-label">Seleccionar Tarea</InputLabel>
+                  <InputLabel id="task-select-label">{t('taskAssociation.selectTask')}</InputLabel>
                   <Select
                     labelId="task-select-label"
                     value={selectedTaskName}
-                    label="Seleccionar Tarea"
+                    label={t('taskAssociation.selectTask')}
                     onChange={(e) => handleTaskSelection(e.target.value)}
                     sx={{ borderRadius: '8px' }}
                   >
                     <MenuItem value="">
-                      <em>Ninguna</em>
+                      <em>{t('taskAssociation.none')}</em>
                     </MenuItem>
                     {availableTasks.map((t) => (
                       <MenuItem key={t.name} value={t.name}>
@@ -674,20 +687,20 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
                   <>
                     {nodeType === 'feature' && scenarios && scenarios.length > 0 && (
                       <FormControl fullWidth size="small">
-                        <InputLabel id="target-scenario-select-label">Escenario Objetivo</InputLabel>
+                        <InputLabel id="target-scenario-select-label">{t('taskAssociation.targetScenario')}</InputLabel>
                         <Select
                           labelId="target-scenario-select-label"
                           value={currentTargetScenario}
-                          label="Escenario Objetivo"
+                          label={t('taskAssociation.targetScenario')}
                           onChange={(e) => setCurrentTargetScenario(e.target.value)}
                           sx={{ borderRadius: '8px' }}
                         >
                           <MenuItem value="all">
-                            <em>Todos los escenarios de este Feature</em>
+                            <em>{t('taskAssociation.allScenariosInFeature')}</em>
                           </MenuItem>
                           {scenarios.map((sname) => (
                             <MenuItem key={sname} value={sname}>
-                              Solo: "{sname}"
+                              {t('taskAssociation.onlyScenario', { name: sname })}
                             </MenuItem>
                           ))}
                         </Select>
@@ -696,50 +709,50 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
 
                     {isContainerLevel ? (
                       <FormControl fullWidth size="small">
-                        <InputLabel id="container-hook-select-label">Momento de Ejecución</InputLabel>
+                        <InputLabel id="container-hook-select-label">{t('taskAssociation.executionMoment')}</InputLabel>
                         <Select
                           labelId="container-hook-select-label"
                           value={currentHook}
-                          label="Momento de Ejecución"
+                          label={t('taskAssociation.executionMoment')}
                           onChange={(e) => {
                             setCurrentHook(e.target.value as 'before' | 'after');
                             setCurrentScope('scenario');
                           }}
                           sx={{ borderRadius: '8px' }}
                         >
-                          <MenuItem value="before">Al inicio del {getNodeTypeLabel()}</MenuItem>
-                          <MenuItem value="after">Al final del {getNodeTypeLabel()}</MenuItem>
+                          <MenuItem value="before">{t('taskAssociation.atStartOf', { type: getNodeTypeLabel() })}</MenuItem>
+                          <MenuItem value="after">{t('taskAssociation.atEndOf', { type: getNodeTypeLabel() })}</MenuItem>
                         </Select>
                       </FormControl>
                     ) : (
                       <Grid container spacing={2}>
                         <Grid size={{ xs: 6 }}>
                           <FormControl fullWidth size="small">
-                            <InputLabel id="hook-select-label">Momento (Hook)</InputLabel>
+                            <InputLabel id="hook-select-label">{t('taskAssociation.hook')}</InputLabel>
                             <Select
                               labelId="hook-select-label"
                               value={currentHook}
-                              label="Momento (Hook)"
+                              label={t('taskAssociation.hook')}
                               onChange={(e) => setCurrentHook(e.target.value as 'before' | 'after')}
                               sx={{ borderRadius: '8px' }}
                             >
-                              <MenuItem value="before">Antes (Before)</MenuItem>
-                              <MenuItem value="after">Después (After)</MenuItem>
+                              <MenuItem value="before">{t('taskAssociation.before')}</MenuItem>
+                              <MenuItem value="after">{t('taskAssociation.after')}</MenuItem>
                             </Select>
                           </FormControl>
                         </Grid>
                         <Grid size={{ xs: 6 }}>
                           <FormControl fullWidth size="small">
-                            <InputLabel id="scope-select-label">Alcance (Scope)</InputLabel>
+                            <InputLabel id="scope-select-label">{t('taskAssociation.scope')}</InputLabel>
                             <Select
                               labelId="scope-select-label"
                               value={currentScope}
-                              label="Alcance (Scope)"
+                              label={t('taskAssociation.scope')}
                               onChange={(e) => setCurrentScope(e.target.value as 'scenario' | 'step')}
                               sx={{ borderRadius: '8px' }}
                             >
-                              <MenuItem value="scenario">Escenario</MenuItem>
-                              <MenuItem value="step">Paso (Step)</MenuItem>
+                              <MenuItem value="scenario">{t('taskAssociation.scenario')}</MenuItem>
+                              <MenuItem value="step">{t('taskAssociation.step')}</MenuItem>
                             </Select>
                           </FormControl>
                         </Grid>
@@ -751,7 +764,7 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
                       <Box>
                         <Divider sx={{ mb: 2, borderColor: alpha(theme.palette.divider, 0.5) }} />
                         <Typography variant="caption" display="block" sx={{ fontWeight: 700, mb: 1.5, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                          Parámetros de la Tarea
+                          {t('taskAssociation.taskParameters')}
                         </Typography>
                         <Stack spacing={2}>
                           {selectedTaskDef.args_schema.map((arg) => (
@@ -794,7 +807,7 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
                           backgroundColor: alpha(theme.palette.warning.main, 0.08)
                         }}
                       >
-                        <strong>Asociación existente:</strong> Ya existe una tarea @{selectedTaskName} configurada para {isContainerLevel ? (currentHook === 'before' ? 'el Inicio' : 'el Final') : (currentHook === 'before' ? 'Antes' : 'Después')} {isContainerLevel ? `del ${getNodeTypeLabel()}` : `de cada ${currentScope === 'scenario' ? 'Escenario' : 'Paso'}`}{targetScenarioVal ? ` en el escenario "${targetScenarioVal}"` : ''}.
+                        <strong>{t('taskAssociation.duplicateWarning', { name: selectedTaskName, moment: getMomentLabel(), target: getTargetLabel() })}</strong>
                       </Alert>
                     )}
 
@@ -811,7 +824,7 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
                           borderColor: alpha(theme.palette.divider, 0.8),
                         }}
                       >
-                        Cancelar
+                        {t('common.cancel')}
                       </Button>
                       <Button
                         size="small"
@@ -829,7 +842,7 @@ export const TaskAssociationDialog: React.FC<TaskAssociationDialogProps> = ({
                           boxShadow: `0 2px 6px ${alpha(editingTaskId ? theme.palette.primary.main : theme.palette.secondary.main, 0.2)}`,
                         }}
                       >
-                        {editingTaskId ? 'Actualizar esta asociación' : 'Guardar esta asociación'}
+                        {editingTaskId ? t('taskAssociation.updateAssociation') : t('taskAssociation.saveAssociation')}
                       </Button>
                     </Box>
                   </>

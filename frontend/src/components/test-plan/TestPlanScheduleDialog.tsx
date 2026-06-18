@@ -79,14 +79,14 @@ const TestPlanScheduleDialog: React.FC<TestPlanScheduleDialogProps> = ({
                 >
                     <ScheduleIcon sx={{ color: PRIMARY, fontSize: 24 }} />
                     <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary', fontSize: '1.1rem' }}>
-                        Programar Ejecución
+                        {t('pages.execution.scheduleTitle')}
                     </Typography>
                 </Box>
             </DialogTitle>
 
             <DialogContent sx={{ px: 3, py: 3, display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
-                    Selecciona la fecha y hora exacta en la que deseas que el Test Plan comience a ejecutarse.
+                    {t('pages.execution.scheduleDescription')}
                 </Typography>
                 <TextField
                     id="schedule-datetime"
@@ -97,7 +97,7 @@ const TestPlanScheduleDialog: React.FC<TestPlanScheduleDialogProps> = ({
                     fullWidth
                     size="medium"
                     error={!isValid && scheduledTime !== ''}
-                    helperText={!isValid && scheduledTime !== '' ? 'La hora seleccionada ya pasó.' : ''}
+                    helperText={!isValid && scheduledTime !== '' ? t('pages.execution.schedulePastError') : ''}
                     sx={{
                         '& .MuiOutlinedInput-root': {
                             borderRadius: '8px',
@@ -128,7 +128,7 @@ const TestPlanScheduleDialog: React.FC<TestPlanScheduleDialogProps> = ({
                         '&:hover': { backgroundColor: alpha(theme.palette.action.hover, 0.8), borderColor: 'text.secondary' },
                     }}
                 >
-                    Cancelar
+                    {t('common.cancel')}
                 </Button>
                 <Button
                     onClick={handleConfirm}
@@ -146,7 +146,7 @@ const TestPlanScheduleDialog: React.FC<TestPlanScheduleDialogProps> = ({
                         '&.Mui-disabled': { opacity: 0.5, color: '#fff' },
                     }}
                 >
-                    Programar
+                    {t('pages.execution.scheduleConfirmButton')}
                 </Button>
             </DialogActions>
         </Dialog>

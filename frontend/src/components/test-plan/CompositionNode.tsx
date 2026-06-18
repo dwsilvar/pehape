@@ -15,6 +15,7 @@ import { BlueprintRef, BlueprintsData, PlanTask } from '../../types';
 import { CycleIcon, FlowIcon, ScenarioIcon, FeatureIcon } from '../PehapeIcons';
 import LibraryBooksRoundedIcon from '@mui/icons-material/LibraryBooksRounded';
 import TaskAssociationDialog from './TaskAssociationDialog';
+import { useTranslation } from 'react-i18next';
 
 const TAG_COLORS = [
   '#6366f1', '#8b5cf6', '#ec4899', '#f43f5e',
@@ -44,6 +45,7 @@ const CompositionNode: React.FC<CompositionNodeProps> = ({
   item, index, total, onRemove, onMoveUp, onMoveDown, onUpdateTasks, compact, isSetContext, blueprints
 }) => {
   const theme = useTheme();
+  const { t } = useTranslation();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
     data: { type: 'composition-item', item }
@@ -126,7 +128,7 @@ const CompositionNode: React.FC<CompositionNodeProps> = ({
               {item.type === 'scenario' && item.scenarioName ? item.scenarioName : item.name}
             </Typography>
             {item.tasks && item.tasks.length > 0 && (
-              <Tooltip title={`${item.tasks.length} tarea(s) configurada(s)`}>
+              <Tooltip title={t('pages.testPlan.node.tasksConfigured', { count: item.tasks.length })}>
                 <Typography variant="caption" sx={{ fontSize: '0.62rem', bgcolor: 'primary.main', color: 'primary.contrastText', px: 0.5, py: 0.1, borderRadius: 0.5, fontWeight: 'bold' }}>
                   {item.tasks.length}T
                 </Typography>
@@ -170,7 +172,7 @@ const CompositionNode: React.FC<CompositionNodeProps> = ({
         </Box>
 
         {isSetContext && item.type === 'feature' && (
-          <Tooltip title="Ver expansión matricial">
+          <Tooltip title={t('pages.testPlan.node.matrixExpansion')}>
             <IconButton size="small" onClick={() => setShowBranches(!showBranches)} sx={{ color: showBranches ? 'primary.main' : 'text.secondary' }}>
               <CallSplitRoundedIcon sx={{ fontSize: 16 }} />
             </IconButton>
@@ -183,10 +185,10 @@ const CompositionNode: React.FC<CompositionNodeProps> = ({
             <IconButton size="small" disabled={index === total - 1} onClick={() => onMoveDown(item.id)} sx={{ p: 0.25 }}><KeyboardArrowDownRoundedIcon sx={{ fontSize: 14 }} /></IconButton>
           </Box>
           <Box sx={{ display: 'flex', gap: 0.25 }}>
-            <Tooltip title="Configurar Tareas">
+            <Tooltip title={t('pages.testPlan.node.configureTasks')}>
               <IconButton size="small" onClick={() => setTaskDialogOpen(true)} sx={{ p: compact ? 0.25 : 0.5 }}><AssignmentIcon sx={{ fontSize: compact ? 14 : 16 }} /></IconButton>
             </Tooltip>
-            <Tooltip title="Remover">
+            <Tooltip title={t('pages.testPlan.canvas.remove')}>
               <IconButton size="small" color="error" onClick={() => onRemove(item.id)} sx={{ p: compact ? 0.25 : 0.5 }}><DeleteOutlineRoundedIcon sx={{ fontSize: compact ? 14 : 16 }} /></IconButton>
             </Tooltip>
           </Box>
@@ -197,7 +199,7 @@ const CompositionNode: React.FC<CompositionNodeProps> = ({
       <Collapse in={showBranches && isSetContext && item.type === 'feature'}>
         <Box sx={{ ml: 4, mt: 1, pl: 2, borderLeft: `2px dashed ${theme.palette.divider}`, display: 'flex', flexDirection: 'column', gap: 1 }}>
           <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-            Este Feature generará un flujo independiente por cada uno de sus escenarios:
+            {t('pages.testPlan.node.matrixBranching')}
           </Typography>
           {(item.steps || []).length > 0 ? (
             item.steps?.map((scenarioName, i) => (
@@ -207,7 +209,7 @@ const CompositionNode: React.FC<CompositionNodeProps> = ({
               </Box>
             ))
           ) : (
-            <Typography variant="caption" color="error">No se encontraron escenarios pre-procesados en esta referencia.</Typography>
+            <Typography variant="caption" color="error">{t('pages.testPlan.node.noScenariosWarning')}</Typography>
           )}
         </Box>
       </Collapse>

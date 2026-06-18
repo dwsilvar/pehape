@@ -151,32 +151,32 @@ const AppNavbar: React.FC = () => {
                     }}
                 >
                     <Typography variant="caption" sx={{ color: 'text.disabled', mr: 1, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: '0.65rem' }}>
-                        Herramientas
+                        {t('common.navbar.tools', 'Herramientas')}
                     </Typography>
                     <Divider orientation="vertical" flexItem sx={{ mx: 0.5, height: 16, my: 'auto' }} />
                     
-                    <Tooltip title="Importar (Deshabilitado)">
+                    <Tooltip title={t('common.navbar.importDisabled', 'Importar (Deshabilitado)')}>
                         <span>
                             <IconButton size="small" disabled sx={{ color: 'text.disabled' }}>
                                 <FileUploadRoundedIcon fontSize="small" />
                             </IconButton>
                         </span>
                     </Tooltip>
-                    <Tooltip title="Sincronizar (Deshabilitado)">
+                    <Tooltip title={t('common.navbar.syncDisabled', 'Sincronizar (Deshabilitado)')}>
                         <span>
                             <IconButton size="small" disabled sx={{ color: 'text.disabled' }}>
                                 <SyncRoundedIcon fontSize="small" />
                             </IconButton>
                         </span>
                     </Tooltip>
-                    <Tooltip title="Preferencias (Deshabilitado)">
+                    <Tooltip title={t('common.navbar.prefDisabled', 'Preferencias (Deshabilitado)')}>
                         <span>
                             <IconButton size="small" disabled sx={{ color: 'text.disabled' }}>
                                 <SettingsRoundedIcon fontSize="small" />
                             </IconButton>
                         </span>
                     </Tooltip>
-                    <Tooltip title="Ayuda (Deshabilitado)">
+                    <Tooltip title={t('common.navbar.helpDisabled', 'Ayuda (Deshabilitado)')}>
                         <span>
                             <IconButton size="small" disabled sx={{ color: 'text.disabled' }}>
                                 <HelpOutlineRoundedIcon fontSize="small" />
@@ -207,7 +207,7 @@ const AppNavbar: React.FC = () => {
                         }}
                     >
                         {/* Theme Mode Toggle (Light/Dark) */}
-                        <Tooltip title={isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}>
+                        <Tooltip title={isDark ? t('common.navbar.lightMode', 'Cambiar a modo claro') : t('common.navbar.darkMode', 'Cambiar a modo oscuro')}>
                             <IconButton onClick={handleThemeModeToggle} color="inherit" size="small">
                                 {isDark ? <LightModeRoundedIcon fontSize="small" /> : <DarkModeRoundedIcon fontSize="small" />}
                             </IconButton>
@@ -216,7 +216,7 @@ const AppNavbar: React.FC = () => {
                         <Divider orientation="vertical" flexItem sx={{ mx: 0.5, height: 16, my: 'auto' }} />
 
                         {/* Theme Style Selector */}
-                        <Tooltip title={t('common.theme', 'Estilo del Tema')}>
+                        <Tooltip title={t('common.navbar.themeStyle', 'Estilo del Tema')}>
                             <IconButton onClick={handleThemeClick} color="inherit" size="small">
                                 <PaletteRoundedIcon fontSize="small" />
                             </IconButton>

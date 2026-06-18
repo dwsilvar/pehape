@@ -116,15 +116,15 @@ const TestPlanPage: React.FC = () => {
       });
       if (response.ok) {
         fetchBlueprints();
-        alert("Plan importado exitosamente");
+        alert(t('pages.execution.importSuccess'));
       } else {
         const error = await response.json();
-        alert(`Error al importar: ${error.detail}`);
+        alert(t('pages.execution.importError', { error: error.detail }));
       }
-    } catch (error) {
-      alert(`Error al importar: ${error}`);
+    } catch (error: any) {
+      alert(t('pages.execution.importError', { error: error.message || error }));
     }
-  }, [fetchBlueprints]);
+  }, [fetchBlueprints, t]);
 
   // ── Active Blueprint Helpers ─────────────────────────────────────────────────
   const getActiveBlueprintList = useCallback(() => {
@@ -375,12 +375,12 @@ const TestPlanPage: React.FC = () => {
             sx={{ width: libraryVisible ? 4 : 28, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative', bgcolor: theme.palette.custom.border, cursor: libraryVisible ? 'col-resize' : 'default', '&:hover': { bgcolor: libraryVisible ? 'primary.main' : theme.palette.custom.border } }}
             onMouseDown={libraryVisible ? makeResizeHandler('right') : undefined}
           >
-            <Tooltip title={libraryVisible ? 'Ocultar biblioteca' : 'Mostrar biblioteca'} placement="left">
+            <Tooltip title={libraryVisible ? t('pages.testPlan.hideLibrary') : t('pages.testPlan.showLibrary')} placement="left">
               <IconButton size="small" onClick={() => setLibraryVisible(v => !v)} onMouseDown={e => e.stopPropagation()} sx={{ position: libraryVisible ? 'absolute' : 'static', right: libraryVisible ? -12 : 'auto', width: 24, height: 24, bgcolor: theme.palette.background.paper, border: `1px solid ${theme.palette.custom.border}`, borderRadius: '50%', opacity: libraryVisible ? 0 : 1, zIndex: 10, '&:hover': { bgcolor: theme.palette.primary.main, color: 'white', opacity: 1 }, '.MuiBox-root:hover &': { opacity: 1 }, p: 0.25 }}>
                 {libraryVisible ? <ChevronRightRoundedIcon sx={{ fontSize: 14 }} /> : <ChevronLeftRoundedIcon sx={{ fontSize: 14 }} />}
               </IconButton>
             </Tooltip>
-            {!libraryVisible && <Tooltip title="Biblioteca" placement="left"><LibraryBooksRoundedIcon sx={{ fontSize: 13, color: 'text.disabled', mt: 1 }} /></Tooltip>}
+            {!libraryVisible && <Tooltip title={t('pages.testPlan.library')} placement="left"><LibraryBooksRoundedIcon sx={{ fontSize: 13, color: 'text.disabled', mt: 1 }} /></Tooltip>}
           </Box>
 
           {/* Right: Asset Library */}
