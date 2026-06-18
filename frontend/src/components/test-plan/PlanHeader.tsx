@@ -31,11 +31,6 @@ interface PlanHeaderProps {
   onImport?: (file: File) => void;
 }
 
-const statusColors: Record<string, 'default' | 'warning' | 'success' | 'info'> = {
-  draft: 'default',
-  running: 'warning',
-  completed: 'success',
-};
 
 const PlanHeader: React.FC<PlanHeaderProps> = ({ plan, cycle, flow, activeBlueprintName, targetPlanName, targetPlanId, isSaved, onSave, onExecute, isExecuting = false, executionStatus, canExecute = false, onImport }) => {
   const { t } = useTranslation();
@@ -72,8 +67,6 @@ const PlanHeader: React.FC<PlanHeaderProps> = ({ plan, cycle, flow, activeBluepr
     }
   };
 
-  const statusLabel = plan ? t(`pages.testPlan.status.draft`) : '';
-  const statusColor = plan ? statusColors['draft'] : 'default';
 
   return (
     <Box
@@ -113,16 +106,6 @@ const PlanHeader: React.FC<PlanHeaderProps> = ({ plan, cycle, flow, activeBluepr
         )}
       </Breadcrumbs>
 
-      {/* Status chip */}
-      {activeBlueprintName && (
-        <Chip
-          label="Borrador"
-          color="default"
-          size="small"
-          variant="outlined"
-          sx={{ fontSize: '0.7rem', fontWeight: 600, letterSpacing: 0.5 }}
-        />
-      )}
 
       {/* Save button */}
       <Tooltip title={isSaved ? t('pages.testPlan.saved') : t('pages.testPlan.save')}>

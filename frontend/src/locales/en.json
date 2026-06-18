@@ -298,7 +298,7 @@
                 "subtitle": "Real-time output from the test runner"
             },
             "save": "Save Plan",
-            "saved": "✓ Plan saved",
+            "saved": "Plan saved",
             "deletePlan": "Delete Plan",
             "deleteCycle": "Delete Cycle",
             "deleteFlow": "Delete Flow",

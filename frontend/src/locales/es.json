@@ -304,7 +304,7 @@
                 "subtitle": "Salida en tiempo real del runner de pruebas"
             },
             "save": "Guardar Plan",
-            "saved": "✓ Plan guardado",
+            "saved": "Plan guardado",
             "deletePlan": "Eliminar Plan",
             "deleteCycle": "Eliminar Ciclo",
             "deleteFlow": "Eliminar Flujo",

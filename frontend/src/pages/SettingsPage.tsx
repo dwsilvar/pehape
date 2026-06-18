@@ -18,9 +18,17 @@ import {
     CircularProgress,
     Snackbar,
     InputAdornment,
-    IconButton
+    IconButton,
+    Tabs,
+    Tab
 } from '@mui/material';
-import { Settings as SettingsIcon, Save as SaveIcon, FolderOpen as FolderOpenIcon } from '@mui/icons-material';
+import {
+    Settings as SettingsIcon,
+    Save as SaveIcon,
+    FolderOpen as FolderOpenIcon,
+    Info as InfoIcon,
+    Autorenew as UpdateIcon
+} from '@mui/icons-material';
 import AppToolbar from '../components/AppToolbar';
 import { useAppVersion } from '../hooks/useAppVersion';
 
@@ -46,6 +54,7 @@ const SettingsPage: React.FC = () => {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState(false);
+    const [tabValue, setTabValue] = useState(0);
     const appVersion = useAppVersion();
 
     useEffect(() => {
@@ -201,318 +210,416 @@ const SettingsPage: React.FC = () => {
         <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
             <AppToolbar title={t('pages.settings.title', 'Configuraciones')} icon={<SettingsIcon sx={{ fontSize: 32 }} />} showControls={false} />
             
-            <Box sx={{ px: 4, pt: 4, flex: 1, overflowY: 'auto', backgroundColor: 'background.default' }}>
-                <Paper elevation={0} sx={{ p: 4, mb: '5px', maxWidth: 800, mx: 'auto', border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+            <Box sx={{ p: 1.5, flex: 1, overflow: 'hidden', backgroundColor: 'background.default', display: 'flex', flexDirection: 'column' }}>
+                <Paper elevation={0} sx={{ p: 2, flex: 1, display: 'flex', flexDirection: 'column', border: '1px solid', borderColor: 'divider', borderRadius: 2, overflow: 'hidden' }}>
                     
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                        <Typography variant="h6" fontWeight="600">Parámetros Globales</Typography>
-                        <Button 
-                            variant="contained" 
-                            color="primary" 
-                            startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />} 
-                            onClick={handleSave}
-                            disabled={saving || !settings}
-                        >
-                            {t('common.save', 'Guardar')}
-                        </Button>
+                    <Tabs
+                        value={tabValue}
+                        onChange={(_, val) => setTabValue(val)}
+                        variant="fullWidth"
+                        sx={{
+                            mb: 2.5,
+                            borderBottom: 1,
+                            borderColor: 'divider',
+                            '& .MuiTabs-flexContainer': {
+                                gap: 1
+                            },
+                            '& .MuiTab-root': {
+                                fontSize: '0.85rem',
+                                fontWeight: 600,
+                                textTransform: 'none',
+                                minHeight: 44,
+                                display: 'flex',
+                                flexDirection: 'row',
+                                gap: 1,
+                                alignItems: 'center'
+                            }
+                        }}
+                    >
+                        <Tab label="Automatización y OCR" icon={<SettingsIcon sx={{ fontSize: 18 }} />} />
+                        <Tab label="Actualizaciones" icon={<UpdateIcon sx={{ fontSize: 18 }} />} />
+                        <Tab label="Información del Sistema" icon={<InfoIcon sx={{ fontSize: 18 }} />} />
+                    </Tabs>
+
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                        <Typography variant="h6" fontWeight="600" fontSize="1.1rem">
+                            {tabValue === 0 && "Parámetros de Automatización"}
+                            {tabValue === 1 && "Actualización de Software"}
+                            {tabValue === 2 && "Estado del Sistema"}
+                        </Typography>
+                        {tabValue !== 2 && (
+                            <Button 
+                                variant="contained" 
+                                color="primary" 
+                                size="small"
+                                startIcon={saving ? <CircularProgress size={16} color="inherit" /> : <SaveIcon />} 
+                                onClick={handleSave}
+                                disabled={saving || !settings}
+                            >
+                                {t('common.save', 'Guardar')}
+                            </Button>
+                        )}
                     </Box>
 
-                    {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
+                    {error && <Alert severity="error" sx={{ mb: 2, py: 0.5 }}>{error}</Alert>}
 
                     {loading || !settings ? (
-                        <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flex: 1 }}>
                             <CircularProgress />
                         </Box>
                     ) : (
-                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        <Box sx={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column', gap: 2, pr: 1.5, pl: 0.5 }}>
                             
-                            {/* --- Tesseract Configuration --- */}
-                            <Typography variant="subtitle1" fontWeight="600" color="primary">Configuración OCR (Tesseract)</Typography>
-                            <TextField 
-                                label="Ruta de Tesseract (TESSERACT_CMD_PATH)" 
-                                variant="outlined" 
-                                fullWidth 
-                                value={settings.TESSERACT_CMD_PATH}
-                                onChange={(e) => handleChange('TESSERACT_CMD_PATH', e.target.value)}
-                                helperText="Ruta absoluta al ejecutable tesseract.exe"
-                                size="small"
-                                InputProps={{
-                                    endAdornment: (
-                                        <InputAdornment position="end">
-                                            <IconButton onClick={async () => {
-                                                try {
-                                                    const currentPath = encodeURIComponent(settings.TESSERACT_CMD_PATH || '');
-                                                    const res = await fetch(`/api/settings/browse_file?current_path=${currentPath}`);
-                                                    if (res.ok) {
-                                                        const data = await res.json();
-                                                        if (data.path) {
-                                                            handleChange('TESSERACT_CMD_PATH', data.path);
-                                                        }
-                                                    }
-                                                } catch (err) {
-                                                    console.error("Error al abrir explorador:", err);
-                                                }
-                                            }} edge="end">
-                                                <FolderOpenIcon />
-                                            </IconButton>
-                                        </InputAdornment>
-                                    )
-                                }}
-                            />
-                            
-                            <FormControl fullWidth size="small">
-                                <InputLabel>Idioma OCR (TESSERACT_LANGUAGE)</InputLabel>
-                                <Select
-                                    value={settings.TESSERACT_LANGUAGE}
-                                    label="Idioma OCR (TESSERACT_LANGUAGE)"
-                                    onChange={(e) => handleChange('TESSERACT_LANGUAGE', e.target.value)}
-                                >
-                                    <MenuItem value="spa">Español (spa)</MenuItem>
-                                    <MenuItem value="eng">Inglés (eng)</MenuItem>
-                                    <MenuItem value="spa+eng">Español + Inglés</MenuItem>
-                                </Select>
-                            </FormControl>
+                            {/* TAB 0: Automatización y OCR */}
+                            {tabValue === 0 && (
+                                <Box sx={{ display: 'flex', gap: 4, flexDirection: { xs: 'column', md: 'row' } }}>
+                                    
+                                    {/* Left Column: Tesseract & Image Paths */}
+                                    <Box sx={{ flex: 1.2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                        {/* --- Tesseract Configuration --- */}
+                                        <Typography variant="subtitle2" fontWeight="600" color="primary">Configuración OCR (Tesseract)</Typography>
+                                        
+                                        <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
+                                            <Box sx={{ flex: 3 }}>
+                                                <TextField 
+                                                    label="Ruta de Tesseract (TESSERACT_CMD_PATH)" 
+                                                    variant="outlined" 
+                                                    fullWidth 
+                                                    value={settings.TESSERACT_CMD_PATH}
+                                                    onChange={(e) => handleChange('TESSERACT_CMD_PATH', e.target.value)}
+                                                    placeholder="Ej: C:\Program Files\Tesseract-OCR\tesseract.exe"
+                                                    size="small"
+                                                    InputProps={{
+                                                        endAdornment: (
+                                                            <InputAdornment position="end">
+                                                                <IconButton onClick={async () => {
+                                                                    try {
+                                                                        const currentPath = encodeURIComponent(settings.TESSERACT_CMD_PATH || '');
+                                                                        const res = await fetch(`/api/settings/browse_file?current_path=${currentPath}`);
+                                                                        if (res.ok) {
+                                                                            const data = await res.json();
+                                                                            if (data.path) {
+                                                                                handleChange('TESSERACT_CMD_PATH', data.path);
+                                                                            }
+                                                                        }
+                                                                    } catch (err) {
+                                                                        console.error("Error al abrir explorador:", err);
+                                                                    }
+                                                                }} edge="end" size="small">
+                                                                    <FolderOpenIcon fontSize="small" />
+                                                                </IconButton>
+                                                            </InputAdornment>
+                                                        )
+                                                    }}
+                                                />
+                                            </Box>
+                                            <Box sx={{ flex: 1, minWidth: 160 }}>
+                                                <FormControl fullWidth size="small">
+                                                    <InputLabel>Idioma OCR</InputLabel>
+                                                    <Select
+                                                        value={settings.TESSERACT_LANGUAGE}
+                                                        label="Idioma OCR"
+                                                        onChange={(e) => handleChange('TESSERACT_LANGUAGE', e.target.value)}
+                                                    >
+                                                        <MenuItem value="spa">Español (spa)</MenuItem>
+                                                        <MenuItem value="eng">Inglés (eng)</MenuItem>
+                                                        <MenuItem value="spa+eng">Español + Inglés</MenuItem>
+                                                    </Select>
+                                                </FormControl>
+                                            </Box>
+                                        </Box>
 
-                            <Box>
-                                <Typography gutterBottom variant="body2" color="text.secondary">
-                                    Umbral de Confianza OCR (OCR_CONFIDENCE_THRESHOLD)
-                                </Typography>
-                                <Box sx={{ px: 2 }}>
-                                    <Slider
-                                        value={settings.OCR_CONFIDENCE_THRESHOLD}
-                                        onChange={(_, val) => handleChange('OCR_CONFIDENCE_THRESHOLD', val as number)}
-                                        valueLabelDisplay="auto"
-                                        step={1}
-                                        min={0}
-                                        max={100}
-                                        marks={[
-                                            { value: 0, label: '0%' },
-                                            { value: 100, label: '100%' }
-                                        ]}
-                                    />
-                                </Box>
-                            </Box>
+                                        <Divider />
 
-                            <Divider />
-
-                            {/* --- Image Paths --- */}
-                            <Typography variant="subtitle1" fontWeight="600" color="primary">Configuración de Imágenes y Rutas</Typography>
-                            <TextField 
-                                label="Ruta Base de Imágenes (IMAGES_BASE_PATH)" 
-                                variant="outlined" 
-                                fullWidth 
-                                value={settings.IMAGES_BASE_PATH}
-                                onChange={(e) => handleChange('IMAGES_BASE_PATH', e.target.value)}
-                                size="small"
-                                helperText="Ruta absoluta o relativa a la carpeta de imágenes"
-                                InputProps={{
-                                    endAdornment: (
-                                        <InputAdornment position="end">
-                                            <IconButton onClick={async () => {
-                                                try {
-                                                    const currentPath = encodeURIComponent(settings.IMAGES_BASE_PATH || '');
-                                                    const res = await fetch(`/api/settings/browse_directory?current_path=${currentPath}`);
-                                                    if (res.ok) {
-                                                        const data = await res.json();
-                                                        if (data.path) {
-                                                            handleChange('IMAGES_BASE_PATH', data.path);
-                                                        }
-                                                    }
-                                                } catch (err) {
-                                                    console.error("Error al abrir explorador:", err);
-                                                }
-                                            }} edge="end">
-                                                <FolderOpenIcon />
-                                            </IconButton>
-                                        </InputAdornment>
-                                    )
-                                }}
-                            />
-                            
-                            <TextField 
-                                label="Ruta de Evidencias (IMAGES_REPORT_PATH)" 
-                                variant="outlined" 
-                                fullWidth 
-                                value={settings.IMAGES_REPORT_PATH}
-                                onChange={(e) => handleChange('IMAGES_REPORT_PATH', e.target.value)}
-                                size="small"
-                                helperText="Ruta absoluta o relativa a la carpeta para guardar capturas de reportes"
-                                InputProps={{
-                                    endAdornment: (
-                                        <InputAdornment position="end">
-                                            <IconButton onClick={async () => {
-                                                try {
-                                                    const currentPath = encodeURIComponent(settings.IMAGES_REPORT_PATH || '');
-                                                    const res = await fetch(`/api/settings/browse_directory?current_path=${currentPath}`);
-                                                    if (res.ok) {
-                                                        const data = await res.json();
-                                                        if (data.path) {
-                                                            handleChange('IMAGES_REPORT_PATH', data.path);
-                                                        }
-                                                    }
-                                                } catch (err) {
-                                                    console.error("Error al abrir explorador:", err);
-                                                }
-                                            }} edge="end">
-                                                <FolderOpenIcon />
-                                            </IconButton>
-                                        </InputAdornment>
-                                    )
-                                }}
-                            />
-                            
-                            <Box>
-                                <Typography gutterBottom variant="body2" color="text.secondary">
-                                    Umbral de Coincidencia de Imágenes (IMAGE_CONFIDENCE_THRESHOLD)
-                                </Typography>
-                                <Box sx={{ px: 2 }}>
-                                    <Slider
-                                        value={settings.IMAGE_CONFIDENCE_THRESHOLD}
-                                        onChange={(_, val) => handleChange('IMAGE_CONFIDENCE_THRESHOLD', val as number)}
-                                        valueLabelDisplay="auto"
-                                        step={1}
-                                        min={0}
-                                        max={100}
-                                        marks={[
-                                            { value: 0, label: '0%' },
-                                            { value: 100, label: '100%' }
-                                        ]}
-                                    />
-                                </Box>
-                            </Box>
-
-                            <Divider />
-
-                            {/* --- Execution Engine --- */}
-                            <Typography variant="subtitle1" fontWeight="600" color="primary">Motor de Ejecución</Typography>
-                            <FormControlLabel
-                                control={
-                                    <Switch 
-                                        checked={settings.STOP_ON_FAILURE} 
-                                        onChange={(e) => handleChange('STOP_ON_FAILURE', e.target.checked)}
-                                        color="primary"
-                                    />
-                                }
-                                label={
-                                    <Box>
-                                        <Typography variant="body1">Detener en el Primer Fallo (STOP_ON_FAILURE)</Typography>
-                                        <Typography variant="caption" color="text.secondary">Si está activo, detiene la ejecución del flujo cuando un escenario falla.</Typography>
+                                        {/* --- Image Paths --- */}
+                                        <Typography variant="subtitle2" fontWeight="600" color="primary">Configuración de Imágenes y Rutas</Typography>
+                                        
+                                        <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
+                                            <Box sx={{ flex: 1 }}>
+                                                <TextField 
+                                                    label="Ruta Base de Imágenes (IMAGES_BASE_PATH)" 
+                                                    variant="outlined" 
+                                                    fullWidth 
+                                                    value={settings.IMAGES_BASE_PATH}
+                                                    onChange={(e) => handleChange('IMAGES_BASE_PATH', e.target.value)}
+                                                    size="small"
+                                                    placeholder="Ej: C:\Proyectos\imagenes"
+                                                    InputProps={{
+                                                        endAdornment: (
+                                                            <InputAdornment position="end">
+                                                                <IconButton onClick={async () => {
+                                                                    try {
+                                                                        const currentPath = encodeURIComponent(settings.IMAGES_BASE_PATH || '');
+                                                                        const res = await fetch(`/api/settings/browse_directory?current_path=${currentPath}`);
+                                                                        if (res.ok) {
+                                                                            const data = await res.json();
+                                                                            if (data.path) {
+                                                                                handleChange('IMAGES_BASE_PATH', data.path);
+                                                                            }
+                                                                        }
+                                                                    } catch (err) {
+                                                                        console.error("Error al abrir explorador:", err);
+                                                                    }
+                                                                }} edge="end" size="small">
+                                                                    <FolderOpenIcon fontSize="small" />
+                                                                </IconButton>
+                                                            </InputAdornment>
+                                                        )
+                                                    }}
+                                                />
+                                            </Box>
+                                            <Box sx={{ flex: 1 }}>
+                                                <TextField 
+                                                    label="Ruta de Evidencias (IMAGES_REPORT_PATH)" 
+                                                    variant="outlined" 
+                                                    fullWidth 
+                                                    value={settings.IMAGES_REPORT_PATH}
+                                                    onChange={(e) => handleChange('IMAGES_REPORT_PATH', e.target.value)}
+                                                    size="small"
+                                                    placeholder="Ej: C:\Proyectos\reportes"
+                                                    InputProps={{
+                                                        endAdornment: (
+                                                            <InputAdornment position="end">
+                                                                <IconButton onClick={async () => {
+                                                                    try {
+                                                                        const currentPath = encodeURIComponent(settings.IMAGES_REPORT_PATH || '');
+                                                                        const res = await fetch(`/api/settings/browse_directory?current_path=${currentPath}`);
+                                                                        if (res.ok) {
+                                                                            const data = await res.json();
+                                                                            if (data.path) {
+                                                                                handleChange('IMAGES_REPORT_PATH', data.path);
+                                                                            }
+                                                                        }
+                                                                    } catch (err) {
+                                                                        console.error("Error al abrir explorador:", err);
+                                                                    }
+                                                                }} edge="end" size="small">
+                                                                    <FolderOpenIcon fontSize="small" />
+                                                                </IconButton>
+                                                            </InputAdornment>
+                                                        )
+                                                    }}
+                                                />
+                                            </Box>
+                                        </Box>
                                     </Box>
-                                }
-                            />
 
-                            <Divider sx={{ my: 1 }} />
+                                    <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', md: 'block' } }} />
 
-                            {/* --- System Updates --- */}
-                            <Typography variant="subtitle1" fontWeight="600" color="primary">Actualizaciones del Sistema</Typography>
-                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 1 }}>
-                                <TextField
-                                    label="URL del Servidor de Actualizaciones (UPDATE_URL)"
-                                    variant="outlined"
-                                    fullWidth
-                                    value={upgradeConfig.update_url}
-                                    onChange={(e) => handleUpgradeChange('update_url', e.target.value)}
-                                    size="small"
-                                    helperText="Dirección HTTP/HTTPS que sirve las actualizaciones del sistema"
-                                />
+                                    {/* Right Column: Sliders and Switch */}
+                                    <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                        <Typography variant="subtitle2" fontWeight="600" color="primary">Parámetros de Ejecución y Confianza</Typography>
+                                        
+                                        <Box>
+                                            <Typography gutterBottom variant="caption" color="text.secondary" fontWeight="600">
+                                                Umbral de Confianza OCR
+                                            </Typography>
+                                            <Box sx={{ px: 1 }}>
+                                                <Slider
+                                                    value={settings.OCR_CONFIDENCE_THRESHOLD}
+                                                    onChange={(_, val) => handleChange('OCR_CONFIDENCE_THRESHOLD', val as number)}
+                                                    valueLabelDisplay="auto"
+                                                    step={1}
+                                                    min={0}
+                                                    max={100}
+                                                    size="small"
+                                                    marks={[
+                                                        { value: 0, label: '0%' },
+                                                        { value: 100, label: '100%' }
+                                                    ]}
+                                                />
+                                            </Box>
+                                        </Box>
+                                        
+                                        <Box>
+                                            <Typography gutterBottom variant="caption" color="text.secondary" fontWeight="600">
+                                                Umbral de Coincidencia de Imágenes
+                                            </Typography>
+                                            <Box sx={{ px: 1 }}>
+                                                <Slider
+                                                    value={settings.IMAGE_CONFIDENCE_THRESHOLD}
+                                                    onChange={(_, val) => handleChange('IMAGE_CONFIDENCE_THRESHOLD', val as number)}
+                                                    valueLabelDisplay="auto"
+                                                    step={1}
+                                                    min={0}
+                                                    max={100}
+                                                    size="small"
+                                                    marks={[
+                                                        { value: 0, label: '0%' },
+                                                        { value: 100, label: '100%' }
+                                                    ]}
+                                                />
+                                            </Box>
+                                        </Box>
+                                        
+                                        <Box sx={{ pt: 1 }}>
+                                            <FormControlLabel
+                                                control={
+                                                    <Switch 
+                                                        checked={settings.STOP_ON_FAILURE} 
+                                                        onChange={(e) => handleChange('STOP_ON_FAILURE', e.target.checked)}
+                                                        color="primary"
+                                                        size="small"
+                                                    />
+                                                }
+                                                label={
+                                                    <Box>
+                                                        <Typography variant="body2" fontWeight="600">Detener en el Primer Fallo</Typography>
+                                                        <Typography variant="caption" color="text.secondary" display="block">STOP_ON_FAILURE</Typography>
+                                                    </Box>
+                                                }
+                                            />
+                                        </Box>
+                                    </Box>
+                                </Box>
+                            )}
 
-                                <TextField
-                                    label="Carpeta Local de Actualizaciones (LOCAL_UPDATE_DIR)"
-                                    variant="outlined"
-                                    fullWidth
-                                    value={upgradeConfig.local_update_dir}
-                                    onChange={(e) => handleUpgradeChange('local_update_dir', e.target.value)}
-                                    size="small"
-                                    helperText="Carpeta donde se comprueban y descargan los archivos ZIP de actualización"
-                                    InputProps={{
-                                        endAdornment: (
-                                            <InputAdornment position="end">
-                                                <IconButton onClick={async () => {
-                                                    try {
-                                                        const currentPath = encodeURIComponent(upgradeConfig.local_update_dir || '');
-                                                        const res = await fetch(`/api/settings/browse_directory?current_path=${currentPath}`);
-                                                        if (res.ok) {
-                                                            const data = await res.json();
-                                                            if (data.path) {
-                                                                handleUpgradeChange('local_update_dir', data.path);
-                                                            }
-                                                        }
-                                                    } catch (err) {
-                                                        console.error("Error al abrir explorador:", err);
-                                                    }
-                                                }} edge="end">
-                                                    <FolderOpenIcon />
-                                                </IconButton>
-                                            </InputAdornment>
-                                        )
-                                    }}
-                                />
+                            {/* TAB 1: Actualizaciones */}
+                            {tabValue === 1 && (
+                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                    {/* --- System Updates --- */}
+                                    <Typography variant="subtitle2" fontWeight="600" color="primary">Actualizaciones del Sistema</Typography>
+                                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                        
+                                        <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
+                                            <Box sx={{ flex: 1 }}>
+                                                <TextField
+                                                    label="URL del Servidor de Actualizaciones (UPDATE_URL)"
+                                                    variant="outlined"
+                                                    fullWidth
+                                                    value={upgradeConfig.update_url}
+                                                    onChange={(e) => handleUpgradeChange('update_url', e.target.value)}
+                                                    size="small"
+                                                    placeholder="Ej: http://servidor-actualizaciones"
+                                                />
+                                            </Box>
+                                            <Box sx={{ flex: 1 }}>
+                                                <TextField
+                                                    label="Carpeta Local de Actualizaciones (LOCAL_UPDATE_DIR)"
+                                                    variant="outlined"
+                                                    fullWidth
+                                                    value={upgradeConfig.local_update_dir}
+                                                    onChange={(e) => handleUpgradeChange('local_update_dir', e.target.value)}
+                                                    size="small"
+                                                    placeholder="Ej: C:\actualizaciones"
+                                                    InputProps={{
+                                                        endAdornment: (
+                                                            <InputAdornment position="end">
+                                                                <IconButton onClick={async () => {
+                                                                    try {
+                                                                        const currentPath = encodeURIComponent(upgradeConfig.local_update_dir || '');
+                                                                        const res = await fetch(`/api/settings/browse_directory?current_path=${currentPath}`);
+                                                                        if (res.ok) {
+                                                                            const data = await res.json();
+                                                                            if (data.path) {
+                                                                                handleUpgradeChange('local_update_dir', data.path);
+                                                                            }
+                                                                        }
+                                                                    } catch (err) {
+                                                                        console.error("Error al abrir explorador:", err);
+                                                                    }
+                                                                }} edge="end" size="small">
+                                                                    <FolderOpenIcon fontSize="small" />
+                                                                </IconButton>
+                                                            </InputAdornment>
+                                                        )
+                                                    }}
+                                                />
+                                            </Box>
+                                        </Box>
 
-                                <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
-                                    <Button
-                                        variant="outlined"
-                                        color="primary"
-                                        disabled={checkingUpdate || applyingUpdate}
-                                        onClick={checkUpdates}
-                                        size="small"
-                                    >
-                                        {checkingUpdate ? <CircularProgress size={20} sx={{ mr: 1 }} /> : null}
-                                        Buscar Actualizaciones
-                                    </Button>
+                                        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap', mt: 0.5 }}>
+                                            <Button
+                                                variant="outlined"
+                                                color="primary"
+                                                disabled={checkingUpdate || applyingUpdate}
+                                                onClick={checkUpdates}
+                                                size="small"
+                                            >
+                                                {checkingUpdate ? <CircularProgress size={16} sx={{ mr: 1 }} /> : null}
+                                                Buscar Actualizaciones
+                                            </Button>
 
-                                    {updateStatus?.local_update_available && (
-                                        <Button
-                                            variant="contained"
-                                            color="secondary"
-                                            disabled={checkingUpdate || applyingUpdate}
-                                            onClick={applyUpdate}
-                                            size="small"
-                                        >
-                                            {applyingUpdate ? <CircularProgress size={20} color="inherit" sx={{ mr: 1 }} /> : null}
-                                            Instalar Actualización v{updateStatus.local_update_version}
-                                        </Button>
+                                            {updateStatus?.local_update_available && (
+                                                <Button
+                                                    variant="contained"
+                                                    color="secondary"
+                                                    disabled={checkingUpdate || applyingUpdate}
+                                                    onClick={applyUpdate}
+                                                    size="small"
+                                                >
+                                                    {applyingUpdate ? <CircularProgress size={16} color="inherit" sx={{ mr: 1 }} /> : null}
+                                                    Instalar Actualización v{updateStatus.local_update_version}
+                                                </Button>
+                                            )}
+                                        </Box>
+
+                                        {updateMessage && (
+                                            <Alert severity={updateMessage.toLowerCase().includes("error") ? "error" : "info"} sx={{ py: 0.5 }}>
+                                                {updateMessage}
+                                            </Alert>
+                                        )}
+                                    </Box>
+                                </Box>
+                            )}
+
+                            {/* TAB 2: Información */}
+                            {tabValue === 2 && (
+                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                    {/* --- Version Info --- */}
+                                    <Typography variant="subtitle2" fontWeight="600" color="primary">Información del Sistema</Typography>
+                                    
+                                    {appVersion ? (
+                                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                            <Box sx={{
+                                                display: 'grid',
+                                                gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' },
+                                                gap: 2
+                                            }}>
+                                                <Paper elevation={0} sx={{ p: 1.5, display: 'flex', flexDirection: 'column', gap: 0.5, backgroundColor: 'rgba(56, 189, 248, 0.04)', borderColor: 'divider' }}>
+                                                    <Typography variant="caption" color="text.secondary" fontWeight="600">
+                                                        Versión de la Aplicación
+                                                    </Typography>
+                                                    <Typography variant="body2" fontWeight="700" color="primary">
+                                                        v{appVersion.version}
+                                                    </Typography>
+                                                </Paper>
+                                                
+                                                <Paper elevation={0} sx={{ p: 1.5, display: 'flex', flexDirection: 'column', gap: 0.5, backgroundColor: 'rgba(56, 189, 248, 0.04)', borderColor: 'divider' }}>
+                                                    <Typography variant="caption" color="text.secondary" fontWeight="600">
+                                                        Fecha de Compilación
+                                                    </Typography>
+                                                    <Typography variant="body2" fontWeight="700">
+                                                        {appVersion.build_date}
+                                                    </Typography>
+                                                </Paper>
+                                                
+                                                <Paper elevation={0} sx={{ p: 1.5, display: 'flex', flexDirection: 'column', gap: 0.5, backgroundColor: 'rgba(56, 189, 248, 0.04)', borderColor: 'divider' }}>
+                                                    <Typography variant="caption" color="text.secondary" fontWeight="600">
+                                                        Versión Mínima Requerida
+                                                    </Typography>
+                                                    <Typography variant="body2" fontWeight="700">
+                                                        {appVersion.min_base_version}
+                                                    </Typography>
+                                                </Paper>
+                                            </Box>
+                                            
+                                            <Paper elevation={0} sx={{ p: 2, backgroundColor: 'background.paper', maxHeight: 240, overflowY: 'auto', border: '1px solid', borderColor: 'divider' }}>
+                                                <Typography variant="subtitle2" fontWeight="600" color="text.primary" gutterBottom>
+                                                    Changelog / Novedades
+                                                </Typography>
+                                                <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-line', lineHeight: 1.5, fontSize: '0.85rem' }}>
+                                                    {appVersion.changelog}
+                                                </Typography>
+                                            </Paper>
+                                        </Box>
+                                    ) : (
+                                        <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                                            <CircularProgress size={24} />
+                                        </Box>
                                     )}
                                 </Box>
-
-                                {updateMessage && (
-                                    <Alert severity={updateMessage.toLowerCase().includes("error") ? "error" : "info"} sx={{ py: 0.5 }}>
-                                        {updateMessage}
-                                    </Alert>
-                                )}
-                            </Box>
-
-                            <Divider sx={{ my: 1 }} />
-
-                            {/* --- Version Info --- */}
-                            <Typography variant="subtitle1" fontWeight="600" color="primary">Información del Sistema</Typography>
-                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 1 }}>
-                                <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'text.primary' }}>
-                                    <strong>Versión de la Aplicación:</strong>
-                                    <span style={{
-                                        backgroundColor: 'rgba(56, 189, 248, 0.15)',
-                                        color: '#38BDF8',
-                                        padding: '2px 8px',
-                                        borderRadius: '4px',
-                                        fontWeight: 600,
-                                        fontSize: '0.85rem'
-                                    }}>
-                                        {appVersion ? `v${appVersion.version}` : 'Cargando...'}
-                                    </span>
-                                </Typography>
-                                {appVersion && (
-                                    <>
-                                        <Typography variant="body2" color="text.secondary">
-                                            <strong>Fecha de Compilación:</strong> {appVersion.build_date}
-                                        </Typography>
-                                        <Typography variant="body2" color="text.secondary">
-                                            <strong>Versión Mínima Requerida:</strong> {appVersion.min_base_version}
-                                        </Typography>
-                                        <Typography variant="body2" color="text.secondary">
-                                            <strong>Changelog / Novedades:</strong> {appVersion.changelog}
-                                        </Typography>
-                                    </>
-                                )}
-                            </Box>
+                            )}
 
                         </Box>
                     )}
