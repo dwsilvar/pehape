@@ -38,7 +38,7 @@ const ReportTimelineView: React.FC<ReportTimelineViewProps> = ({ data }) => {
             {data.test_cycles?.map((cycle: any) => (
                 <Box key={cycle.cycle_id} sx={{ mb: 4 }}>
                     <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, color: theme.palette.primary.main }}>
-                        Ciclo: {cycle.cycle_name || cycle.cycle_id}
+                        {t('pages.reports.cycle')}: {cycle.cycle_name || cycle.cycle_id}
                     </Typography>
 
                     {cycle.test_flows?.map((flow: any) => (
@@ -53,8 +53,8 @@ const ReportTimelineView: React.FC<ReportTimelineViewProps> = ({ data }) => {
                                 backgroundColor: theme.palette.divider
                             }} />
                             <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
-                                Flujo: {(() => {
-                                    let displayFlowName = flow.flow_name ? flow.flow_name.replace(' — Default', '').replace(' - Default', '') : 'Sin Grupo';
+                                {t('pages.reports.flow')}: {(() => {
+                                    let displayFlowName = flow.flow_name ? flow.flow_name.replace(' — Default', '').replace(' - Default', '') : t('pages.reports.withoutGroup');
                                     if (displayFlowName) {
                                         displayFlowName = displayFlowName.replace(/\(((?:Matriz|Caso|Case) \d+)\)/g, (match: string, p1: string) => {
                                             const numberPart = p1.split(' ').pop();

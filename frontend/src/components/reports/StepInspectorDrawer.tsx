@@ -10,6 +10,7 @@ import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import CancelRoundedIcon from '@mui/icons-material/CancelRounded';
 import HelpOutlineRoundedIcon from '@mui/icons-material/HelpOutlineRounded';
 import ZoomInRoundedIcon from '@mui/icons-material/ZoomInRounded';
+import { useTranslation } from 'react-i18next';
 
 interface StepInspectorDrawerProps {
     scenario: any | null;
@@ -19,6 +20,7 @@ interface StepInspectorDrawerProps {
 
 const StepInspectorDrawer: React.FC<StepInspectorDrawerProps> = ({ scenario, isOpen, onClose }) => {
     const theme = useTheme();
+    const { t } = useTranslation();
     const [zoomedImage, setZoomedImage] = useState<string | null>(null);
 
     if (!scenario) return null;
@@ -50,7 +52,7 @@ const StepInspectorDrawer: React.FC<StepInspectorDrawerProps> = ({ scenario, isO
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, color: theme.palette.primary.main }}>
                         <ListAltRoundedIcon />
                         <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1rem' }}>
-                            Inspector de Pasos (Steps)
+                            {t('pages.reports.stepsInspector')}
                         </Typography>
                     </Box>
                     <IconButton onClick={onClose} size="small">
@@ -59,14 +61,14 @@ const StepInspectorDrawer: React.FC<StepInspectorDrawerProps> = ({ scenario, isO
                 </Box>
 
                 <Box sx={{ p: 2, borderBottom: `1px solid ${theme.palette.divider}` }}>
-                    <Typography variant="subtitle2" color="text.secondary">Escenario Seleccionado</Typography>
+                    <Typography variant="subtitle2" color="text.secondary">{t('pages.reports.selectedScenario')}</Typography>
                     <Typography sx={{ fontWeight: 600, mt: 0.5 }}>{scenario.name || scenario.scenario_name}</Typography>
                 </Box>
 
                 <Box sx={{ flex: 1, p: 2, overflow: 'auto' }}>
                     {(!scenario.steps || scenario.steps.length === 0) ? (
                         <Typography variant="body2" color="text.secondary" align="center" sx={{ mt: 4 }}>
-                            No hay información de pasos (steps) disponible para este escenario.
+                            {t('pages.reports.noStepsAvailable')}
                         </Typography>
                     ) : (
                         scenario.steps.map((step: any, index: number) => {
@@ -145,7 +147,7 @@ const StepInspectorDrawer: React.FC<StepInspectorDrawerProps> = ({ scenario, isO
                                                             </Box>
                                                         ) : (
                                                             <Typography variant="caption" color="text.secondary">
-                                                                Attachment no renderizable: {att.type}
+                                                                {t('pages.reports.attachmentNotRenderable', { type: att.type })}
                                                             </Typography>
                                                         )}
                                                     </Box>
@@ -153,7 +155,7 @@ const StepInspectorDrawer: React.FC<StepInspectorDrawerProps> = ({ scenario, isO
                                             </Box>
                                         ) : (
                                             <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                                                No hay capturas asociadas a este paso.
+                                                {t('pages.reports.noScreenshotsForStep')}
                                             </Typography>
                                         )}
                                     </AccordionDetails>

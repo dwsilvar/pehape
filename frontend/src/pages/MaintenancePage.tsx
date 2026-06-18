@@ -95,7 +95,7 @@ const MaintenancePage: React.FC = () => {
                                     {usage ? formatBytes(usage.results_size) : '-'}
                                 </Typography>
                                 <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                                    Create in reports/allure_results
+                                    {t('pages.maintenance.results_desc')}
                                 </Typography>
                                 <Button
                                     variant="contained"
@@ -107,7 +107,7 @@ const MaintenancePage: React.FC = () => {
                                 </Button>
                             </CardContent>
                         </Card>
-
+ 
                         <Card>
                             <CardContent>
                                 <Typography color="textSecondary" gutterBottom>
@@ -117,7 +117,7 @@ const MaintenancePage: React.FC = () => {
                                     {usage ? formatBytes(usage.report_size) : '-'}
                                 </Typography>
                                 <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                                    Static site in reports/allure-report
+                                    {t('pages.maintenance.reports_desc')}
                                 </Typography>
                                 <Button
                                     variant="contained"
@@ -129,7 +129,7 @@ const MaintenancePage: React.FC = () => {
                                 </Button>
                             </CardContent>
                         </Card>
-
+ 
                         <Card>
                             <CardContent>
                                 <Typography color="textSecondary" gutterBottom>
@@ -139,7 +139,7 @@ const MaintenancePage: React.FC = () => {
                                     {usage ? formatBytes(usage.screenshots_size) : '-'}
                                 </Typography>
                                 <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                                    Images in reports/screenshots
+                                    {t('pages.maintenance.screenshots_desc')}
                                 </Typography>
                                 <Button
                                     variant="contained"
@@ -151,24 +151,24 @@ const MaintenancePage: React.FC = () => {
                                 </Button>
                             </CardContent>
                         </Card>
-
+ 
                         <Card sx={{ bgcolor: 'action.hover' }}>
                             <CardContent>
                                 <Typography color="textSecondary" gutterBottom>
-                                    Total Usage
+                                    {t('pages.maintenance.total_usage')}
                                 </Typography>
                                 <Typography variant="h4" component="div" color="primary">
                                     {usage ? formatBytes(usage.total_size) : '-'}
                                 </Typography>
                                 <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                                    Total disk space used by Allure
+                                    {t('pages.maintenance.total_usage_desc')}
                                 </Typography>
                                 <Button
                                     variant="outlined"
                                     color="error"
-                                    onClick={() => setConfirmDialog({ open: true, target: 'all', title: 'Delete EVERYTHING?' })}
+                                    onClick={() => setConfirmDialog({ open: true, target: 'all', title: t('pages.maintenance.confirmDeleteEverything') })}
                                 >
-                                    Clean All
+                                    {t('pages.maintenance.cleanAllButton')}
                                 </Button>
                             </CardContent>
                         </Card>

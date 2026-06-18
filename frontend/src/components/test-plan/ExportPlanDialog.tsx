@@ -16,6 +16,7 @@ import {
 import FileDownloadRoundedIcon from '@mui/icons-material/FileDownloadRounded';
 import FolderOpenRoundedIcon from '@mui/icons-material/FolderOpenRounded';
 import ImageRoundedIcon from '@mui/icons-material/ImageRounded';
+import { useTranslation } from 'react-i18next';
 
 interface ExportPlanDialogProps {
   open: boolean;
@@ -31,6 +32,7 @@ const ExportPlanDialog: React.FC<ExportPlanDialogProps> = ({
   onClose,
 }) => {
   const theme = useTheme();
+  const { t } = useTranslation();
   const [includeAllFeatures, setIncludeAllFeatures] = useState(false);
   const [includeImages, setIncludeImages] = useState(false);
 
@@ -85,7 +87,7 @@ const ExportPlanDialog: React.FC<ExportPlanDialogProps> = ({
         </Box>
         <Box>
           <Typography variant="subtitle1" fontWeight={700} lineHeight={1.2}>
-            Exportar Plan
+            {t('pages.testPlan.export.title')}
           </Typography>
           {planName && (
             <Typography variant="caption" color="text.secondary" noWrap>
@@ -97,10 +99,7 @@ const ExportPlanDialog: React.FC<ExportPlanDialogProps> = ({
 
       {/* Content */}
       <DialogContent sx={{ pt: 2.5, pb: 1 }}>
-        <Typography variant="body2" color="text.secondary" mb={2}>
-          El plan se exportará siempre con los <strong>features usados</strong> por el plan.
-          Puedes ampliar el contenido con las siguientes opciones:
-        </Typography>
+        <Typography variant="body2" color="text.secondary" mb={2} dangerouslySetInnerHTML={{ __html: t('pages.testPlan.export.description') }} />
 
         <Divider sx={{ mb: 2 }} />
 
@@ -155,15 +154,12 @@ const ExportPlanDialog: React.FC<ExportPlanDialogProps> = ({
               }
               label={
                 <Typography variant="body2" fontWeight={600}>
-                  Incluir todos los features
+                  {t('pages.testPlan.export.includeAll')}
                 </Typography>
               }
               sx={{ m: 0 }}
             />
-            <Typography variant="caption" color="text.secondary" display="block" mt={0.3}>
-              Agrega al archivo también los features que <em>no están usados</em> en este plan
-              (todos los .feature del proyecto).
-            </Typography>
+            <Typography variant="caption" color="text.secondary" display="block" mt={0.3} dangerouslySetInnerHTML={{ __html: t('pages.testPlan.export.includeAllDesc') }} />
           </Box>
         </Box>
 
@@ -218,15 +214,12 @@ const ExportPlanDialog: React.FC<ExportPlanDialogProps> = ({
               }
               label={
                 <Typography variant="body2" fontWeight={600}>
-                  Incluir imágenes de los literales
+                  {t('pages.testPlan.export.includeImages')}
                 </Typography>
               }
               sx={{ m: 0 }}
             />
-            <Typography variant="caption" color="text.secondary" display="block" mt={0.3}>
-              Incluye las imágenes OCR referenciadas dentro de los features exportados
-              (carpeta <code>images/</code> en el .desb).
-            </Typography>
+            <Typography variant="caption" color="text.secondary" display="block" mt={0.3} dangerouslySetInnerHTML={{ __html: t('pages.testPlan.export.includeImagesDesc') }} />
           </Box>
         </Box>
       </DialogContent>
@@ -239,7 +232,7 @@ const ExportPlanDialog: React.FC<ExportPlanDialogProps> = ({
           size="small"
           sx={{ borderRadius: 2, minWidth: 90 }}
         >
-          Cancelar
+          {t('common.cancel')}
         </Button>
         <Button
           onClick={handleExport}
@@ -256,7 +249,7 @@ const ExportPlanDialog: React.FC<ExportPlanDialogProps> = ({
             },
           }}
         >
-          Exportar .desb
+          {t('pages.testPlan.export.btnExport')}
         </Button>
       </DialogActions>
     </Dialog>

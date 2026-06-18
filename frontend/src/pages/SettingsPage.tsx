@@ -83,12 +83,12 @@ const SettingsPage: React.FC = () => {
         try {
             setLoading(true);
             const response = await fetch('/api/settings/');
-            if (!response.ok) throw new Error('Error al cargar configuraciones');
+            if (!response.ok) throw new Error(t('pages.settings.errorLoading'));
             const data = await response.json();
             setSettings(data);
             setError(null);
         } catch (err: any) {
-            setError(err.message || 'Error desconocido');
+            setError(err.message || t('common.error'));
         } finally {
             setLoading(false);
         }
@@ -105,7 +105,7 @@ const SettingsPage: React.FC = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(settings),
             });
-            if (!response.ok) throw new Error('Error al guardar configuraciones');
+            if (!response.ok) throw new Error(t('pages.settings.errorSaving'));
 
             // Guardar configuración del actualizador
             const upgResponse = await fetch('/api/update/config', {
@@ -113,13 +113,13 @@ const SettingsPage: React.FC = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(upgradeConfig),
             });
-            if (!upgResponse.ok) throw new Error('Error al guardar configuración del actualizador');
+            if (!upgResponse.ok) throw new Error(t('pages.settings.errorSavingUpdater'));
 
             setSuccessMessage(true);
             setError(null);
             fetchUpgradeConfig(); // Recargar estado actualizado
         } catch (err: any) {
-            setError(err.message || 'Error desconocido');
+            setError(err.message || t('common.error'));
         } finally {
             setSaving(false);
         }
@@ -132,12 +132,12 @@ const SettingsPage: React.FC = () => {
     const checkUpdates = async () => {
         try {
             setCheckingUpdate(true);
-            setUpdateMessage("Buscando actualizaciones...");
+            setUpdateMessage(t('pages.settings.searchingUpdates'));
             const res = await fetch('/api/update/check', { method: 'POST' });
             if (res.ok) {
                 const data = await res.json();
                 if (data.status === "downloading") {
-                    setUpdateMessage("Descargando actualización en segundo plano...");
+                    setUpdateMessage(t('pages.settings.downloadingUpdate'));
                     // Poll status
                     const interval = setInterval(async () => {
                         const sRes = await fetch('/api/update/status');
@@ -146,56 +146,56 @@ const SettingsPage: React.FC = () => {
                             setUpdateStatus(sData);
                             if (sData.download_state.status === "completed") {
                                 clearInterval(interval);
-                                setUpdateMessage("Descarga completa. Actualización lista.");
+                                setUpdateMessage(t('pages.settings.downloadComplete'));
                                 setCheckingUpdate(false);
                             } else if (sData.download_state.status === "error") {
                                 clearInterval(interval);
-                                setUpdateMessage(`Error al descargar: ${sData.download_state.error_message}`);
+                                setUpdateMessage(t('pages.settings.downloadError', { error: sData.download_state.error_message }));
                                 setCheckingUpdate(false);
                             }
                         }
                     }, 2000);
                 } else if (data.status === "ready") {
-                    setUpdateMessage(`Actualización v${data.version} lista localmente.`);
+                    setUpdateMessage(t('pages.settings.updateReady', { version: data.version }));
                     setCheckingUpdate(false);
                     const statusRes = await fetch('/api/update/status');
                     if (statusRes.ok) setUpdateStatus(await statusRes.json());
                 } else {
-                    setUpdateMessage("No se encontraron actualizaciones nuevas.");
+                    setUpdateMessage(t('pages.settings.noUpdatesFound'));
                     setCheckingUpdate(false);
                     const statusRes = await fetch('/api/update/status');
                     if (statusRes.ok) setUpdateStatus(await statusRes.json());
                 }
             } else {
-                setUpdateMessage("Fallo al buscar actualizaciones.");
+                setUpdateMessage(t('pages.settings.checkUpdatesFailed'));
                 setCheckingUpdate(false);
             }
         } catch (err) {
-            setUpdateMessage("Error de conexión al buscar actualizaciones.");
+            setUpdateMessage(t('pages.settings.checkUpdatesConnError'));
             setCheckingUpdate(false);
         }
     };
 
     const applyUpdate = async () => {
-        if (!window.confirm("¿Está seguro de que desea aplicar la actualización? El servidor se reiniciará automáticamente y perderá la conexión por unos segundos.")) {
+        if (!window.confirm(t('pages.settings.confirmApplyUpdate'))) {
             return;
         }
         try {
             setApplyingUpdate(true);
             const res = await fetch('/api/update/apply', { method: 'POST' });
             if (res.ok) {
-                setUpdateMessage("Aplicando actualización y reiniciando el servidor...");
+                setUpdateMessage(t('pages.settings.applyingUpdate'));
                 // Esperar a que se apague y recargar la página tras 8 segundos
                 setTimeout(() => {
                     window.location.reload();
                 }, 8000);
             } else {
                 const data = await res.json();
-                setError(data.detail || "Fallo al iniciar el actualizador");
+                setError(data.detail || t('pages.settings.applyUpdateFailed'));
                 setApplyingUpdate(false);
             }
         } catch (err) {
-            setError("Error al enviar comando de actualización");
+            setError(t('pages.settings.applyUpdateConnError'));
             setApplyingUpdate(false);
         }
     };
@@ -208,7 +208,7 @@ const SettingsPage: React.FC = () => {
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-            <AppToolbar title={t('pages.settings.title', 'Configuraciones')} icon={<SettingsIcon sx={{ fontSize: 32 }} />} showControls={false} />
+            <AppToolbar title={t('pages.settings.title')} icon={<SettingsIcon sx={{ fontSize: 32 }} />} showControls={false} />
             
             <Box sx={{ p: 1.5, flex: 1, overflow: 'hidden', backgroundColor: 'background.default', display: 'flex', flexDirection: 'column' }}>
                 <Paper elevation={0} sx={{ p: 2, flex: 1, display: 'flex', flexDirection: 'column', border: '1px solid', borderColor: 'divider', borderRadius: 2, overflow: 'hidden' }}>
@@ -236,16 +236,16 @@ const SettingsPage: React.FC = () => {
                             }
                         }}
                     >
-                        <Tab label="Automatización y OCR" icon={<SettingsIcon sx={{ fontSize: 18 }} />} />
-                        <Tab label="Actualizaciones" icon={<UpdateIcon sx={{ fontSize: 18 }} />} />
-                        <Tab label="Información del Sistema" icon={<InfoIcon sx={{ fontSize: 18 }} />} />
+                        <Tab label={t('pages.settings.tabAutoOcr')} icon={<SettingsIcon sx={{ fontSize: 18 }} />} />
+                        <Tab label={t('pages.settings.tabUpdates')} icon={<UpdateIcon sx={{ fontSize: 18 }} />} />
+                        <Tab label={t('pages.settings.tabSysInfo')} icon={<InfoIcon sx={{ fontSize: 18 }} />} />
                     </Tabs>
 
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                         <Typography variant="h6" fontWeight="600" fontSize="1.1rem">
-                            {tabValue === 0 && "Parámetros de Automatización"}
-                            {tabValue === 1 && "Actualización de Software"}
-                            {tabValue === 2 && "Estado del Sistema"}
+                            {tabValue === 0 && t('pages.settings.headerAuto')}
+                            {tabValue === 1 && t('pages.settings.headerUpdates')}
+                            {tabValue === 2 && t('pages.settings.headerSysInfo')}
                         </Typography>
                         {tabValue !== 2 && (
                             <Button 
@@ -256,7 +256,7 @@ const SettingsPage: React.FC = () => {
                                 onClick={handleSave}
                                 disabled={saving || !settings}
                             >
-                                {t('common.save', 'Guardar')}
+                                {t('common.save')}
                             </Button>
                         )}
                     </Box>
@@ -277,22 +277,22 @@ const SettingsPage: React.FC = () => {
                                     {/* Left Column: Tesseract & Image Paths */}
                                     <Box sx={{ flex: 1.2, display: 'flex', flexDirection: 'column', gap: 2 }}>
                                         {/* --- Tesseract Configuration --- */}
-                                        <Typography variant="subtitle2" fontWeight="600" color="primary">Configuración OCR (Tesseract)</Typography>
+                                        <Typography variant="subtitle2" fontWeight="600" color="primary">{t('pages.settings.ocrConfig')}</Typography>
                                         
                                         <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
                                             <Box sx={{ flex: 3 }}>
                                                 <TextField 
-                                                    label="Ruta de Tesseract (TESSERACT_CMD_PATH)" 
+                                                    label={t('pages.settings.tesseractPath')} 
                                                     variant="outlined" 
                                                     fullWidth 
                                                     value={settings.TESSERACT_CMD_PATH}
                                                     onChange={(e) => handleChange('TESSERACT_CMD_PATH', e.target.value)}
-                                                    placeholder="Ej: C:\Program Files\Tesseract-OCR\tesseract.exe"
+                                                    placeholder={t('pages.settings.tesseractPathPlaceholder')}
                                                     size="small"
                                                     InputProps={{
                                                         endAdornment: (
                                                             <InputAdornment position="end">
-                                                                <IconButton onClick={async () => {
+                                                                 <IconButton onClick={async () => {
                                                                     try {
                                                                         const currentPath = encodeURIComponent(settings.TESSERACT_CMD_PATH || '');
                                                                         const res = await fetch(`/api/settings/browse_file?current_path=${currentPath}`);
@@ -315,15 +315,15 @@ const SettingsPage: React.FC = () => {
                                             </Box>
                                             <Box sx={{ flex: 1, minWidth: 160 }}>
                                                 <FormControl fullWidth size="small">
-                                                    <InputLabel>Idioma OCR</InputLabel>
+                                                    <InputLabel>{t('pages.settings.tesseractLanguage')}</InputLabel>
                                                     <Select
                                                         value={settings.TESSERACT_LANGUAGE}
-                                                        label="Idioma OCR"
+                                                        label={t('pages.settings.tesseractLanguage')}
                                                         onChange={(e) => handleChange('TESSERACT_LANGUAGE', e.target.value)}
                                                     >
-                                                        <MenuItem value="spa">Español (spa)</MenuItem>
-                                                        <MenuItem value="eng">Inglés (eng)</MenuItem>
-                                                        <MenuItem value="spa+eng">Español + Inglés</MenuItem>
+                                                        <MenuItem value="spa">{t('pages.settings.langSpa')}</MenuItem>
+                                                        <MenuItem value="eng">{t('pages.settings.langEng')}</MenuItem>
+                                                        <MenuItem value="spa+eng">{t('pages.settings.langBoth')}</MenuItem>
                                                     </Select>
                                                 </FormControl>
                                             </Box>
@@ -332,18 +332,18 @@ const SettingsPage: React.FC = () => {
                                         <Divider />
 
                                         {/* --- Image Paths --- */}
-                                        <Typography variant="subtitle2" fontWeight="600" color="primary">Configuración de Imágenes y Rutas</Typography>
+                                        <Typography variant="subtitle2" fontWeight="600" color="primary">{t('pages.settings.imagesConfig')}</Typography>
                                         
                                         <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
                                             <Box sx={{ flex: 1 }}>
                                                 <TextField 
-                                                    label="Ruta Base de Imágenes (IMAGES_BASE_PATH)" 
+                                                    label={t('pages.settings.imagesBasePath')} 
                                                     variant="outlined" 
                                                     fullWidth 
                                                     value={settings.IMAGES_BASE_PATH}
                                                     onChange={(e) => handleChange('IMAGES_BASE_PATH', e.target.value)}
                                                     size="small"
-                                                    placeholder="Ej: C:\Proyectos\imagenes"
+                                                    placeholder={t('pages.settings.imagesBasePathPlaceholder')}
                                                     InputProps={{
                                                         endAdornment: (
                                                             <InputAdornment position="end">
@@ -370,13 +370,13 @@ const SettingsPage: React.FC = () => {
                                             </Box>
                                             <Box sx={{ flex: 1 }}>
                                                 <TextField 
-                                                    label="Ruta de Evidencias (IMAGES_REPORT_PATH)" 
+                                                    label={t('pages.settings.imagesReportPath')} 
                                                     variant="outlined" 
                                                     fullWidth 
                                                     value={settings.IMAGES_REPORT_PATH}
                                                     onChange={(e) => handleChange('IMAGES_REPORT_PATH', e.target.value)}
                                                     size="small"
-                                                    placeholder="Ej: C:\Proyectos\reportes"
+                                                    placeholder={t('pages.settings.imagesReportPathPlaceholder')}
                                                     InputProps={{
                                                         endAdornment: (
                                                             <InputAdornment position="end">
@@ -408,11 +408,11 @@ const SettingsPage: React.FC = () => {
 
                                     {/* Right Column: Sliders and Switch */}
                                     <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                        <Typography variant="subtitle2" fontWeight="600" color="primary">Parámetros de Ejecución y Confianza</Typography>
+                                        <Typography variant="subtitle2" fontWeight="600" color="primary">{t('pages.settings.executionParameters')}</Typography>
                                         
                                         <Box>
                                             <Typography gutterBottom variant="caption" color="text.secondary" fontWeight="600">
-                                                Umbral de Confianza OCR
+                                                {t('pages.settings.ocrConfidence')}
                                             </Typography>
                                             <Box sx={{ px: 1 }}>
                                                 <Slider
@@ -433,7 +433,7 @@ const SettingsPage: React.FC = () => {
                                         
                                         <Box>
                                             <Typography gutterBottom variant="caption" color="text.secondary" fontWeight="600">
-                                                Umbral de Coincidencia de Imágenes
+                                                {t('pages.settings.imageConfidence')}
                                             </Typography>
                                             <Box sx={{ px: 1 }}>
                                                 <Slider
@@ -464,7 +464,7 @@ const SettingsPage: React.FC = () => {
                                                 }
                                                 label={
                                                     <Box>
-                                                        <Typography variant="body2" fontWeight="600">Detener en el Primer Fallo</Typography>
+                                                        <Typography variant="body2" fontWeight="600">{t('pages.settings.stopOnFailure')}</Typography>
                                                         <Typography variant="caption" color="text.secondary" display="block">STOP_ON_FAILURE</Typography>
                                                     </Box>
                                                 }
@@ -478,30 +478,30 @@ const SettingsPage: React.FC = () => {
                             {tabValue === 1 && (
                                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                                     {/* --- System Updates --- */}
-                                    <Typography variant="subtitle2" fontWeight="600" color="primary">Actualizaciones del Sistema</Typography>
+                                    <Typography variant="subtitle2" fontWeight="600" color="primary">{t('pages.settings.sysUpdates')}</Typography>
                                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                                         
                                         <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
                                             <Box sx={{ flex: 1 }}>
                                                 <TextField
-                                                    label="URL del Servidor de Actualizaciones (UPDATE_URL)"
+                                                    label={t('pages.settings.updateUrl')}
                                                     variant="outlined"
                                                     fullWidth
                                                     value={upgradeConfig.update_url}
                                                     onChange={(e) => handleUpgradeChange('update_url', e.target.value)}
                                                     size="small"
-                                                    placeholder="Ej: http://servidor-actualizaciones"
+                                                    placeholder={t('pages.settings.updateUrlPlaceholder')}
                                                 />
                                             </Box>
                                             <Box sx={{ flex: 1 }}>
                                                 <TextField
-                                                    label="Carpeta Local de Actualizaciones (LOCAL_UPDATE_DIR)"
+                                                    label={t('pages.settings.localUpdateDir')}
                                                     variant="outlined"
                                                     fullWidth
                                                     value={upgradeConfig.local_update_dir}
                                                     onChange={(e) => handleUpgradeChange('local_update_dir', e.target.value)}
                                                     size="small"
-                                                    placeholder="Ej: C:\actualizaciones"
+                                                    placeholder={t('pages.settings.localUpdateDirPlaceholder')}
                                                     InputProps={{
                                                         endAdornment: (
                                                             <InputAdornment position="end">
@@ -537,7 +537,7 @@ const SettingsPage: React.FC = () => {
                                                 size="small"
                                             >
                                                 {checkingUpdate ? <CircularProgress size={16} sx={{ mr: 1 }} /> : null}
-                                                Buscar Actualizaciones
+                                                {t('pages.settings.btnCheckUpdates')}
                                             </Button>
 
                                             {updateStatus?.local_update_available && (
@@ -549,7 +549,7 @@ const SettingsPage: React.FC = () => {
                                                     size="small"
                                                 >
                                                     {applyingUpdate ? <CircularProgress size={16} color="inherit" sx={{ mr: 1 }} /> : null}
-                                                    Instalar Actualización v{updateStatus.local_update_version}
+                                                    {t('pages.settings.btnInstallUpdate', { version: updateStatus.local_update_version })}
                                                 </Button>
                                             )}
                                         </Box>
@@ -567,7 +567,7 @@ const SettingsPage: React.FC = () => {
                             {tabValue === 2 && (
                                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                                     {/* --- Version Info --- */}
-                                    <Typography variant="subtitle2" fontWeight="600" color="primary">Información del Sistema</Typography>
+                                    <Typography variant="subtitle2" fontWeight="600" color="primary">{t('pages.settings.sysInfo')}</Typography>
                                     
                                     {appVersion ? (
                                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -578,7 +578,7 @@ const SettingsPage: React.FC = () => {
                                             }}>
                                                 <Paper elevation={0} sx={{ p: 1.5, display: 'flex', flexDirection: 'column', gap: 0.5, backgroundColor: 'rgba(56, 189, 248, 0.04)', borderColor: 'divider' }}>
                                                     <Typography variant="caption" color="text.secondary" fontWeight="600">
-                                                        Versión de la Aplicación
+                                                        {t('pages.settings.appVersion')}
                                                     </Typography>
                                                     <Typography variant="body2" fontWeight="700" color="primary">
                                                         v{appVersion.version}
@@ -587,7 +587,7 @@ const SettingsPage: React.FC = () => {
                                                 
                                                 <Paper elevation={0} sx={{ p: 1.5, display: 'flex', flexDirection: 'column', gap: 0.5, backgroundColor: 'rgba(56, 189, 248, 0.04)', borderColor: 'divider' }}>
                                                     <Typography variant="caption" color="text.secondary" fontWeight="600">
-                                                        Fecha de Compilación
+                                                        {t('pages.settings.buildDate')}
                                                     </Typography>
                                                     <Typography variant="body2" fontWeight="700">
                                                         {appVersion.build_date}
@@ -596,7 +596,7 @@ const SettingsPage: React.FC = () => {
                                                 
                                                 <Paper elevation={0} sx={{ p: 1.5, display: 'flex', flexDirection: 'column', gap: 0.5, backgroundColor: 'rgba(56, 189, 248, 0.04)', borderColor: 'divider' }}>
                                                     <Typography variant="caption" color="text.secondary" fontWeight="600">
-                                                        Versión Mínima Requerida
+                                                        {t('pages.settings.minBaseVersion')}
                                                     </Typography>
                                                     <Typography variant="body2" fontWeight="700">
                                                         {appVersion.min_base_version}
@@ -606,7 +606,7 @@ const SettingsPage: React.FC = () => {
                                             
                                             <Paper elevation={0} sx={{ p: 2, backgroundColor: 'background.paper', maxHeight: 240, overflowY: 'auto', border: '1px solid', borderColor: 'divider' }}>
                                                 <Typography variant="subtitle2" fontWeight="600" color="text.primary" gutterBottom>
-                                                    Changelog / Novedades
+                                                    {t('pages.settings.changelog')}
                                                 </Typography>
                                                 <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-line', lineHeight: 1.5, fontSize: '0.85rem' }}>
                                                     {appVersion.changelog}
@@ -630,7 +630,7 @@ const SettingsPage: React.FC = () => {
                 open={successMessage}
                 autoHideDuration={3000}
                 onClose={() => setSuccessMessage(false)}
-                message="Configuraciones guardadas correctamente"
+                message={t('pages.settings.savedSuccess')}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
             />
         </Box>

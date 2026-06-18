@@ -13,6 +13,7 @@ import { BlueprintRef, BlueprintsData, PlanTask } from '../../types';
 import CompositionNode from './CompositionNode';
 import FlowConnector from './FlowConnector';
 import TaskAssociationDialog from './TaskAssociationDialog';
+import { useTranslation } from 'react-i18next';
 
 interface CompositionCanvasProps {
   category: 'plans' | 'cycles' | 'sets' | 'flows';
@@ -46,6 +47,17 @@ const CompositionCanvas: React.FC<CompositionCanvasProps> = ({
   onUpdateTasks,
 }) => {
   const theme = useTheme();
+  const { t } = useTranslation();
+
+  const getCategorySingular = (cat: string) => {
+    switch (cat) {
+      case 'plans': return t('pages.testPlan.canvas.planSingular');
+      case 'cycles': return t('pages.testPlan.canvas.cycleSingular');
+      case 'sets': return t('pages.testPlan.canvas.setSingular');
+      case 'flows': return t('pages.testPlan.canvas.flowSingular');
+      default: return cat;
+    }
+  };
 
   const [compact, setCompact] = useState<boolean>(false);
   const [blueprintTaskDialogOpen, setBlueprintTaskDialogOpen] = useState<boolean>(false);
@@ -58,7 +70,7 @@ const CompositionCanvas: React.FC<CompositionCanvasProps> = ({
       <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1.5, color: 'text.disabled', bgcolor: alpha(theme.palette.action.hover, 0.3) }}>
         <AccountTreeRoundedIcon sx={{ fontSize: 52, opacity: 0.2 }} />
         <Typography variant="body2" sx={{ opacity: 0.5, textAlign: 'center', px: 4 }}>
-          Selecciona un {category.slice(0, -1)} para comenzar a editar
+          {t('pages.testPlan.canvas.selectToEdit', { type: getCategorySingular(category) })}
         </Typography>
       </Box>
     );
@@ -71,7 +83,7 @@ const CompositionCanvas: React.FC<CompositionCanvasProps> = ({
         <InputBase
           value={name || ''}
           onChange={(e) => onNameChange(e.target.value)}
-          placeholder={`Nombre del ${category.slice(0, -1)}...`}
+          placeholder={t('pages.testPlan.canvas.namePlaceholder', { type: getCategorySingular(category) })}
           sx={{
             flex: 1, fontSize: '0.75rem', letterSpacing: 0.5, fontWeight: 700, color: 'text.primary',
             '& input': { padding: '2px 4px', borderRadius: 1, transition: 'background-color 0.2s', '&:hover': { backgroundColor: alpha(theme.palette.action.hover, 0.5) }, '&:focus': { backgroundColor: alpha(theme.palette.action.focus, 0.8) } }
@@ -83,7 +95,7 @@ const CompositionCanvas: React.FC<CompositionCanvasProps> = ({
           </Typography>
         )}
         {onUpdateTasks && (
-          <Tooltip title={`Configurar tareas del ${category.slice(0, -1)}`}>
+          <Tooltip title={t('pages.testPlan.canvas.configureTasks', { type: getCategorySingular(category) })}>
             <IconButton size="small" onClick={() => setBlueprintTaskDialogOpen(true)} sx={{ p: 0.5, position: 'relative' }}>
               <AssignmentIcon sx={{ fontSize: 16 }} />
               {tasks.length > 0 && (
@@ -92,7 +104,7 @@ const CompositionCanvas: React.FC<CompositionCanvasProps> = ({
             </IconButton>
           </Tooltip>
         )}
-        <Tooltip title={compact ? 'Vista expandida' : 'Vista compacta'}>
+        <Tooltip title={compact ? t('pages.testPlan.canvas.expandedView') : t('pages.testPlan.canvas.compactView')}>
           <IconButton size="small" onClick={toggleCompact} sx={{ p: 0.5, color: compact ? 'primary.main' : 'text.secondary' }}>
             {compact ? <ViewAgendaRoundedIcon sx={{ fontSize: 16 }} /> : <ViewListRoundedIcon sx={{ fontSize: 16 }} />}
           </IconButton>
@@ -113,7 +125,7 @@ const CompositionCanvas: React.FC<CompositionCanvasProps> = ({
           <Box sx={{ minHeight: 300, width: '100%', border: '2px dashed', borderColor: isOver ? 'primary.main' : alpha(theme.palette.divider, 0.6), borderRadius: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1.5, bgcolor: isOver ? alpha(theme.palette.primary.main, 0.04) : 'transparent' }}>
             <DragIndicatorRoundedIcon sx={{ fontSize: 40, color: isOver ? 'primary.main' : 'text.disabled', opacity: isOver ? 0.8 : 0.3 }} />
             <Typography variant="body2" sx={{ color: isOver ? 'primary.main' : 'text.disabled', fontWeight: isOver ? 600 : 400 }}>
-              Arrastra elementos aquí
+              {t('pages.testPlan.canvas.dragItems')}
             </Typography>
           </Box>
         ) : (
@@ -151,7 +163,7 @@ const CompositionCanvas: React.FC<CompositionCanvasProps> = ({
         <TaskAssociationDialog
           open={blueprintTaskDialogOpen}
           onClose={() => setBlueprintTaskDialogOpen(false)}
-          nodeName={name || category.slice(0, -1)}
+          nodeName={name || getCategorySingular(category)}
           initialTasks={tasks}
           onSave={onUpdateTasks}
           nodeType={category.slice(0, -1)}

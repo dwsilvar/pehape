@@ -49,7 +49,7 @@ const ExecutionDrawer: React.FC<ExecutionDrawerProps> = ({ isOpen, onToggle, tas
       return;
     }
 
-    setLogs(['> Conectando al orquestador...']);
+    setLogs([t('pages.testPlan.drawer.connectingOrchestrator')]);
     setIsDone(false);
     // Let the initial fetch set the correct status
     // onStatusChange?.('pending');
@@ -108,7 +108,7 @@ const ExecutionDrawer: React.FC<ExecutionDrawerProps> = ({ isOpen, onToggle, tas
     };
 
     es.onerror = () => {
-      setLogs(prev => [...prev, '> Error de conexión con el stream de logs.']);
+      setLogs(prev => [...prev, t('pages.testPlan.drawer.connLogStreamError')]);
       setIsDone(true);
       onExecutionFinishedRef.current();
       es.close();
@@ -130,12 +130,12 @@ const ExecutionDrawer: React.FC<ExecutionDrawerProps> = ({ isOpen, onToggle, tas
       const now = Date.now();
       const diff = target - now;
       if (diff <= 0) {
-        setCountdown('00:00:00 restante');
+        setCountdown(`00:00:00 ${t('pages.testPlan.drawer.remaining')}`);
       } else {
         const h = Math.floor(diff / (1000 * 60 * 60));
         const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
         const s = Math.floor((diff % (1000 * 60)) / 1000);
-        setCountdown(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')} restante`);
+        setCountdown(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')} ${t('pages.testPlan.drawer.remaining')}`);
       }
     }, 1000);
     return () => clearInterval(interval);
@@ -196,7 +196,7 @@ const ExecutionDrawer: React.FC<ExecutionDrawerProps> = ({ isOpen, onToggle, tas
         <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.68rem', mr: 1 }}>
           {t('pages.testPlan.drawer.subtitle')}
         </Typography>
-        <Tooltip title={isOpen ? 'Colapsar' : 'Expandir'}>
+        <Tooltip title={isOpen ? t('common.collapse') : t('common.expand')}>
           <IconButton size="small" sx={{ p: 0.25 }}>
             {isOpen ? (
               <ExpandMoreRoundedIcon sx={{ fontSize: 16 }} />
@@ -235,12 +235,12 @@ const ExecutionDrawer: React.FC<ExecutionDrawerProps> = ({ isOpen, onToggle, tas
                 mb: 0.5,
               }}
             >
-              {'>'} Listo. Diseña tu plan y haz clic en "Ejecutar Plan Completo" para iniciar.
+              {t('pages.testPlan.drawer.readyToRun')}
             </Typography>
           ) : execStatus === 'scheduled' ? (
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1 }}>
               <Typography sx={{ color: '#38BDF8', fontFamily: 'inherit', fontSize: '1.2rem', fontWeight: 600 }}>
-                [PROGRAMADO]
+                {t('pages.testPlan.drawer.scheduled')}
               </Typography>
               <Typography sx={{ color: '#F8FAFC', fontFamily: 'inherit', fontSize: '2rem', fontWeight: 700 }}>
                 {countdown}
@@ -258,7 +258,7 @@ const ExecutionDrawer: React.FC<ExecutionDrawerProps> = ({ isOpen, onToggle, tas
                   '&:hover': { borderColor: '#ef4444', bgcolor: alpha('#ef4444', 0.1) }
                 }}
               >
-                Cancelar Ejecución
+                {t('pages.testPlan.drawer.cancelRun')}
               </Button>
             </Box>
           ) : (
@@ -312,7 +312,7 @@ const ExecutionDrawer: React.FC<ExecutionDrawerProps> = ({ isOpen, onToggle, tas
                   letterSpacing: 0.3,
                 }}
               >
-                Generando reporte Allure...
+                {t('pages.testPlan.drawer.generatingAllure')}
               </Typography>
             </Box>
           )}
@@ -331,7 +331,7 @@ const ExecutionDrawer: React.FC<ExecutionDrawerProps> = ({ isOpen, onToggle, tas
                    '&:hover': { borderColor: '#22c55e', bgcolor: alpha('#22c55e', 0.1) }
                  }}
                >
-                 Ir a Resultados y Reportes
+                 {t('pages.testPlan.drawer.goToReports')}
                </Button>
              </Box>
           )}

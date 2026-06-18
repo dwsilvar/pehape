@@ -78,13 +78,13 @@ const ExecutionPage: React.FC = () => {
       });
       if (response.ok) {
         fetchBlueprints();
-        alert("Plan importado exitosamente");
+        alert(t('pages.execution.importSuccess', 'Plan importado exitosamente'));
       } else {
         const error = await response.json();
-        alert(`Error al importar: ${error.detail}`);
+        alert(t('pages.execution.importError', 'Error al importar: {{error}}', { error: error.detail }));
       }
     } catch (error) {
-      alert(`Error al importar: ${error}`);
+      alert(t('pages.execution.importError', 'Error al importar: {{error}}', { error: String(error) }));
     }
   }, [fetchBlueprints]);
 
@@ -452,11 +452,11 @@ const ExecutionPage: React.FC = () => {
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flex: 1, justifyContent: 'flex-start' }}>
           {/* Plan Selector */}
           <FormControl size="small" sx={{ minWidth: 200, mr: 1 }}>
-            <InputLabel id="execution-plan-select-label">Plan de Pruebas</InputLabel>
+            <InputLabel id="execution-plan-select-label">{t('pages.execution.selectPlan', 'Plan de Pruebas')}</InputLabel>
             <Select
               labelId="execution-plan-select-label"
               value={selectedPlanId || ''}
-              label="Plan de Pruebas"
+              label={t('pages.execution.selectPlan', 'Plan de Pruebas')}
               onChange={(e) => setSelectedPlanId(e.target.value as string)}
               disabled={isExecuting}
               sx={{ borderRadius: '6px', height: 36, fontSize: '0.8rem' }}
@@ -464,10 +464,10 @@ const ExecutionPage: React.FC = () => {
               {isBlueprintsLoading ? (
                 <MenuItem disabled>
                   <CircularProgress size={16} sx={{ mr: 1 }} />
-                  Cargando planes...
+                  {t('pages.execution.loadingPlans', 'Cargando planes...')}
                 </MenuItem>
               ) : blueprints.plans.length === 0 ? (
-                <MenuItem disabled>No hay planes disponibles</MenuItem>
+                <MenuItem disabled>{t('pages.execution.noPlans', 'No hay planes disponibles')}</MenuItem>
               ) : (
                 blueprints.plans.map(p => (
                   <MenuItem key={p.id} value={p.id} sx={{ fontSize: '0.8rem' }}>
@@ -480,7 +480,7 @@ const ExecutionPage: React.FC = () => {
 
           {/* Save button */}
           {!isSaved && (
-            <Tooltip title="Guardar cambios de tareas en el plan">
+            <Tooltip title={t('pages.execution.saveTasksTooltip', 'Guardar cambios de tareas en el plan')}>
               <Button
                 size="small"
                 variant="outlined"
@@ -490,7 +490,7 @@ const ExecutionPage: React.FC = () => {
                 startIcon={<SaveRoundedIcon sx={{ fontSize: 16 }} />}
                 sx={{ fontSize: '0.75rem', height: 36, textTransform: 'none', borderRadius: '6px' }}
               >
-                Guardar Tareas
+                {t('pages.execution.saveTasksButton', 'Guardar Tareas')}
               </Button>
             </Tooltip>
           )}
@@ -506,7 +506,7 @@ const ExecutionPage: React.FC = () => {
               startIcon={<CancelRoundedIcon />}
               sx={{ fontSize: '0.75rem', height: 36, textTransform: 'none', borderRadius: '6px' }}
             >
-              {executionStatus === 'stopping' ? 'Deteniendo...' : 'Detener Pruebas'}
+              {executionStatus === 'stopping' ? t('pages.execution.stoppingButton', 'Deteniendo...') : t('pages.execution.stopButton', 'Detener Pruebas')}
             </Button>
           ) : (
             <Box ref={anchorRef} sx={{ display: 'inline-flex' }}>
@@ -546,7 +546,7 @@ const ExecutionPage: React.FC = () => {
                     )
                   }
                 >
-                  {executionStatus === 'scheduled' ? 'Programado' : 'Ejecutar Plan'}
+                  {executionStatus === 'scheduled' ? t('pages.execution.scheduledButton', 'Programado') : t('pages.execution.executePlanButton', 'Ejecutar Plan')}
                 </Button>
                 <Button size="small" onClick={handleToggleScheduleMenu} sx={{ px: 0.5 }}>
                   <ArrowDropDownIcon />
@@ -574,16 +574,16 @@ const ExecutionPage: React.FC = () => {
                   <ClickAwayListener onClickAway={handleCloseScheduleMenu}>
                     <MenuList autoFocusItem sx={{ p: 0 }}>
                       <MenuItem onClick={() => handleScheduleOption('instant')} sx={{ fontSize: '0.8rem', py: 1 }}>
-                        ⚡ Ejecutar Ahora
+                        {t('pages.execution.runNow', '⚡ Ejecutar Ahora')}
                       </MenuItem>
                       <MenuItem onClick={() => handleScheduleOption('delay_short')} sx={{ fontSize: '0.8rem', py: 1 }}>
-                        ⏱️ En 1 minuto
+                        {t('pages.execution.run1m', '⏱️ En 1 minuto')}
                       </MenuItem>
                       <MenuItem onClick={() => handleScheduleOption('delay_medium')} sx={{ fontSize: '0.8rem', py: 1 }}>
-                        ⏱️ En 5 minutos
+                        {t('pages.execution.run5m', '⏱️ En 5 minutos')}
                       </MenuItem>
                       <MenuItem onClick={() => handleScheduleOption('custom')} sx={{ fontSize: '0.8rem', py: 1 }}>
-                        📅 Programar Fecha/Hora...
+                        {t('pages.execution.runCustom', '📅 Programar Fecha/Hora...')}
                       </MenuItem>
                     </MenuList>
                   </ClickAwayListener>

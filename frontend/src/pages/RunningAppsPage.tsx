@@ -50,7 +50,7 @@ const RunningAppsPage: React.FC = () => {
                 setData(result);
             }
         } catch (err) {
-            setError('Error connecting to the server.');
+            setError(t('pages.runningApps.connectionError'));
             console.error(err);
         } finally {
             setLoading(false);
@@ -84,7 +84,7 @@ const RunningAppsPage: React.FC = () => {
                     <Paper elevation={2} sx={{ maxWidth: 1000 }}>
                         <Box sx={{ p: 2, bgcolor: 'background.default', borderBottom: 1, borderColor: 'divider' }}>
                             <Typography variant="h6">
-                                Windows Found: {data?.count || 0}
+                                {t('pages.runningApps.windowsFound', { count: data?.count || 0 })}
                             </Typography>
                         </Box>
 

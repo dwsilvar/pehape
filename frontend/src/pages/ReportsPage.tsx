@@ -551,7 +551,7 @@ const ReportsPage: React.FC = () => {
                 >
                     <Tab
                         id="tab-gherkin"
-                        label="Dashboard / Resumen Jerárquico"
+                        label={t('pages.reports.tabDashboard')}
                         icon={<DashboardRoundedIcon sx={{ fontSize: 20 }} />}
                         iconPosition="start"
                     />

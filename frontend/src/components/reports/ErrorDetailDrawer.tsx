@@ -2,6 +2,7 @@ import React from 'react';
 import { Drawer, Box, Typography, IconButton, Divider, useTheme, alpha } from '@mui/material';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import ErrorOutlineRoundedIcon from '@mui/icons-material/ErrorOutlineRounded';
+import { useTranslation } from 'react-i18next';
 
 interface ErrorDetailDrawerProps {
     scenario: any | null;
@@ -11,6 +12,7 @@ interface ErrorDetailDrawerProps {
 
 const ErrorDetailDrawer: React.FC<ErrorDetailDrawerProps> = ({ scenario, isOpen, onClose }) => {
     const theme = useTheme();
+    const { t } = useTranslation();
 
     if (!scenario) return null;
 
@@ -32,7 +34,7 @@ const ErrorDetailDrawer: React.FC<ErrorDetailDrawerProps> = ({ scenario, isOpen,
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, color: theme.palette.error.main }}>
                     <ErrorOutlineRoundedIcon />
                     <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1rem' }}>
-                        Detalles del Error
+                        {t('pages.reports.errorDetails')}
                     </Typography>
                 </Box>
                 <IconButton onClick={onClose} size="small">
@@ -41,15 +43,15 @@ const ErrorDetailDrawer: React.FC<ErrorDetailDrawerProps> = ({ scenario, isOpen,
             </Box>
 
             <Box sx={{ p: 2, borderBottom: `1px solid ${theme.palette.divider}` }}>
-                <Typography variant="subtitle2" color="text.secondary">Escenario Fallido</Typography>
+                <Typography variant="subtitle2" color="text.secondary">{t('pages.reports.failedScenario')}</Typography>
                 <Typography sx={{ fontWeight: 600, mt: 0.5 }}>{scenario.scenario_name}</Typography>
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1, wordBreak: 'break-all' }}>
-                    Archivo: {scenario.feature_path}
+                    {t('pages.reports.file')}: {scenario.feature_path}
                 </Typography>
             </Box>
 
             <Box sx={{ flex: 1, p: 2, overflow: 'auto' }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>Console Output & Stacktrace</Typography>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>{t('pages.reports.consoleOutput')}</Typography>
                 <Box
                     sx={{
                         backgroundColor: theme.palette.mode === 'dark' ? '#0d1117' : '#1e1e1e',
@@ -63,7 +65,7 @@ const ErrorDetailDrawer: React.FC<ErrorDetailDrawerProps> = ({ scenario, isOpen,
                         minHeight: 200
                     }}
                 >
-                    {scenario.logs ? scenario.logs : 'No hay logs disponibles para este escenario.'}
+                    {scenario.logs ? scenario.logs : t('pages.reports.noLogsAvailable')}
                 </Box>
             </Box>
         </Drawer>

@@ -6,6 +6,7 @@ import {
 import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
 import SaveRoundedIcon from '@mui/icons-material/SaveRounded';
 import ExitToAppRoundedIcon from '@mui/icons-material/ExitToAppRounded';
+import { useTranslation } from 'react-i18next';
 
 interface UnsavedChangesDialogProps {
   open: boolean;
@@ -28,6 +29,7 @@ const UnsavedChangesDialog: React.FC<UnsavedChangesDialogProps> = ({
   onCancel,
 }) => {
   const theme = useTheme();
+  const { t } = useTranslation();
 
   return (
     <Dialog
@@ -60,15 +62,14 @@ const UnsavedChangesDialog: React.FC<UnsavedChangesDialogProps> = ({
             <WarningAmberRoundedIcon sx={{ fontSize: 20, color: 'warning.main' }} />
           </Box>
           <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1rem' }}>
-            Cambios sin guardar
+            {t('common.unsavedTitle')}
           </Typography>
         </Box>
       </DialogTitle>
 
       <DialogContent sx={{ pt: 0.5, pb: 1 }}>
         <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
-          Tienes cambios pendientes que aún no se han guardado. Si sales ahora,
-          se perderán todos los cambios realizados.
+          {t('common.unsavedText')}
         </Typography>
       </DialogContent>
 
@@ -81,7 +82,7 @@ const UnsavedChangesDialog: React.FC<UnsavedChangesDialogProps> = ({
           fullWidth
           sx={{ fontWeight: 600 }}
         >
-          Guardar y continuar
+          {t('common.unsavedSave')}
         </Button>
 
         {/* Secondary: discard */}
@@ -93,7 +94,7 @@ const UnsavedChangesDialog: React.FC<UnsavedChangesDialogProps> = ({
           fullWidth
           sx={{ fontWeight: 500 }}
         >
-          Descartar cambios y salir
+          {t('common.unsavedDiscard')}
         </Button>
 
         {/* Cancel: stay */}
@@ -103,7 +104,7 @@ const UnsavedChangesDialog: React.FC<UnsavedChangesDialogProps> = ({
           fullWidth
           sx={{ color: 'text.secondary', fontWeight: 400 }}
         >
-          Cancelar (volver al editor)
+          {t('common.unsavedCancel')}
         </Button>
       </DialogActions>
     </Dialog>

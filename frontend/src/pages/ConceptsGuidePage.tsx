@@ -3,6 +3,7 @@ import {
   Box, Typography, Chip, Paper, Divider, useTheme, alpha, List, ListItem,
   ListItemButton, ListItemText,
 } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 import AccountTreeRoundedIcon from '@mui/icons-material/AccountTreeRounded';
 import LayersRoundedIcon from '@mui/icons-material/LayersRounded';
 import RepeatRoundedIcon from '@mui/icons-material/RepeatRounded';
@@ -12,126 +13,29 @@ import LightbulbRoundedIcon from '@mui/icons-material/LightbulbRounded';
 import LibraryBooksRoundedIcon from '@mui/icons-material/LibraryBooksRounded';
 import { PlanIcon, FeatureIcon, ScenarioIcon } from '../components/PehapeIcons';
 
-// ── Concept definitions ───────────────────────────────────────────────────────
+// ── Types and Interfaces ──────────────────────────────────────────────────────
 
-const CONCEPTS = [
-  {
-    id: 'feature',
-    level: 'Base',
-    levelColor: '#22c55e',
-    icon: <FeatureIcon size={28} color="#22c55e" />,
-    title: 'Feature',
-    subtitle: 'El archivo .feature de Gherkin',
-    description:
-      'Un archivo .feature es la unidad de escritura de pruebas. Contiene varios escenarios (Scenarios) agrupados y relacionados a una misma funcionalidad del sistema, escritos en lenguaje natural (Gherkin).',
-    whenToUse: [
-      'Documentar una funcionalidad completa del sistema',
-      'Agrupar escenarios relacionados bajo un mismo contexto',
-      'Describir el comportamiento esperado desde la perspectiva del usuario',
-    ],
-    mnemonic: '¿Qué funcionalidad estoy documentando?',
-    example: 'retiro/retiro.feature, login/login.feature',
-    chips: ['Gherkin', '.feature file', 'Fuente de verdad'],
-  },
-  {
-    id: 'scenario',
-    level: 'Base',
-    levelColor: '#14b8a6',
-    icon: <ScenarioIcon size={28} color="#14b8a6" />,
-    title: 'Scenario',
-    subtitle: 'El caso de prueba individual',
-    description:
-      'Un Scenario es la unidad mínima ejecutable. Define un comportamiento específico del sistema mediante una secuencia de pasos Given / When / Then. Se asocia a tags para filtrar y categorizar la ejecución.',
-    whenToUse: [
-      'Probar un caso de uso o flujo específico',
-      'Verificar un comportamiento puntual del sistema',
-      'Reutilizar como bloque de construcción en un Test Flow',
-    ],
-    mnemonic: '¿Qué comportamiento específico estoy probando?',
-    example: 'Scenario: Retiro exitoso con saldo suficiente',
-    chips: ['Given / When / Then', 'Unidad ejecutable', 'Tags'],
-  },
-  {
-    id: 'test-flow',
-    level: 'Diseño',
-    levelColor: '#6366f1',
-    icon: <AltRouteRoundedIcon sx={{ fontSize: 28, color: '#6366f1' }} />,
-    title: 'Test Flow',
-    subtitle: 'La secuencia ordenada de escenarios',
-    description:
-      'Un Test Flow es una secuencia de Scenarios (de uno o varios Features) organizados en el canvas para ejecutarse en un orden específico. Es el "flujo" que diseñas arrastrando scenarios desde la biblioteca. Un Test Flow solo puede contener Scenarios. ' +
-      '⚠️ Regla de ejecución — Fail-Fast: si un Scenario dentro de un Flow falla, todos los Scenarios restantes de ese mismo Flow se omiten (skip) automáticamente. La ejecución continúa con el siguiente Flow o Cycle; el Plan global nunca se detiene por el fallo de un Flow.',
-    whenToUse: [
-      'Definir el orden de ejecución de un conjunto de escenarios',
-      'Componer flujos complejos: login → navegar → acción → logout',
-      'Garantizar dependencias entre pasos de prueba',
-      'Aislar un bloque de escenarios con Fail-Fast propio (fallo en uno no afecta otros Flows)',
-    ],
-    mnemonic: '¿En qué orden ejecuto estos escenarios?',
-    example: 'Flujo Principal: login → retiro → verificar saldo → logout',
-    chips: ['Canvas drag & drop', 'Solo Scenarios', 'Orden de ejecución', 'Fail-Fast'],
-  },
-  {
-    id: 'test-set',
-    level: 'Agrupación',
-    levelColor: '#d946ef',
-    icon: <LibraryBooksRoundedIcon sx={{ fontSize: 28, color: '#d946ef' }} />,
-    title: 'Test Set',
-    subtitle: 'El generador matricial de flujos',
-    description:
-      'Un Test Set agrupa Features y/o Test Flows de forma lógica (ya no escenarios sueltos). Actúa como un multiplicador: si agregas un Feature (que tiene múltiples escenarios) junto a otros flujos, internamente creará una matriz de ejecución. Por ejemplo, al unir [Flow A] + [Feature B con 2 escenarios] + [Flow C], el Set generará dos flujos resultantes: (Flow A + Escenario B1 + Flow C) y (Flow A + Escenario B2 + Flow C). ' +
-      '⚠️ Entidad de diseño solamente — el Test Set no existe en tiempo de ejecución. Antes de que el orquestador arranque, cada Set se expande mediante Producto Cartesiano y se convierte en N Test Flows independientes. Cada Flow resultante hereda el comportamiento Fail-Fast normal: un fallo en una combinación no afecta a las demás combinaciones del mismo Set.',
-    whenToUse: [
-      'Agrupar múltiples Test Flows y Features bajo un mismo propósito',
-      'Crear combinaciones matriciales de escenarios con pasos comunes de pre/post condición',
-      'Organizar módulos grandes de una aplicación en una misma agrupación',
-      'Cuando necesitas que un mismo pre/post-condición se combine con múltiples variantes de escenario',
-    ],
-    mnemonic: '¿Cómo agrupo de forma lógica estos flujos y features?',
-    example: 'Set de Pruebas de Pagos, Conjunto de Validaciones de Usuario',
-    chips: ['Matriz', 'Features + Flows', 'Multiplicador', 'Solo diseño — no ejecutable'],
-  },
-  {
-    id: 'test-cycle',
-    level: 'Organización',
-    levelColor: '#f97316',
-    icon: <RepeatRoundedIcon sx={{ fontSize: 28, color: '#f97316' }} />,
-    title: 'Test Cycle',
-    subtitle: 'La iteración o ronda de pruebas',
-    description:
-      'Un Test Cycle agrupa uno o varios Test Sets y/o Test Flows bajo una iteración específica de pruebas. Representa una "ronda" completa: puede contener múltiples conjuntos o flujos paralelos que se ejecutan juntos.',
-    whenToUse: [
-      'Agrupar sets y flujos bajo una misma ronda o sprint de pruebas',
-      'Organizar pruebas de regresión, smoke tests o sanity checks',
-      'Separar ejecuciones por ambiente (staging, producción)',
-    ],
-    mnemonic: '¿En qué iteración/ronda ejecuto estos sets y flujos?',
-    example: 'Ciclo de Regresión Semanal, Sprint 12 - Smoke Tests',
-    chips: ['Iteración', 'Múltiples sets/flujos', 'Agrupación'],
-  },
-  {
-    id: 'test-plan',
-    level: 'Campaña',
-    levelColor: '#38bdf8',
-    icon: <PlanIcon size={28} color="#38bdf8" />,
-    title: 'Test Plan',
-    subtitle: 'El contenedor raíz de la campaña',
-    description:
-      'El Test Plan es el contenedor de más alto nivel. Agrupa todos los ciclos de una campaña de pruebas completa. Tiene estado propio (draft → running → completed) y puede programarse para ejecución automática.',
-    whenToUse: [
-      'Organizar una campaña de pruebas completa (trimestral, por versión)',
-      'Programar ejecuciones automáticas del conjunto de ciclos',
-      'Tener una vista global del estado de todas las pruebas',
-    ],
-    mnemonic: '¿A qué campaña pertenece todo esto?',
-    example: 'Plan de Pruebas Q2 2026, Release v3.5 — Regression Suite',
-    chips: ['draft → running → completed', 'Programable', 'Campaña completa'],
-  },
-] as const;
+interface ConceptItem {
+  id: string;
+  levelColor: string;
+  icon: React.ReactNode;
+  title: string;
+  level: string;
+  subtitle: string;
+  description: string;
+  whenToUse: string[];
+  mnemonic: string;
+  example: string;
+  chips: string[];
+}
 
 // ── Hierarchy diagram ─────────────────────────────────────────────────────────
 
-const HierarchyDiagram: React.FC = () => {
+interface HierarchyDiagramProps {
+  t: any;
+}
+
+const HierarchyDiagram: React.FC<HierarchyDiagramProps> = ({ t }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
 
@@ -158,7 +62,7 @@ const HierarchyDiagram: React.FC = () => {
               flexShrink: 0,
             }}
           >
-            {i === 0 ? 'Nivel 1' : i === 1 ? 'Nivel 2' : i === 2 ? 'Nivel 3' : i === 3 ? 'Nivel 4' : i === 4 ? 'Unidad' : 'Fuente'}
+            {i === 0 ? t('pages.guide.level1', 'Nivel 1') : i === 1 ? t('pages.guide.level2', 'Nivel 2') : i === 2 ? t('pages.guide.level3', 'Nivel 3') : i === 3 ? t('pages.guide.level4', 'Nivel 4') : i === 4 ? t('pages.guide.unit', 'Unidad') : t('pages.guide.source', 'Fuente')}
           </Typography>
           <Box
             sx={{
@@ -197,11 +101,12 @@ const HierarchyDiagram: React.FC = () => {
 // ── Concept card ──────────────────────────────────────────────────────────────
 
 interface ConceptCardProps {
-  concept: (typeof CONCEPTS)[number];
+  concept: ConceptItem;
   conceptRef: React.RefObject<HTMLDivElement | null>;
+  t: any;
 }
 
-const ConceptCard: React.FC<ConceptCardProps> = ({ concept, conceptRef }) => {
+const ConceptCard: React.FC<ConceptCardProps> = ({ concept, conceptRef, t }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
 
@@ -273,7 +178,7 @@ const ConceptCard: React.FC<ConceptCardProps> = ({ concept, conceptRef }) => {
           variant="overline"
           sx={{ fontSize: '0.65rem', letterSpacing: 1, color: 'text.disabled', fontWeight: 700, display: 'block', mb: 0.75 }}
         >
-          Cuándo usarlo
+          {t('pages.guide.whenToUse', 'Cuándo usarlo')}
         </Typography>
         {concept.whenToUse.map((item, i) => (
           <Box key={i} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 0.5 }}>
@@ -328,7 +233,7 @@ const ConceptCard: React.FC<ConceptCardProps> = ({ concept, conceptRef }) => {
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.25 }}>
           <LightbulbRoundedIcon sx={{ fontSize: 13, color: concept.levelColor }} />
           <Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'text.disabled', fontWeight: 700, letterSpacing: 0.5 }}>
-            PREGUNTA CLAVE
+            {t('pages.guide.keyQuestion', 'PREGUNTA CLAVE')}
           </Typography>
         </Box>
         <Typography sx={{ fontSize: '0.85rem', fontStyle: 'italic', color: 'text.primary', fontWeight: 500 }}>
@@ -363,8 +268,62 @@ const ConceptCard: React.FC<ConceptCardProps> = ({ concept, conceptRef }) => {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 const ConceptsGuidePage: React.FC = () => {
+  const { t } = useTranslation();
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
+
+  const conceptIds = ['feature', 'scenario', 'test-flow', 'test-set', 'test-cycle', 'test-plan'] as const;
+
+  const getConceptIcon = (id: string, color: string) => {
+    switch (id) {
+      case 'feature':
+        return <FeatureIcon size={28} color={color} />;
+      case 'scenario':
+        return <ScenarioIcon size={28} color={color} />;
+      case 'test-flow':
+        return <AltRouteRoundedIcon sx={{ fontSize: 28, color }} />;
+      case 'test-set':
+        return <LibraryBooksRoundedIcon sx={{ fontSize: 28, color }} />;
+      case 'test-cycle':
+        return <RepeatRoundedIcon sx={{ fontSize: 28, color }} />;
+      case 'test-plan':
+        return <PlanIcon size={28} color={color} />;
+      default:
+        return null;
+    }
+  };
+
+  const getConceptColor = (id: string) => {
+    switch (id) {
+      case 'feature': return '#22c55e';
+      case 'scenario': return '#14b8a6';
+      case 'test-flow': return '#6366f1';
+      case 'test-set': return '#d946ef';
+      case 'test-cycle': return '#f97316';
+      case 'test-plan': return '#38bdf8';
+      default: return '#777777';
+    }
+  };
+
+  const concepts: ConceptItem[] = conceptIds.map((id) => {
+    const levelColor = getConceptColor(id);
+    const whenToUse = t(`pages.guide.concepts.${id}.whenToUse`, { returnObjects: true }) as string[];
+    const chips = t(`pages.guide.concepts.${id}.chips`, { returnObjects: true }) as string[];
+    
+    return {
+      id,
+      levelColor,
+      icon: getConceptIcon(id, levelColor),
+      title: t(`pages.guide.concepts.${id}.title`),
+      level: t(`pages.guide.concepts.${id}.level`),
+      subtitle: t(`pages.guide.concepts.${id}.subtitle`),
+      description: t(`pages.guide.concepts.${id}.description`),
+      mnemonic: t(`pages.guide.concepts.${id}.mnemonic`),
+      example: t(`pages.guide.concepts.${id}.example`),
+      whenToUse: Array.isArray(whenToUse) ? whenToUse : [],
+      chips: Array.isArray(chips) ? chips : [],
+    };
+  });
 
   const refs = {
     feature: useRef<HTMLDivElement>(null),
@@ -411,11 +370,11 @@ const ConceptsGuidePage: React.FC = () => {
               variant="overline"
               sx={{ fontSize: '0.62rem', letterSpacing: 1.2, color: 'text.disabled', fontWeight: 700 }}
             >
-              Guía de Conceptos
+              {t('pages.guide.title', 'Guía de Conceptos')}
             </Typography>
           </Box>
           <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', lineHeight: 1.5 }}>
-            Navegación rápida entre los conceptos de Pehape.
+            {t('pages.guide.navDesc', 'Navegación rápida entre los conceptos de Pehape.')}
           </Typography>
         </Box>
 
@@ -426,12 +385,12 @@ const ConceptsGuidePage: React.FC = () => {
             variant="caption"
             sx={{ px: 1, fontSize: '0.62rem', color: 'text.disabled', fontWeight: 700, letterSpacing: 0.5 }}
           >
-            JERARQUÍA
+            {t('pages.guide.hierarchy', 'JERARQUÍA')}
           </Typography>
         </Box>
 
         <List disablePadding>
-          {CONCEPTS.map((c) => (
+          {concepts.map((c) => (
             <ListItem key={c.id} disablePadding>
               <ListItemButton
                 onClick={() => scrollTo(c.id)}
@@ -480,7 +439,7 @@ const ConceptsGuidePage: React.FC = () => {
           >
             <AccountTreeRoundedIcon sx={{ fontSize: 14, color: 'primary.main', flexShrink: 0 }} />
             <Typography sx={{ fontSize: '0.7rem', color: 'text.secondary', lineHeight: 1.4 }}>
-              De abajo hacia arriba: Feature → Scenario → Flow → Set → Cycle → Plan
+              {t('pages.guide.bottomUp', 'De abajo hacia arriba: Feature → Scenario → Flow → Set → Cycle → Plan')}
             </Typography>
           </Box>
         </Box>
@@ -502,12 +461,11 @@ const ConceptsGuidePage: React.FC = () => {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
             <LayersRoundedIcon sx={{ fontSize: 28, color: 'primary.main' }} />
             <Typography variant="h5" sx={{ fontWeight: 800 }}>
-              Guía de Conceptos
+              {t('pages.guide.title', 'Guía de Conceptos')}
             </Typography>
           </Box>
           <Typography sx={{ fontSize: '0.95rem', color: 'text.secondary', lineHeight: 1.7, mb: 2 }}>
-            Pehape organiza las pruebas en una jerarquía de cinco niveles. Entender cuándo usar
-            cada concepto te permite diseñar campañas de prueba claras, reutilizables y fáciles de mantener.
+            {t('pages.guide.description', 'Pehape organiza las pruebas en una jerarquía de cinco niveles. Entender cuándo usar cada concepto te permite diseñar campañas de prueba claras, reutilizables y fáciles de mantener.')}
           </Typography>
 
           {/* Hierarchy diagram */}
@@ -526,12 +484,11 @@ const ConceptsGuidePage: React.FC = () => {
               variant="overline"
               sx={{ fontSize: '0.62rem', letterSpacing: 1, color: 'text.disabled', fontWeight: 700 }}
             >
-              Jerarquía de contenedores
+              {t('pages.guide.containersHierarchy', 'Jerarquía de contenedores')}
             </Typography>
-            <HierarchyDiagram />
+            <HierarchyDiagram t={t} />
             <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.68rem' }}>
-              Cada nivel puede contener uno o más elementos del nivel inferior. Feature y Scenario son la
-              fuente de las pruebas; los niveles superiores son formas de organizarlos.
+              {t('pages.guide.containersDescription', 'Cada nivel puede contener uno o más elementos del nivel inferior. Feature y Scenario son la fuente de las pruebas; los niveles superiores son formas de organizarlos.')}
             </Typography>
           </Paper>
         </Box>
@@ -540,11 +497,12 @@ const ConceptsGuidePage: React.FC = () => {
 
         {/* Concept cards */}
         <Box sx={{ maxWidth: 720 }}>
-          {CONCEPTS.map((concept) => (
+          {concepts.map((concept) => (
             <ConceptCard
               key={concept.id}
               concept={concept}
               conceptRef={refs[concept.id as keyof typeof refs]}
+              t={t}
             />
           ))}
         </Box>

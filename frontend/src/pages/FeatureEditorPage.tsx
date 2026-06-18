@@ -264,14 +264,14 @@ const FeatureEditorPage: React.FC = () => {
       window.URL.revokeObjectURL(url);
       setSnackbar({
         open: true,
-        message: 'Features exportados exitosamente.',
+        message: t('editor.export_success', 'Features exportados exitosamente.'),
         severity: 'success'
       });
     } catch (err) {
       console.error('Error exporting features:', err);
       setSnackbar({
         open: true,
-        message: 'Error al exportar features.',
+        message: t('editor.export_error', 'Error al exportar features.'),
         severity: 'error'
       });
     }
@@ -295,7 +295,7 @@ const FeatureEditorPage: React.FC = () => {
     try {
       setSnackbar({
         open: true,
-        message: 'Importando features...',
+        message: t('editor.importing', 'Importando features...'),
         severity: 'info'
       });
       
@@ -312,7 +312,7 @@ const FeatureEditorPage: React.FC = () => {
       const result = await res.json();
       setSnackbar({
         open: true,
-        message: result.message || 'Features importados correctamente.',
+        message: result.message || t('editor.import_success', 'Features importados correctamente.'),
         severity: 'success'
       });
 
@@ -321,7 +321,7 @@ const FeatureEditorPage: React.FC = () => {
       console.error('Error importing features:', err);
       setSnackbar({
         open: true,
-        message: err instanceof Error ? err.message : 'Error al importar features.',
+        message: err instanceof Error ? err.message : t('editor.import_error', 'Error al importar features.'),
         severity: 'error'
       });
     }
@@ -540,7 +540,7 @@ const FeatureEditorPage: React.FC = () => {
 
                   {/* Close button */}
                   <Tooltip
-                    title="Cerrar"
+                    title={t('editor.close_tooltip', 'Cerrar')}
                     placement="top"
                     arrow
                     componentsProps={{
@@ -636,7 +636,7 @@ const FeatureEditorPage: React.FC = () => {
                     lineHeight: 1.6,
                   }}
                 >
-                  Selecciona un archivo .feature del explorador para comenzar a editar
+                  {t('editor.select_file_hint', 'Selecciona un archivo .feature del explorador para comenzar a editar')}
                 </Typography>
               </Box>
             </Box>
