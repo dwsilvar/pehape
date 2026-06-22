@@ -140,6 +140,9 @@ La plataforma cuenta con un CLI potente e interactivo (`pehape`) que te permite 
 1.  **Ejecución Local (`--local`)**: Corre los escenarios localmente en la terminal como subprocesos en-cliente. Actualiza los resultados de Allure, resúmenes Gherkin y captura de pantalla/evidencias en la carpeta local `./reports`, pero **no** crea una tarea en segundo plano en el servidor. Ideal para automatizaciones desatendidas y CI/CD.
 2.  **Ejecución API (`--api`)**: Envía una petición POST al servidor FastAPI activo en segundo plano y transmite (streams) las líneas de logs de SSE en tiempo real a tu consola. Esto **sí** registra la ejecución en el monitor e historial de tareas en tiempo real de la UI de React.
 
+> [!NOTE]
+> Si no se especifica ningún modo, **`--local` es el modo por defecto**.
+
 ### Casos de Uso y Sintaxis
 
 Puedes ejecutar pruebas filtrando por cualquier nivel de la jerarquía de planos o directamente archivos `.feature` sueltos:
@@ -152,24 +155,48 @@ Puedes ejecutar pruebas filtrando por cualquier nivel de la jerarquía de planos
 *   **Ejecutar un Plan de Pruebas completo**:
     ```powershell
     pehape --plan "veesoon"
+    pehape --plan "veesoon" --api        # Registra en el monitor de la UI
     ```
 *   **Ejecutar un Ciclo (Suite)**:
     ```powershell
     pehape --cycle "retiro"
+    pehape --plan "veesoon" --cycle "retiro"   # Desambigua si el nombre se repite
     ```
 *   **Ejecutar un Test Flow**:
     ```powershell
     pehape --flow "ingresopin"
+    pehape --plan "veesoon" --flow "ingresopin"
     ```
 *   **Ejecutar un Escenario Específico**:
     ```powershell
     pehape --scenario "Nuevo escenario"
+    pehape --plan "veesoon" --cycle "retiro" --scenario "Nuevo escenario"
     ```
 *   **Ejecutar un Archivo Feature Crudo (Dry / Direct Run)**:
     ```powershell
     pehape --feature "example.feature"
     pehape --feature "retiro/retiro.feature" --scenario "Nuevo escenario"
     ```
+    > [!IMPORTANT]
+    > `--feature` **no se puede combinar** con `--plan`, `--cycle` ni `--flow`, ya que los archivos crudos no forman parte de ningún plan de blueprints.  
+    > `--feature` tampoco es compatible con `--api`: si se especifican juntos, la ejecución se realiza en modo local automáticamente.
+
+### Referencia Completa de Argumentos
+
+| Argumento | Tipo | Descripción |
+|:---|:---|:---|
+| `--plan <nombre\|ID>` | Filtro | Nombre o ID del Plan de Pruebas a ejecutar. |
+| `--cycle <nombre\|ID>` | Filtro | Nombre, ID de definición o ID de instancia del Ciclo (Suite). |
+| `--flow <nombre\|ID>` | Filtro | Nombre, ID de definición o ID de instancia del Flow de prueba. |
+| `--scenario <nombre\|ID>` | Filtro | Nombre o ID de instancia del Escenario a ejecutar. |
+| `--feature <ruta>` | Modo directo | Ruta a un archivo `.feature` Gherkin sin blueprints. Relativa a `features/` o absoluta. |
+| `--local` | Modo | Ejecuta como subproceso local (default si no se especifica modo). |
+| `--api` | Modo | Delega al servidor FastAPI y transmite logs por SSE en tiempo real. |
+| `--host <ip>` | Config | Sobreescribe el host del servidor FastAPI (default: leído desde `network_config.json`). |
+| `--port <puerto>` | Config | Sobreescribe el puerto del servidor FastAPI (default: leído desde `network_config.json`). |
+| `--debug` | Config | Activa salida de depuración detallada en la consola. |
+
+Los filtros son **acumulables**: puedes combinar `--plan`, `--cycle`, `--flow` y `--scenario` en el mismo comando para precisar exactamente qué ejecutar.
 
 ### Resolución de Identificadores y Colisiones
 El comando `pehape` acepta nombres (ej: `"retiro"`), IDs de definición estáticos, o IDs de instancia largos generados. 
@@ -177,6 +204,13 @@ Si el nombre de un elemento se repite en el árbol (por ejemplo, hay 2 flows lla
 1.  Detectará la colisión de nombres.
 2.  Imprimirá las opciones candidatas detallando su ruta jerárquica (ej: `Plan A > Cycle 1 > Flow retiro` vs `Plan B > Cycle 2 > Flow retiro`) junto a sus IDs de instancia únicos.
 3.  Te instruirá a desambiguar la ejecución pasando un filtro padre (`--plan` o `--cycle`) o utilizando el ID de instancia único directamente.
+
+### Ver los Resultados en la Interfaz Web
+Cuando se usa el modo `--api`, la ejecución queda registrada en la UI de React:
+*   **Monitor de ejecución en tiempo real**: Accede a la sección **Ejecuciones** del panel lateral → verás la tarea activa con logs en streaming.
+*   **Historial y reportes**: Una vez finalizada, la ejecución aparece en **Reportes** → puedes inspeccionar resultados, capturas de pantalla, GIFs y el estado de cada escenario.
+
+En modo `--local`, los resultados se guardan en `reports/allure_results/` y puedes visualizarlos abriendo el reporte Allure manualmente o desde la sección de **Reportes** de la UI.
 
 ---
 
@@ -265,10 +299,11 @@ El orquestador cuenta con un flujo seguro de actualización en caliente:
 
 ## Resolución de Problemas (Troubleshooting) 🛠️
 
-*   **Error: `ModuleNotFoundError: No module named 'config'`**: Asegúrate de estar ejecutando los scripts desde la raíz del proyecto. El directorio `config` contiene un archivo `__init__.py` necesario para que Python lo trate como un paquete.
+*   **Error: `ModuleNotFoundError: No module named 'config'`**: Este error ocurre al ejecutar `orchestrator.py` u `orchestrator_api.py` directamente **fuera de la raíz del proyecto**. El wrapper `pehape` (bat/ps1) resuelve rutas automáticamente desde cualquier directorio; los scripts Python base requieren que el CWD sea la raíz del proyecto.
 *   **Tesseract no funciona o no se encuentra**: Verifica la ruta especificada en `ocr_config.json`. Si utilizas el paquete empaquetado offline, la instalación configurará la ruta relativa automáticamente.
 *   **Reportes de Allure no abren o dan error 9009**: Asegúrate de tener instalado Java en tu máquina y que la variable `java` esté disponible en el PATH del sistema.
 *   **Doble ejecución de escenarios**: El motor orquestador ejecuta los escenarios buscando coincidencia exacta de nombre (`--name "^NombreExacto$"`). Evita nombrar escenarios idénticos dentro del mismo archivo de feature si deseas correrlos por separado de forma CLI directo.
+*   **`pehape --api` no conecta o da error de conexión**: El modo `--api` requiere que el servidor FastAPI esté corriendo previamente (`./start-all.ps1` o `python orchestrator_api.py`). Verifica que el host y puerto en `config/network_config.json` coincidan con el servidor activo, o sobreescríbelos con `--host` y `--port`.
 
 ---
 

@@ -21,11 +21,15 @@ from pathlib import Path
 if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8")
 
+# Root of the project is always the directory containing cli.py,
+# regardless of which directory the user runs the command from.
+_PROJECT_ROOT = Path(__file__).resolve().parent
+
 def get_network_config() -> tuple[str, int]:
     """Reads network configuration from config/network_config.json."""
     host = "127.0.0.1"
     port = 5001
-    config_path = Path("config/network_config.json")
+    config_path = _PROJECT_ROOT / "config" / "network_config.json"
     if config_path.exists():
         try:
             with open(config_path, "r", encoding="utf-8-sig") as f:
@@ -139,13 +143,14 @@ Examples:
 
 def execute_local(plan_json_str: str):
     """Launches orchestrator.py in a local subprocess to execute the plan."""
+    orchestrator = str(_PROJECT_ROOT / "orchestrator.py")
     cmd = [
         sys.executable,
-        "orchestrator.py",
+        orchestrator,
         "--json", plan_json_str,
-        "--results-dir", "./reports/allure_results",
-        "--report-dir", "./reports/allure-report",
-        "--features-dir", "./features",
+        "--results-dir", str(_PROJECT_ROOT / "reports" / "allure_results"),
+        "--report-dir",  str(_PROJECT_ROOT / "reports" / "allure-report"),
+        "--features-dir", str(_PROJECT_ROOT / "features"),
     ]
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
