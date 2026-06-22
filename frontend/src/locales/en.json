@@ -385,10 +385,10 @@
             "tabMonitor": "Execution Matrix",
             "canvas": {
                 "planSingular": "Plan",
-            "cycleSingular": "Cycle",
-            "setSingular": "Set",
-            "flowSingular": "Flow",
-            "title": "Flow Designer",
+                "cycleSingular": "Cycle",
+                "setSingular": "Set",
+                "flowSingular": "Flow",
+                "title": "Flow Designer",
                 "placeholder": "Drag scenarios here to build a test flow",
                 "placeholderSub": "Scenarios will execute top-to-bottom",
                 "scenariosCount": "{{count}} scenario(s)",
@@ -424,17 +424,7 @@
                 "loading": "Loading Gherkin…",
                 "errorLoading": "Could not load feature: {{error}}"
             },
-            "library": {
-                "title": "Asset Library",
-                "search": "Search features or tags...",
-                "filterVersion": "Filter by tag",
-                "allVersions": "All tags",
-                "noScenarios": "No scenarios found.",
-                "loading": "Loading features...",
-                "dragHint": "Drag to canvas",
-                "steps": "Steps:",
-                "noFeatures": "No feature files found."
-            },
+            "library": "Library",
             "drawer": {
                 "title": "Execution Logs",
                 "subtitle": "Real-time output from the test runner",
@@ -455,8 +445,7 @@
             "confirmDelete": "Delete \"{{name}}\"? This action cannot be undone.",
             "enterName": "Enter a name...",
             "hideLibrary": "Hide library",
-            "showLibrary": "Show library",
-            "library": "Library"
+            "showLibrary": "Show library"
         },
         "execution": {
             "selectPlan": "Test Plan",
@@ -478,7 +467,30 @@
             "scheduleDescription": "Select the exact date and time when you want the Test Plan to start executing.",
             "schedulePastError": "The selected time has already passed.",
             "scheduleConfirmButton": "Schedule",
-            "lastExecution": "Last execution: {{datetime}}"
+            "lastExecution": "Last execution: {{datetime}}",
+            "monitor": {
+                "testCycle": "Test Cycle",
+                "testSet": "Test Set",
+                "testFlow": "Test Flow",
+                "scenario": "Scenario",
+                "feature": "Feature",
+                "result": "Result",
+                "executeCycle": "Execute Cycle",
+                "executeSuite": "Execute Suite (Set)",
+                "executeFlow": "Execute Flow",
+                "executeScenario": "Execute Scenario",
+                "associateTaskToCycle": "Associate Task to Cycle",
+                "associateTaskToSuite": "Associate Task to Suite",
+                "associateTaskToFlow": "Associate Task to Flow",
+                "associateTaskToScenario": "Associate Task to Scenario",
+                "copyConsoleCommand": "Copy console command",
+                "copyConsoleCommandCycle": "Copy console command (Full Cycle)",
+                "commandCopied": "Command copied!",
+                "cycleTasksBadge": "{{count}} cycle task(s) — click to configure/view",
+                "suiteTasksBadge": "{{count}} suite task(s) — click to configure/view",
+                "flowTasksBadge": "{{count}} flow task(s) — click to configure/view",
+                "scenarioTasksBadge": "{{count}} scenario task(s) — click to configure/view"
+            }
         },
         "guide": {
             "title": "Concepts Guide",
@@ -509,7 +521,11 @@
                     ],
                     "mnemonic": "What functionality am I documenting?",
                     "example": "withdrawal/withdrawal.feature, login/login.feature",
-                    "chips": ["Gherkin", ".feature file", "Source of truth"]
+                    "chips": [
+                        "Gherkin",
+                        ".feature file",
+                        "Source of truth"
+                    ]
                 },
                 "scenario": {
                     "title": "Scenario",
@@ -523,7 +539,11 @@
                     ],
                     "mnemonic": "What specific behavior am I testing?",
                     "example": "Scenario: Successful withdrawal with sufficient balance",
-                    "chips": ["Given / When / Then", "Executable unit", "Tags"]
+                    "chips": [
+                        "Given / When / Then",
+                        "Executable unit",
+                        "Tags"
+                    ]
                 },
                 "test-flow": {
                     "title": "Test Flow",
@@ -538,7 +558,12 @@
                     ],
                     "mnemonic": "In what order do I execute these scenarios?",
                     "example": "Main Flow: login → withdrawal → check balance → logout",
-                    "chips": ["Canvas drag & drop", "Scenarios only", "Execution order", "Fail-Fast"]
+                    "chips": [
+                        "Canvas drag & drop",
+                        "Scenarios only",
+                        "Execution order",
+                        "Fail-Fast"
+                    ]
                 },
                 "test-set": {
                     "title": "Test Set",
@@ -553,7 +578,12 @@
                     ],
                     "mnemonic": "How do I logically group these flows and features?",
                     "example": "Payment Test Set, User Validation Set",
-                    "chips": ["Matrix", "Features + Flows", "Multiplier", "Design only — not executable"]
+                    "chips": [
+                        "Matrix",
+                        "Features + Flows",
+                        "Multiplier",
+                        "Design only — not executable"
+                    ]
                 },
                 "test-cycle": {
                     "title": "Test Cycle",
@@ -567,7 +597,11 @@
                     ],
                     "mnemonic": "In which iteration/round do I execute these sets and flows?",
                     "example": "Weekly Regression Cycle, Sprint 12 - Smoke Tests",
-                    "chips": ["Iteration", "Multiple sets/flows", "Grouping"]
+                    "chips": [
+                        "Iteration",
+                        "Multiple sets/flows",
+                        "Grouping"
+                    ]
                 },
                 "test-plan": {
                     "title": "Test Plan",
@@ -581,7 +615,11 @@
                     ],
                     "mnemonic": "To which campaign does all this belong?",
                     "example": "Q2 2026 Test Plan, Release v3.5 — Regression Suite",
-                    "chips": ["draft → running → completed", "Schedulable", "Complete campaign"]
+                    "chips": [
+                        "draft → running → completed",
+                        "Schedulable",
+                        "Complete campaign"
+                    ]
                 }
             }
         },
