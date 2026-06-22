@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+﻿import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -18,6 +18,7 @@ import AssignmentIcon from '@mui/icons-material/Assignment';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import DeleteIcon from '@mui/icons-material/Delete';
 import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
+import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
 import { BlueprintsData, BlueprintRef, PlanBlueprint, PlanTask } from '../../types';
 import { ScenarioIcon, FeatureIcon, CycleIcon, FlowIcon } from '../PehapeIcons';
 import { useExecutionScenarioStatus, ScenarioExecStatus } from '../../hooks/useExecutionScenarioStatus';
@@ -347,6 +348,17 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const headerBg = theme.palette.custom?.tableHeaderBg || theme.palette.custom?.bgCanvas || (isDark ? '#0b1120' : '#f1f5f9');
+
+  // State to track which item's command was copied
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopyCommand = (e: React.MouseEvent, commandText: string, id: string) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(commandText).then(() => {
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 1500);
+    });
+  };
 
   // State to store resizable column widths
   const [colWidths, setColWidths] = useState<{ [key: string]: number }>({
@@ -1204,7 +1216,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
               >
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, overflow: 'hidden' }}>
                   <CycleIcon size={14} color={theme.palette.text.secondary} />
-                  <Tooltip title="Test Cycle" placement="top" arrow enterDelay={200}>
+                  <Tooltip title={t('pages.execution.monitor.testCycle', 'Test Cycle')} placement="top" arrow enterDelay={200}>
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Test Cycle</span>
                   </Tooltip>
                 </Box>
@@ -1243,7 +1255,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
               >
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, overflow: 'hidden' }}>
                   <LibraryBooksRoundedIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
-                  <Tooltip title="Test Set" placement="top" arrow enterDelay={200}>
+                  <Tooltip title={t('pages.execution.monitor.testSet', 'Test Set')} placement="top" arrow enterDelay={200}>
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Test Set</span>
                   </Tooltip>
                 </Box>
@@ -1282,7 +1294,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
               >
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, overflow: 'hidden' }}>
                   <FlowIcon size={14} color={theme.palette.text.secondary} />
-                  <Tooltip title="Test Flow" placement="top" arrow enterDelay={200}>
+                  <Tooltip title={t('pages.execution.monitor.testFlow', 'Test Flow')} placement="top" arrow enterDelay={200}>
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Test Flow</span>
                   </Tooltip>
                 </Box>
@@ -1321,7 +1333,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
               >
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, overflow: 'hidden' }}>
                   <ScenarioIcon size={14} color={theme.palette.text.secondary} />
-                  <Tooltip title="Scenario" placement="top" arrow enterDelay={200}>
+                  <Tooltip title={t('pages.execution.monitor.scenario', 'Scenario')} placement="top" arrow enterDelay={200}>
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 700 }}>Scenario</span>
                   </Tooltip>
                 </Box>
@@ -1360,7 +1372,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
               >
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.75, overflow: 'hidden', width: '100%' }}>
                   <FeatureIcon size={14} color={theme.palette.text.secondary} />
-                  <Tooltip title="Feature" placement="top" arrow enterDelay={200}>
+                  <Tooltip title={t('pages.execution.monitor.feature', 'Feature')} placement="top" arrow enterDelay={200}>
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Feature</span>
                   </Tooltip>
                 </Box>
@@ -1397,7 +1409,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                   textOverflow: 'ellipsis',
                 }}
               >
-                <Tooltip title="Resultado" placement="top" arrow enterDelay={200}>
+                <Tooltip title={t('pages.execution.monitor.result', 'Result')} placement="top" arrow enterDelay={200}>
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Resultado</span>
                 </Tooltip>
                 <Box
@@ -1546,7 +1558,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                                 </Tooltip>
                                 {fs.cycleId && (
                                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.75, mt: 0.5, flexShrink: 0 }}>
-                                    <Tooltip title="Ejecutar Ciclo">
+                                    <Tooltip title={t('pages.execution.monitor.executeCycle', 'Execute Cycle')}>
                                       <span>
                                         <IconButton
                                           size="small"
@@ -1582,14 +1594,42 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                                       </span>
                                     </Tooltip>
 
+                                    <Tooltip title={copiedId === `cycle-${fs.cycleRefId}` ? t('pages.execution.monitor.commandCopied', 'Command copied!') : t('pages.execution.monitor.copyConsoleCommand', 'Copy console command')}>
+                                      <IconButton
+                                        size="small"
+                                        onClick={(e) => handleCopyCommand(e, `pehape --plan "${fs.planName}" --cycle "${fs.cycleName}"`, `cycle-${fs.cycleRefId}`)}
+                                        sx={{
+                                          p: 0.25,
+                                          color: copiedId === `cycle-${fs.cycleRefId}` ? theme.palette.success.main : theme.palette.text.secondary,
+                                          bgcolor: '#ffffff',
+                                          boxShadow: '0 2px 5px rgba(0,0,0,0.18)',
+                                          border: `1px solid ${copiedId === `cycle-${fs.cycleRefId}` ? theme.palette.success.main : alpha(theme.palette.divider, 0.5)}`,
+                                          transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+                                          '&:hover': {
+                                            bgcolor: '#ffffff',
+                                            borderColor: theme.palette.primary.main,
+                                            boxShadow: `0 4px 10px ${alpha(theme.palette.primary.main, 0.25)}`,
+                                            transform: 'translateY(-1.5px)',
+                                          },
+                                          '&:active': {
+                                            transform: 'translateY(1px)',
+                                            boxShadow: 'none',
+                                          },
+                                          flexShrink: 0
+                                        }}
+                                      >
+                                        <ContentCopyRoundedIcon sx={{ fontSize: 13 }} />
+                                      </IconButton>
+                                    </Tooltip>
+
                                     {cycleTasks.length > 0 ? (
                                       <TaskBadge
                                         count={cycleTasks.length}
-                                        label={`${cycleTasks.length} tarea${cycleTasks.length !== 1 ? 's' : ''} de Ciclo — clic para configurar/ver`}
+                                        label={t('pages.execution.monitor.cycleTasksBadge', '{{count}} cycle task(s) — click to configure/view', { count: cycleTasks.length })}
                                         onClick={() => handleOpenTaskDialog('cycle', fs.cycleId!, fs.cycleName, 'cycle')}
                                       />
                                     ) : (
-                                      <Tooltip title="Asociar Tarea al Ciclo">
+                                      <Tooltip title={t('pages.execution.monitor.associateTaskToCycle', 'Associate Task to Cycle')}>
                                         <IconButton
                                           size="small"
                                           onClick={() => handleOpenTaskDialog('cycle', fs.cycleId!, fs.cycleName, 'cycle')}
@@ -1698,7 +1738,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                                 </Box>
                                 {fs.setId && (
                                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.75, mt: 0.5, flexShrink: 0 }}>
-                                    <Tooltip title="Ejecutar Suite (Set)">
+                                    <Tooltip title={t('pages.execution.monitor.executeSuite', 'Execute Suite (Set)')}>
                                       <span>
                                         <IconButton
                                           size="small"
@@ -1734,17 +1774,45 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                                       </span>
                                     </Tooltip>
 
+                                    <Tooltip title={copiedId === `set-${fs.parentGroupId}` ? t('pages.execution.monitor.commandCopied', 'Command copied!') : t('pages.execution.monitor.copyConsoleCommandCycle', 'Copy console command (Full Cycle)')}>
+                                      <IconButton
+                                        size="small"
+                                        onClick={(e) => handleCopyCommand(e, `pehape --plan "${fs.planName}" --cycle "${fs.cycleName}"`, `set-${fs.parentGroupId}`)}
+                                        sx={{
+                                          p: 0.25,
+                                          color: copiedId === `set-${fs.parentGroupId}` ? theme.palette.success.main : theme.palette.text.secondary,
+                                          bgcolor: '#ffffff',
+                                          boxShadow: '0 2px 5px rgba(0,0,0,0.18)',
+                                          border: `1px solid ${copiedId === `set-${fs.parentGroupId}` ? theme.palette.success.main : alpha(theme.palette.divider, 0.5)}`,
+                                          transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+                                          '&:hover': {
+                                            bgcolor: '#ffffff',
+                                            borderColor: theme.palette.primary.main,
+                                            boxShadow: `0 4px 10px ${alpha(theme.palette.primary.main, 0.25)}`,
+                                            transform: 'translateY(-1.5px)',
+                                          },
+                                          '&:active': {
+                                            transform: 'translateY(1px)',
+                                            boxShadow: 'none',
+                                          },
+                                          flexShrink: 0
+                                        }}
+                                      >
+                                        <ContentCopyRoundedIcon sx={{ fontSize: 13 }} />
+                                      </IconButton>
+                                    </Tooltip>
+
                                     {hasSetTasks ? (() => {
                                       const setTasksFiltered = (blueprints.sets.find(s => s.id === fs.setId)?.tasks || []).filter(t => t.name !== '__none__');
                                       return (
                                         <TaskBadge
                                           count={setTasksFiltered.length}
-                                          label={`${setTasksFiltered.length} tarea${setTasksFiltered.length !== 1 ? 's' : ''} de Suite — clic para configurar/ver`}
+                                          label={t('pages.execution.monitor.suiteTasksBadge', '{{count}} suite task(s) — click to configure/view', { count: setTasksFiltered.length })}
                                           onClick={() => handleOpenTaskDialog('set', fs.setId!, fs.parentGroupName!, 'set')}
                                         />
                                       );
                                     })() : (
-                                      <Tooltip title="Asociar Tarea a la Suite">
+                                      <Tooltip title={t('pages.execution.monitor.associateTaskToSuite', 'Associate Task to Suite')}>
                                         <IconButton
                                           size="small"
                                           onClick={() => handleOpenTaskDialog('set', fs.setId!, fs.parentGroupName!, 'set')}
@@ -1824,7 +1892,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                             </Box>
                             {fs.flowId && (
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
-                                <Tooltip title="Ejecutar Flujo">
+                                <Tooltip title={t('pages.execution.monitor.executeFlow', 'Execute Flow')}>
                                   <span>
                                     <IconButton
                                       size="small"
@@ -1860,6 +1928,40 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                                   </span>
                                 </Tooltip>
 
+                                <Tooltip title={copiedId === `flow-${fs.groupId}` ? t('pages.execution.monitor.commandCopied', 'Command copied!') : t('pages.execution.monitor.copyConsoleCommand', 'Copy console command')}>
+                                  <IconButton
+                                    size="small"
+                                    onClick={(e) => handleCopyCommand(
+                                      e, 
+                                      fs.isSetCombo 
+                                        ? `pehape --flow "${fs.groupId}"` 
+                                        : `pehape --plan "${fs.planName}" --cycle "${fs.cycleName}" --flow "${fs.flowName}"`, 
+                                      `flow-${fs.groupId}`
+                                    )}
+                                    sx={{
+                                      p: 0.25,
+                                      color: copiedId === `flow-${fs.groupId}` ? theme.palette.success.main : theme.palette.text.secondary,
+                                      bgcolor: '#ffffff',
+                                      boxShadow: '0 2px 5px rgba(0,0,0,0.18)',
+                                      border: `1px solid ${copiedId === `flow-${fs.groupId}` ? theme.palette.success.main : alpha(theme.palette.divider, 0.5)}`,
+                                      transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+                                      '&:hover': {
+                                        bgcolor: '#ffffff',
+                                        borderColor: theme.palette.primary.main,
+                                        boxShadow: `0 4px 10px ${alpha(theme.palette.primary.main, 0.25)}`,
+                                        transform: 'translateY(-1.5px)',
+                                      },
+                                      '&:active': {
+                                        transform: 'translateY(1px)',
+                                        boxShadow: 'none',
+                                      },
+                                      flexShrink: 0
+                                    }}
+                                  >
+                                    <ContentCopyRoundedIcon sx={{ fontSize: 13 }} />
+                                  </IconButton>
+                                </Tooltip>
+
                                 {hasFlowTasks ? (() => {
                                   const flowTasksFiltered = hasInstanceFlowTasks
                                     ? instanceFlowTasks.filter(t => t.name !== '__none__')
@@ -1867,12 +1969,12 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                                   return (
                                     <TaskBadge
                                       count={flowTasksFiltered.length}
-                                      label={`${flowTasksFiltered.length} tarea${flowTasksFiltered.length !== 1 ? 's' : ''} de Flujo — clic para configurar/ver`}
+                                      label={t('pages.execution.monitor.flowTasksBadge', '{{count}} flow task(s) — click to configure/view', { count: flowTasksFiltered.length })}
                                       onClick={() => handleOpenTaskDialog('flow', fs.groupId, fs.groupName, 'flow', undefined, fs.cycleId, fs.flowId)}
                                     />
                                   );
                                 })() : (
-                                  <Tooltip title="Asociar Tarea al Flujo">
+                                  <Tooltip title={t('pages.execution.monitor.associateTaskToFlow', 'Associate Task to Flow')}>
                                     <IconButton
                                       size="small"
                                       onClick={() => handleOpenTaskDialog('flow', fs.groupId, fs.groupName, 'flow', undefined, fs.cycleId, fs.flowId)}
@@ -2108,7 +2210,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                           </Typography>
                         </Tooltip>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
-                          <Tooltip title="Ejecutar Escenario">
+                          <Tooltip title={t('pages.execution.monitor.executeScenario', 'Execute Scenario')}>
                             <span>
                               <IconButton
                                 size="small"
@@ -2144,6 +2246,40 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                             </span>
                           </Tooltip>
 
+                          <Tooltip title={copiedId === `scen-${fs.id}` ? t('pages.execution.monitor.commandCopied', 'Command copied!') : t('pages.execution.monitor.copyConsoleCommand', 'Copy console command')}>
+                            <IconButton
+                              size="small"
+                              onClick={(e) => handleCopyCommand(
+                                e, 
+                                fs.isSetCombo 
+                                  ? `pehape --scenario "${fs.id}"` 
+                                  : `pehape --plan "${fs.planName}" --cycle "${fs.cycleName}" --flow "${fs.flowName}" --scenario "${fs.scenarioName}"`, 
+                                `scen-${fs.id}`
+                              )}
+                              sx={{
+                                p: 0.25,
+                                color: copiedId === `scen-${fs.id}` ? theme.palette.success.main : theme.palette.text.secondary,
+                                bgcolor: '#ffffff',
+                                boxShadow: '0 2px 5px rgba(0,0,0,0.18)',
+                                border: `1px solid ${copiedId === `scen-${fs.id}` ? theme.palette.success.main : alpha(theme.palette.divider, 0.5)}`,
+                                transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+                                '&:hover': {
+                                  bgcolor: '#ffffff',
+                                  borderColor: theme.palette.primary.main,
+                                  boxShadow: `0 4px 10px ${alpha(theme.palette.primary.main, 0.25)}`,
+                                  transform: 'translateY(-1.5px)',
+                                },
+                                '&:active': {
+                                  transform: 'translateY(1px)',
+                                  boxShadow: 'none',
+                                },
+                                flexShrink: 0
+                              }}
+                            >
+                              <ContentCopyRoundedIcon sx={{ fontSize: 13 }} />
+                            </IconButton>
+                          </Tooltip>
+
                           {hasScenarioTasks ? (() => {
                             const ownTasks = (fs.tasks || []).filter(
                               (t: any) => !t.originLevel || t.originLevel === 'scenario' || t.originLevel === 'plan'
@@ -2151,7 +2287,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                             return ownTasks.length > 0 ? (
                               <TaskBadge
                                 count={ownTasks.length}
-                                label={`${ownTasks.length} tarea${ownTasks.length !== 1 ? 's' : ''} del escenario — clic para configurar/ver`}
+                                label={t('pages.execution.monitor.scenarioTasksBadge', '{{count}} scenario task(s) — click to configure/view', { count: ownTasks.length })}
                                 onClick={() => handleOpenTaskDialog(
                                   'scenario',
                                   fs.id,
@@ -2164,7 +2300,7 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
                               />
                             ) : null;
                           })() : (
-                            <Tooltip title="Asociar tarea al escenario">
+                            <Tooltip title={t('pages.execution.monitor.associateTaskToScenario', 'Associate Task to Scenario')}>
                               <IconButton
                                 size="small"
                                 onClick={() => handleOpenTaskDialog(
@@ -2368,6 +2504,24 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
           </ListItemIcon>
           <ListItemText
             primary="Ver Escenario"
+            primaryTypographyProps={{ fontSize: '0.8rem', fontWeight: 600 }}
+          />
+        </MenuItem>
+        <MenuItem onClick={() => {
+          if (contextMenu?.scenario) {
+            const fs = contextMenu.scenario;
+            const cmd = fs.isSetCombo
+              ? `pehape --scenario "${fs.id}"`
+              : `pehape --plan "${fs.planName}" --cycle "${fs.cycleName}" --flow "${fs.flowName}" --scenario "${fs.scenarioName}"`;
+            navigator.clipboard.writeText(cmd);
+          }
+          handleCloseContextMenu();
+        }}>
+          <ListItemIcon>
+            <ContentCopyRoundedIcon sx={{ fontSize: 16, color: theme.palette.primary.main }} />
+          </ListItemIcon>
+          <ListItemText
+            primary="Copiar Comando CLI"
             primaryTypographyProps={{ fontSize: '0.8rem', fontWeight: 600 }}
           />
         </MenuItem>
