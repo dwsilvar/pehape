@@ -64,6 +64,8 @@ El repositorio está organizado de la siguiente manera:
 *   [util/](file:///c:/Proyectos/ocr_test/pehape/util): Clases de apoyo y utilidades de sistema.
 
 ### Scripts y Ejecutables Principales
+*   [pehape.bat](file:///c:/Proyectos/ocr_test/pehape/pehape.bat) y [pehape.ps1](file:///c:/Proyectos/ocr_test/pehape/pehape.ps1): Wrappers portables de consola para invocar el CLI desde cualquier terminal Windows (CMD o PowerShell).
+*   [cli.py](file:///c:/Proyectos/ocr_test/pehape/cli.py): Script de interfaz de línea de comandos (CLI) que parsea planos, resuelve jerarquías de ejecución y lanza pruebas.
 *   [orchestrator.py](file:///c:/Proyectos/ocr_test/pehape/orchestrator.py): Motor secuencial que procesa las jerarquías de ejecución (Plan ➔ Ciclos ➔ Flujos ➔ Escenarios) e invoca Behave.
 *   [orchestrator_api.py](file:///c:/Proyectos/ocr_test/pehape/orchestrator_api.py): Punto de entrada FastAPI para levantar el servidor y opcionalmente el cliente nativo Edge WebView2.
 *   [start-all.ps1](file:///c:/Proyectos/ocr_test/pehape/start-all.ps1): Script para iniciar backend y frontend simultáneamente en entornos locales.
@@ -127,6 +129,54 @@ Para implementar el sistema en máquinas sin conexión a Internet:
 3. **Modos de Inicio Offline**:
    *   **Modo Ventana de Escritorio (Recomendado)**: Ejecuta `start-app-window.bat`. Utiliza pywebview para encapsular la aplicación en una ventana nativa de Windows (WebView2), ideal para operadores locales.
    *   **Modo Servidor/Navegador**: Ejecuta `start-all-offline.bat`. Levanta el backend FastAPI y te permite conectarte desde tu navegador preferido.
+
+---
+
+## Ejecución desde Consola (CLI PeHaPe) 💻
+
+La plataforma cuenta con un CLI potente e interactivo (`pehape`) que te permite lanzar ejecuciones directamente desde la terminal. Se integra con tus planos en `blueprints.json` y puede ejecutarse de manera autónoma/offline o delegando tareas al backend.
+
+### Modos de Ejecución
+1.  **Ejecución Local (`--local`)**: Corre los escenarios localmente en la terminal como subprocesos en-cliente. Actualiza los resultados de Allure, resúmenes Gherkin y captura de pantalla/evidencias en la carpeta local `./reports`, pero **no** crea una tarea en segundo plano en el servidor. Ideal para automatizaciones desatendidas y CI/CD.
+2.  **Ejecución API (`--api`)**: Envía una petición POST al servidor FastAPI activo en segundo plano y transmite (streams) las líneas de logs de SSE en tiempo real a tu consola. Esto **sí** registra la ejecución en el monitor e historial de tareas en tiempo real de la UI de React.
+
+### Casos de Uso y Sintaxis
+
+Puedes ejecutar pruebas filtrando por cualquier nivel de la jerarquía de planos o directamente archivos `.feature` sueltos:
+
+*   **Ver Ayuda Completa**:
+    ```powershell
+    pehape help
+    # O también: pehape --help
+    ```
+*   **Ejecutar un Plan de Pruebas completo**:
+    ```powershell
+    pehape --plan "veesoon"
+    ```
+*   **Ejecutar un Ciclo (Suite)**:
+    ```powershell
+    pehape --cycle "retiro"
+    ```
+*   **Ejecutar un Test Flow**:
+    ```powershell
+    pehape --flow "ingresopin"
+    ```
+*   **Ejecutar un Escenario Específico**:
+    ```powershell
+    pehape --scenario "Nuevo escenario"
+    ```
+*   **Ejecutar un Archivo Feature Crudo (Dry / Direct Run)**:
+    ```powershell
+    pehape --feature "example.feature"
+    pehape --feature "retiro/retiro.feature" --scenario "Nuevo escenario"
+    ```
+
+### Resolución de Identificadores y Colisiones
+El comando `pehape` acepta nombres (ej: `"retiro"`), IDs de definición estáticos, o IDs de instancia largos generados. 
+Si el nombre de un elemento se repite en el árbol (por ejemplo, hay 2 flows llamados `retiro` en 2 planes de pruebas diferentes), el CLI:
+1.  Detectará la colisión de nombres.
+2.  Imprimirá las opciones candidatas detallando su ruta jerárquica (ej: `Plan A > Cycle 1 > Flow retiro` vs `Plan B > Cycle 2 > Flow retiro`) junto a sus IDs de instancia únicos.
+3.  Te instruirá a desambiguar la ejecución pasando un filtro padre (`--plan` o `--cycle`) o utilizando el ID de instancia único directamente.
 
 ---
 
