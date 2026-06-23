@@ -430,7 +430,17 @@
                 "loading": "Cargando Gherkin…",
                 "errorLoading": "No se pudo cargar el feature: {{error}}"
             },
-            "library": "Biblioteca",
+            "library": {
+                "label": "Biblioteca",
+                "title": "Biblioteca",
+                "search": "Buscar escenarios...",
+                "filterVersion": "Filtrar por versión",
+                "allVersions": "Todas las versiones",
+                "steps": "Pasos",
+                "loading": "Cargando biblioteca...",
+                "noScenarios": "No se encontraron escenarios.",
+                "noFeatures": "No se encontraron features."
+            },
             "drawer": {
                 "title": "Logs de Ejecución",
                 "subtitle": "Salida en tiempo real del runner de pruebas",

@@ -424,7 +424,17 @@
                 "loading": "Loading Gherkin…",
                 "errorLoading": "Could not load feature: {{error}}"
             },
-            "library": "Library",
+            "library": {
+                "label": "Library",
+                "title": "Library",
+                "search": "Search scenarios...",
+                "filterVersion": "Filter by version",
+                "allVersions": "All versions",
+                "steps": "Steps",
+                "loading": "Loading library...",
+                "noScenarios": "No scenarios found.",
+                "noFeatures": "No features found."
+            },
             "drawer": {
                 "title": "Execution Logs",
                 "subtitle": "Real-time output from the test runner",

@@ -1,4 +1,4 @@
-﻿import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -1000,7 +1000,8 @@ const ExecutionMonitor: React.FC<ExecutionMonitorProps> = ({
         } else {
           initialTasks = blueprints.flows.find(f => f.id === targetId)?.tasks || [];
         }
-        initialScope = 'instance';
+        // Blueprint-level tasks were saved with "apply to all" scope → reflect that correctly
+        initialScope = 'all';
       }
     } else if (level === 'scenario') {
       // 1. Check if there are cycle-level tasks targeting this unique instance ID

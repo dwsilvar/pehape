@@ -18,7 +18,7 @@ import ReportMatrixView from './ReportMatrixView';
 const ReportMainShell: React.FC = () => {
     const { t } = useTranslation();
     const theme = useTheme();
-    const [view, setView] = useState<'V_DASH' | 'V_TIME' | 'V_MATR'>('V_TIME');
+    const [view, setView] = useState<'V_DASH' | 'V_TIME' | 'V_MATR'>('V_MATR');
     const [data, setData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
