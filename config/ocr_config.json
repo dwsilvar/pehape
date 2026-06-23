@@ -1,10 +1,10 @@
 {
-  "description": "Configuration for Tesseract OCR, image recognition thresholds, and Behave test execution settings.",
-  "tesseract_cmd_path": "C:\\src\\tesseract-ocr\\tesseract.exe",
-  "tesseract_language": "spa",
-  "image_confidence_threshold": 70,
-  "ocr_confidence_threshold": 40,
-  "stop_on_failure": false,
-  "images_base_path": "resources/images",
-  "images_report_path": "reports/screenshots"
+    "description": "Configuration for Tesseract OCR, image recognition thresholds, and Behave test execution settings.",
+    "tesseract_cmd_path": "C:\\src\\tesseract-ocr\\tesseract.exe",
+    "tesseract_language": "spa",
+    "image_confidence_threshold": 70,
+    "ocr_confidence_threshold": 40,
+    "stop_on_failure": false,
+    "images_base_path": "resources/images",
+    "images_report_path": "reports/screenshots"
 }

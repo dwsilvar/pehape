@@ -10,7 +10,7 @@ import {
 import { arrayMove } from '@dnd-kit/sortable';
 import { v4 as uuidv4 } from 'uuid';
 
-import { FeatureWithScenarios, BlueprintsData, BlueprintRef, PlanTask } from '../types';
+import { FeatureWithScenarios, BlueprintsData, BlueprintRef } from '../types';
 import PlanHeader from '../components/test-plan/PlanHeader';
 import BlueprintCatalogPanel from '../components/test-plan/BlueprintCatalogPanel';
 import CompositionCanvas from '../components/test-plan/CompositionCanvas';
@@ -236,17 +236,6 @@ const TestPlanPage: React.FC = () => {
     });
   };
 
-  const handleUpdateItemTasks = useCallback((itemId: string, tasks: PlanTask[]) => {
-    updateActiveBlueprint(b => ({
-      ...b,
-      items: b.items.map((i: BlueprintRef) => i.id === itemId ? { ...i, tasks } : i)
-    }));
-  }, [updateActiveBlueprint]);
-
-  const handleUpdateBlueprintTasks = useCallback((tasks: PlanTask[]) => {
-    updateActiveBlueprint(b => ({ ...b, tasks }));
-  }, [updateActiveBlueprint]);
-
   // ── DnD ───────────────────────────────────────────────────────────────────────
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -365,9 +354,6 @@ const TestPlanPage: React.FC = () => {
               onMoveUp={handleMoveUp}
               onMoveDown={handleMoveDown}
               blueprints={blueprints}
-              onUpdateItemTasks={handleUpdateItemTasks}
-              tasks={activeBlueprint?.tasks || []}
-              onUpdateTasks={handleUpdateBlueprintTasks}
             />
           </Box>
 
@@ -380,7 +366,7 @@ const TestPlanPage: React.FC = () => {
                 {libraryVisible ? <ChevronRightRoundedIcon sx={{ fontSize: 14 }} /> : <ChevronLeftRoundedIcon sx={{ fontSize: 14 }} />}
               </IconButton>
             </Tooltip>
-            {!libraryVisible && <Tooltip title={t('pages.testPlan.library')} placement="left"><LibraryBooksRoundedIcon sx={{ fontSize: 13, color: 'text.disabled', mt: 1 }} /></Tooltip>}
+            {!libraryVisible && <Tooltip title={t('pages.testPlan.library.label')} placement="left"><LibraryBooksRoundedIcon sx={{ fontSize: 13, color: 'text.disabled', mt: 1 }} /></Tooltip>}
           </Box>
 
           {/* Right: Asset Library */}
